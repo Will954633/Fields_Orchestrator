@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import argparse
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 REPO = Path("/home/fields/Fields_Orchestrator")
@@ -60,33 +62,52 @@ def candidates(limit: int | None) -> list[str]:
     return out
 
 
+def _warm_one(slug: str, kind: str, kinds: list[str], force: bool):
+    """Warm one address. Returns ('published'|'skipped'|'failed', slug[, err])."""
+    if not force and all(has_artifact(slug, k) for k in kinds):
+        return ("skipped", slug)
+    results = publish(slug, kind, verbose=False)
+    if results and all(r.get("ok") for r in results):
+        return ("published", slug)
+    errs = "; ".join(r.get("error", "") for r in results if not r.get("ok"))
+    return ("failed", slug, errs[:200])
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=None, help="max candidates PER suburb")
     ap.add_argument("--kind", default="both", choices=["market-update", "valuation-report", "both"])
+    ap.add_argument("--workers", type=int, default=3, help="concurrent addresses (each spawns generators + headless chrome)")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
 
     with job_run("offmarket_artifact_prewarm", cadence_hours=24, title="Off-Market V5 Artifact Pre-Warm") as beat:
         slugs = candidates(args.limit)
         kinds = ["market-update", "valuation-report"] if args.kind == "both" else [args.kind]
-        published = failed = skipped = 0
-        for slug in slugs:
-            if not args.force and all(has_artifact(slug, k) for k in kinds):
-                skipped += 1
-                continue
-            results = publish(slug, args.kind, verbose=False)
-            if results and all(r.get("ok") for r in results):
-                published += 1
-            else:
-                failed += 1
-                errs = "; ".join(r.get("error", "") for r in results if not r.get("ok"))
-                print(f"  FAIL {slug}: {errs[:200]}", file=sys.stderr)
-        beat.metrics = {"candidates": len(slugs), "published": published, "failed": failed, "skipped": skipped}
+        counts = {"published": 0, "skipped": 0, "failed": 0}
+        done = [0]
+        lock = threading.Lock()
+        total = len(slugs)
+
+        def record(res):
+            with lock:
+                counts[res[0]] += 1
+                done[0] += 1
+                if res[0] == "failed":
+                    print(f"  FAIL {res[1]}: {res[2] if len(res) > 2 else ''}", file=sys.stderr)
+                if done[0] % 50 == 0 or done[0] == total:
+                    print(f"  progress {done[0]}/{total}  {counts}", flush=True)
+
+        with ThreadPoolExecutor(max_workers=max(1, args.workers)) as ex:
+            futs = [ex.submit(_warm_one, s, args.kind, kinds, args.force) for s in slugs]
+            for fut in as_completed(futs):
+                record(fut.result())
+
+        beat.metrics = {"candidates": total, **counts}
         # Rule 7b — candidates existed but we produced and skipped nothing = broken.
-        if slugs and published == 0 and skipped == 0:
-            raise RuntimeError(f"pre-warm published 0 of {len(slugs)} candidates — upstream broken, not empty")
-        beat.detail = f"{published} published, {skipped} already warm, {failed} failed"
+        if total and counts["published"] == 0 and counts["skipped"] == 0:
+            raise RuntimeError(f"pre-warm published 0 of {total} candidates — upstream broken, not empty")
+        beat.detail = f"{counts['published']} published, {counts['skipped']} already warm, {counts['failed']} failed"
     return 0
 
 
