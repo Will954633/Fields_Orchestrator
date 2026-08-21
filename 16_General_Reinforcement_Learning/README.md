@@ -1,5 +1,55 @@
 # General Reinforcement Learning — how it works now
 
+> ## 🔎 START HERE — this folder IS "Samantha and her domain agents"
+>
+> **If Will says "check in with Samantha", "check in with the domain agents", "how are
+> the autonomous agents doing", or anything of that shape — he means THIS system.** It was
+> hard to find once (2026-08-22); this banner exists so it never is again.
+>
+> **What it is:** a weekly team of 7 AI analyst agents — `geo`, `seo`, `ads`, `articles`,
+> `onsite`, `ops`, `valuation` — each owning one slice of the business. They run Sundays
+> (staggered hourly, see cron), file capped recommendations, and **Samantha** (the
+> `conductor` / `samantha_weekly.sh`) dedupes + ranks them into ONE brief of ≤5 decisions
+> sent to Will on Telegram. The domains NEVER message Will directly — that is the core
+> design rule. The full mechanics are in the rest of this README below.
+>
+> **Do a check-in with these five commands** (from this folder, venv + `.env` loaded):
+> ```bash
+> python3 briefing_status.py                       # ← the thing most likely to be chasing Will
+> python3 recommendations.py brief-candidates      # what's awaiting Will's decision now
+> python3 recommendations.py stats                 # per-domain approval rate & hit rate
+> tail -40 ../logs/rl_weekly_cron.log              # did last Sunday's cycles actually run?
+> python3 fix_digest.py --days 7                   # what changed in the business this week
+> ```
+>
+> **The four things that go wrong silently — check each on every check-in:**
+>
+> 1. **Briefing staleness (`briefing_status.py`).** Each domain's `briefings/<domain>.md`
+>    is a standing *authorisation*, not a memo. It ages: **current** (<7d, full autonomy) →
+>    **aging** (8–13d, full but Will is reminded) → **stale** (14–20d, NARROWED to bug-fixes
+>    only) → **expired** (21+d, recommend-only). A daily cron (`briefing_status.py --remind`,
+>    08:30) Telegrams Will while any brief is due; the "day N" counter is the chase streak.
+>    Refreshing a brief = `briefing_status.py --touch <domain>` after editing it. **This is
+>    the alert Will most often asks about.** Renewing the briefs is a Will+Samantha session:
+>    Will says what's changed per domain, Samantha writes them up.
+> 2. **Weekly cycles failing (`../logs/rl_weekly_cron.log`).** Each domain must write a cycle
+>    doc under `cycles/<ISO-week>/<date>/`. A line `heartbeat: error — … NO CYCLE DOC written`
+>    means that domain skipped the week and produced nothing. (`seo` was failing rc=1/rc=124
+>    as of 2026-08-16 — check whether it recovered.)
+> 3. **Recommendation queue (`recommendations.py brief-candidates`).** 0 open = domains have
+>    cleared their queue (fine). Anything open is awaiting Will and should be in the brief.
+> 4. **Ungraded claims (`recommendations.py stats`, "actually worked" column).** Every shipped
+>    rec states a metric + date; `due-for-grading` surfaces them, `grade` records the outcome.
+>    A domain that never gets graded is an idea generator that never learns if it was right.
+>
+> **Cadence at a glance:** domain cycles Sun 06:00–12:00 (ops→seo→geo→ads→articles→onsite→
+> valuation) · Samantha's brief Sun 16:00 · reward ledger Sun 05:30 · briefing reminder daily
+> 08:30 · recommendation-approval poller every 5 min (07–22). All in the VM crontab, grep
+> `16_General`. Note `ops` runs standalone on Opus 5, not the shared runner.
+>
+> ---
+
+
 **Rebuilt 2026-08-13.** This supersedes `00_SCOPING.md`, `DEVELOPMENT_PLAN.md` and
 `PHASE2_DESIGN.md`, which describe the daily self-pacing design that ran 2026-07-29 → 07-30
 and was paused. Those documents are still worth reading for the *thesis* (the closed
