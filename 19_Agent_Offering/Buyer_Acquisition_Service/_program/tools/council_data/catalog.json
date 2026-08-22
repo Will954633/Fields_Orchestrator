@@ -1,0 +1,1560 @@
+{
+ "gold_coast": [
+  {
+   "name": "Activity_Area",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Activity_Area/FeatureServer"
+  },
+  {
+   "name": "ADORNMENT",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/ADORNMENT/FeatureServer"
+  },
+  {
+   "name": "Agriculture_land",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Agriculture_land/FeatureServer"
+  },
+  {
+   "name": "Agriculture_land_interface_area",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Agriculture_land_interface_area/FeatureServer"
+  },
+  {
+   "name": "Agriculture_land_interface_area_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Agriculture_land_interface_area_v5/FeatureServer"
+  },
+  {
+   "name": "Agriculture_land_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Agriculture_land_v5/FeatureServer"
+  },
+  {
+   "name": "AgricultureLand",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/AgricultureLand/FeatureServer"
+  },
+  {
+   "name": "AgricultureLandInterfaceArea",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/AgricultureLandInterfaceArea/FeatureServer"
+  },
+  {
+   "name": "Animal_Agility_Equipment",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Animal_Agility_Equipment/FeatureServer"
+  },
+  {
+   "name": "Artificial_Fauna_Habitat",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Artificial_Fauna_Habitat/FeatureServer"
+  },
+  {
+   "name": "Artificial_Reef",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Artificial_Reef/FeatureServer"
+  },
+  {
+   "name": "Banner_Zone",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Banner_Zone/FeatureServer"
+  },
+  {
+   "name": "Barbeque",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Barbeque/FeatureServer"
+  },
+  {
+   "name": "Barrier_Continuous",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Barrier_Continuous/FeatureServer"
+  },
+  {
+   "name": "BATHING_RESERVE",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/BATHING_RESERVE/FeatureServer"
+  },
+  {
+   "name": "Bicycle_Fitting",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Bicycle_Fitting/FeatureServer"
+  },
+  {
+   "name": "Biodiversity_areas",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Biodiversity_areas/FeatureServer"
+  },
+  {
+   "name": "Biodiversity_areas_",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Biodiversity_areas_/FeatureServer"
+  },
+  {
+   "name": "Biodiversity_areas_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Biodiversity_areas_v5/FeatureServer"
+  },
+  {
+   "name": "Boating_Facility",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Boating_Facility/FeatureServer"
+  },
+  {
+   "name": "Boating_facility_PT",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Boating_facility_PT/FeatureServer"
+  },
+  {
+   "name": "Bridge",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Bridge/FeatureServer"
+  },
+  {
+   "name": "Building",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Building/FeatureServer"
+  },
+  {
+   "name": "Building_height_v4",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Building_height_v4/FeatureServer"
+  },
+  {
+   "name": "Building_height_v6",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Building_height_v6/FeatureServer"
+  },
+  {
+   "name": "Building_Points",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Building_Points/FeatureServer"
+  },
+  {
+   "name": "Buildings_FL",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Buildings_FL/FeatureServer"
+  },
+  {
+   "name": "Bushfire_hazard_area",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Bushfire_hazard_area/FeatureServer"
+  },
+  {
+   "name": "Bushfire_hazard_area_",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Bushfire_hazard_area_/FeatureServer"
+  },
+  {
+   "name": "Bushfire_hazard_area_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Bushfire_hazard_area_v5/FeatureServer"
+  },
+  {
+   "name": "CABLING_PIT",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/CABLING_PIT/FeatureServer"
+  },
+  {
+   "name": "Cadastre_Council_Managed_Current_view",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Cadastre_Council_Managed_Current_view/FeatureServer"
+  },
+  {
+   "name": "Cadastre_Current_view",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Cadastre_Current_view/FeatureServer"
+  },
+  {
+   "name": "Canal_CityPlanV6",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Canal_CityPlanV6/FeatureServer"
+  },
+  {
+   "name": "Capital_Works",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Capital_Works/FeatureServer"
+  },
+  {
+   "name": "CCTV_Safe_City_Cameras",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/CCTV_Safe_City_Cameras/FeatureServer"
+  },
+  {
+   "name": "Cemetery_Locations",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Cemetery_Locations/FeatureServer"
+  },
+  {
+   "name": "City_Plan_Version_10",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/City_Plan_Version_10/FeatureServer"
+  },
+  {
+   "name": "City_Plan_Version_11_Open_Data",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/City_Plan_Version_11_Open_Data/FeatureServer"
+  },
+  {
+   "name": "City_Plan_Version_8",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/City_Plan_Version_8/FeatureServer"
+  },
+  {
+   "name": "City_Plan_Version_9",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/City_Plan_Version_9/FeatureServer"
+  },
+  {
+   "name": "City_Plan_Zoning",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/City_Plan_Zoning/FeatureServer"
+  },
+  {
+   "name": "CityofGoldCoast_Fauna",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/CityofGoldCoast_Fauna/FeatureServer"
+  },
+  {
+   "name": "CityofGoldCoast_Flora",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/CityofGoldCoast_Flora/FeatureServer"
+  },
+  {
+   "name": "CityPlan_Height_Zone_Density_Changes",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/CityPlan_Height_Zone_Density_Changes/FeatureServer"
+  },
+  {
+   "name": "CityPlan_Proposed_Round4_2021",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/CityPlan_Proposed_Round4_2021/FeatureServer"
+  },
+  {
+   "name": "CoGC_Councillor_Divisions",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/CoGC_Councillor_Divisions/FeatureServer"
+  },
+  {
+   "name": "CoGC_Events_Banners",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/CoGC_Events_Banners/FeatureServer"
+  },
+  {
+   "name": "CoGC_Property_Address",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/CoGC_Property_Address/FeatureServer"
+  },
+  {
+   "name": "Community_infrastructure",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Community_infrastructure/FeatureServer"
+  },
+  {
+   "name": "Community_infrastructure_interface_area",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Community_infrastructure_interface_area/FeatureServer"
+  },
+  {
+   "name": "Community_infrastructure_interface_area_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Community_infrastructure_interface_area_v5/FeatureServer"
+  },
+  {
+   "name": "Community_infrastructure_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Community_infrastructure_v5/FeatureServer"
+  },
+  {
+   "name": "CommunityInfrastructure",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/CommunityInfrastructure/FeatureServer"
+  },
+  {
+   "name": "CommunityInfrastructureInterfaceArea",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/CommunityInfrastructureInterfaceArea/FeatureServer"
+  },
+  {
+   "name": "Council_Owned",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Council_Owned/FeatureServer"
+  },
+  {
+   "name": "Cycleway_Guide",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Cycleway_Guide/FeatureServer"
+  },
+  {
+   "name": "DATA_CABLING",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/DATA_CABLING/FeatureServer"
+  },
+  {
+   "name": "Designated_Flood_Level_for_Residential_Buildings",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Designated_Flood_Level_for_Residential_Buildings/FeatureServer"
+  },
+  {
+   "name": "Detention_Basin",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Detention_Basin/FeatureServer"
+  },
+  {
+   "name": "Diving_Structure",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Diving_Structure/FeatureServer"
+  },
+  {
+   "name": "Dog_Areas",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Dog_Areas/FeatureServer"
+  },
+  {
+   "name": "DogBagDispenser",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/DogBagDispenser/FeatureServer"
+  },
+  {
+   "name": "Drainage_Pipe",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Drainage_Pipe/FeatureServer"
+  },
+  {
+   "name": "Drainage_Pit",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Drainage_Pit/FeatureServer"
+  },
+  {
+   "name": "Drinking_Fountain",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Drinking_Fountain/FeatureServer"
+  },
+  {
+   "name": "Dwelling_house_overlay_area",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Dwelling_house_overlay_area/FeatureServer"
+  },
+  {
+   "name": "Easement",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Easement/FeatureServer"
+  },
+  {
+   "name": "ELEC_COMMS_CONDUIT",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/ELEC_COMMS_CONDUIT/FeatureServer"
+  },
+  {
+   "name": "ELEC_COMMS_FITTING",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/ELEC_COMMS_FITTING/FeatureServer"
+  },
+  {
+   "name": "ERP_SIT_PUMP",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/ERP_SIT_PUMP/FeatureServer"
+  },
+  {
+   "name": "Extractive_Resource_100m_transport_route_separation_area_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Extractive_Resource_100m_transport_route_separation_area_v5/FeatureServer"
+  },
+  {
+   "name": "Extractive_resources_special_management_area",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Extractive_resources_special_management_area/FeatureServer"
+  },
+  {
+   "name": "Extractive_resources_Special_management_area_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Extractive_resources_Special_management_area_v5/FeatureServer"
+  },
+  {
+   "name": "ExtractiveResource_100mTransportRouteSeparationArea",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/ExtractiveResource_100mTransportRouteSeparationArea/FeatureServer"
+  },
+  {
+   "name": "ExtractiveResources_SpecialManagementArea",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/ExtractiveResources_SpecialManagementArea/FeatureServer"
+  },
+  {
+   "name": "ExtractiveResources_TransportRoute",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/ExtractiveResources_TransportRoute/FeatureServer"
+  },
+  {
+   "name": "Fiber_Optic_Cable",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Fiber_Optic_Cable/FeatureServer"
+  },
+  {
+   "name": "Fish_Cleaning_Station",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Fish_Cleaning_Station/FeatureServer"
+  },
+  {
+   "name": "Fitness_Equipment",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Fitness_Equipment/FeatureServer"
+  },
+  {
+   "name": "FL_PARKS",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/FL_PARKS/FeatureServer"
+  },
+  {
+   "name": "Flood_assessment_required",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Flood_assessment_required/FeatureServer"
+  },
+  {
+   "name": "Flood_assessment_required_v6",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Flood_assessment_required_v6/FeatureServer"
+  },
+  {
+   "name": "Flood_Depth_City_Plan_Version_6_update1",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Flood_Depth_City_Plan_Version_6_update1/FeatureServer"
+  },
+  {
+   "name": "FMD_Fitting",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/FMD_Fitting/FeatureServer"
+  },
+  {
+   "name": "ForeshoreSeawallSite_CityPlanV6",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/ForeshoreSeawallSite_CityPlanV6/FeatureServer"
+  },
+  {
+   "name": "ForeshoreSetback_CityPlan_V6",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/ForeshoreSetback_CityPlan_V6/FeatureServer"
+  },
+  {
+   "name": "FUEL_HAZARD_Recovered09102023JulTest",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/FUEL_HAZARD_Recovered09102023JulTest/FeatureServer"
+  },
+  {
+   "name": "Functional_Location_Facilities",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Functional_Location_Facilities/FeatureServer"
+  },
+  {
+   "name": "Functional_Location_Water_Supply",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Functional_Location_Water_Supply/FeatureServer"
+  },
+  {
+   "name": "Functional_road_hierarchy",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Functional_road_hierarchy/FeatureServer"
+  },
+  {
+   "name": "Functional_road_hierarchy_",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Functional_road_hierarchy_/FeatureServer"
+  },
+  {
+   "name": "Functional_road_hierarchy_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Functional_road_hierarchy_v5/FeatureServer"
+  },
+  {
+   "name": "Gold_Coast_Electoral_Division_2020",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Gold_Coast_Electoral_Division_2020/FeatureServer"
+  },
+  {
+   "name": "Grease_Trap",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Grease_Trap/FeatureServer"
+  },
+  {
+   "name": "Heritage_adjoining_lot",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Heritage_adjoining_lot/FeatureServer"
+  },
+  {
+   "name": "Heritage_adjoining_lot_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Heritage_adjoining_lot_v5/FeatureServer"
+  },
+  {
+   "name": "Heritage_Listed_Area",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Heritage_Listed_Area/FeatureServer"
+  },
+  {
+   "name": "Heritage_listed_area_",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Heritage_listed_area_/FeatureServer"
+  },
+  {
+   "name": "Heritage_place_point",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Heritage_place_point/FeatureServer"
+  },
+  {
+   "name": "Heritage_place_point_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Heritage_place_point_v5/FeatureServer"
+  },
+  {
+   "name": "Heritage_place_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Heritage_place_v5/FeatureServer"
+  },
+  {
+   "name": "Heritage_protection_boundary",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Heritage_protection_boundary/FeatureServer"
+  },
+  {
+   "name": "Heritage_protection_boundary_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Heritage_protection_boundary_v5/FeatureServer"
+  },
+  {
+   "name": "HeritageAdjoiningLot",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/HeritageAdjoiningLot/FeatureServer"
+  },
+  {
+   "name": "HeritageProtectionBoundary",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/HeritageProtectionBoundary/FeatureServer"
+  },
+  {
+   "name": "Hinterland_to_coast_critical_corridors",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Hinterland_to_coast_critical_corridors/FeatureServer"
+  },
+  {
+   "name": "Hinterland_to_coast_critical_corridors_",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Hinterland_to_coast_critical_corridors_/FeatureServer"
+  },
+  {
+   "name": "Hinterland_to_coast_critical_corridors_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Hinterland_to_coast_critical_corridors_v5/FeatureServer"
+  },
+  {
+   "name": "Industry_interface_area",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Industry_interface_area/FeatureServer"
+  },
+  {
+   "name": "IndustryInterfaceArea",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/IndustryInterfaceArea/FeatureServer"
+  },
+  {
+   "name": "Insurance___Flood_Event",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Insurance___Flood_Event/FeatureServer"
+  },
+  {
+   "name": "Insurance_Flood_Event",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Insurance_Flood_Event/FeatureServer"
+  },
+  {
+   "name": "Irrigation_System",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Irrigation_System/FeatureServer"
+  },
+  {
+   "name": "Kerb_and_Channel",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Kerb_and_Channel/FeatureServer"
+  },
+  {
+   "name": "Koala_Area_Local_Law12_2023",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Koala_Area_Local_Law12_2023/FeatureServer"
+  },
+  {
+   "name": "Koala_Records",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Koala_Records/FeatureServer"
+  },
+  {
+   "name": "Koala_Records2",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Koala_Records2/FeatureServer"
+  },
+  {
+   "name": "Koala_Vehicle_Strikes",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Koala_Vehicle_Strikes/FeatureServer"
+  },
+  {
+   "name": "Koala_VehicleStrikes",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Koala_VehicleStrikes/FeatureServer"
+  },
+  {
+   "name": "Lake_CityPlanV6",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Lake_CityPlanV6/FeatureServer"
+  },
+  {
+   "name": "Land_affected_by_other_development_legislation",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Land_affected_by_other_development_legislation/FeatureServer"
+  },
+  {
+   "name": "Land_affected_by_other_development_legislation_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Land_affected_by_other_development_legislation_v5/FeatureServer"
+  },
+  {
+   "name": "LAND_STABILISATION",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/LAND_STABILISATION/FeatureServer"
+  },
+  {
+   "name": "LandAffectedbyOtherDevLegislation",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/LandAffectedbyOtherDevLegislation/FeatureServer"
+  },
+  {
+   "name": "Landscaped_Areas",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Landscaped_Areas/FeatureServer"
+  },
+  {
+   "name": "Landslide_hazard",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Landslide_hazard/FeatureServer"
+  },
+  {
+   "name": "Landslide_Hazard_Proposed",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Landslide_Hazard_Proposed/FeatureServer"
+  },
+  {
+   "name": "Landslide_hazard_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Landslide_hazard_v5/FeatureServer"
+  },
+  {
+   "name": "LandslideHazard_2011",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/LandslideHazard_2011/FeatureServer"
+  },
+  {
+   "name": "LGA_Boundary",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/LGA_Boundary/FeatureServer"
+  },
+  {
+   "name": "Light_rail_urban_renewal_area",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Light_rail_urban_renewal_area/FeatureServer"
+  },
+  {
+   "name": "LightRailUrbanRenewalArea",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/LightRailUrbanRenewalArea/FeatureServer"
+  },
+  {
+   "name": "Lights",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Lights/FeatureServer"
+  },
+  {
+   "name": "Local_significant_species",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Local_significant_species/FeatureServer"
+  },
+  {
+   "name": "Local_significant_species_",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Local_significant_species_/FeatureServer"
+  },
+  {
+   "name": "Local_significant_species_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Local_significant_species_v5/FeatureServer"
+  },
+  {
+   "name": "Local_Significant_Wetlands_CityPlanV6",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Local_Significant_Wetlands_CityPlanV6/FeatureServer"
+  },
+  {
+   "name": "Minimum_lot_size",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Minimum_lot_size/FeatureServer"
+  },
+  {
+   "name": "MinimumLotSize",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/MinimumLotSize/FeatureServer"
+  },
+  {
+   "name": "Mudgeeraba_village_character",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Mudgeeraba_village_character/FeatureServer"
+  },
+  {
+   "name": "Mudgeeraba_village_character_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Mudgeeraba_village_character_v5/FeatureServer"
+  },
+  {
+   "name": "MudgeerabaVillageCharacter",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/MudgeerabaVillageCharacter/FeatureServer"
+  },
+  {
+   "name": "MyMapService",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/MyMapService/FeatureServer"
+  },
+  {
+   "name": "Non_GPT_Simple",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Non_GPT_Simple/FeatureServer"
+  },
+  {
+   "name": "OLM_ENV_BIO_CORRIDOR_V8",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/OLM_ENV_BIO_CORRIDOR_V8/FeatureServer"
+  },
+  {
+   "name": "Open_Space",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Open_Space/FeatureServer"
+  },
+  {
+   "name": "Outdoor_Tables",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Outdoor_Tables/FeatureServer"
+  },
+  {
+   "name": "Pacific_Motoway_service_roads_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Pacific_Motoway_service_roads_v5/FeatureServer"
+  },
+  {
+   "name": "PacificMotorwayServiceRoadTypes",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/PacificMotorwayServiceRoadTypes/FeatureServer"
+  },
+  {
+   "name": "Parking_Area",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Parking_Area/FeatureServer"
+  },
+  {
+   "name": "PARKING_METERS",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/PARKING_METERS/FeatureServer"
+  },
+  {
+   "name": "PARKING_SENSORS",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/PARKING_SENSORS/FeatureServer"
+  },
+  {
+   "name": "PARKING_SIGNS",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/PARKING_SIGNS/FeatureServer"
+  },
+  {
+   "name": "ParkingBays",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/ParkingBays/FeatureServer"
+  },
+  {
+   "name": "Parks_Shelters",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Parks_Shelters/FeatureServer"
+  },
+  {
+   "name": "PartyHouseArea_CityPlan_V6",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/PartyHouseArea_CityPlan_V6/FeatureServer"
+  },
+  {
+   "name": "Platform",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Platform/FeatureServer"
+  },
+  {
+   "name": "Play_Equipment",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Play_Equipment/FeatureServer"
+  },
+  {
+   "name": "Playing_Surface",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Playing_Surface/FeatureServer"
+  },
+  {
+   "name": "Pole",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Pole/FeatureServer"
+  },
+  {
+   "name": "Pool_Shell",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Pool_Shell/FeatureServer"
+  },
+  {
+   "name": "Potable_Water_Pipe",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Potable_Water_Pipe/FeatureServer"
+  },
+  {
+   "name": "Pram_Ramp",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Pram_Ramp/FeatureServer"
+  },
+  {
+   "name": "Properties_LandSlide",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Properties_LandSlide/FeatureServer"
+  },
+  {
+   "name": "Property_Development_Applications_and_Determinations",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Property_Development_Applications_and_Determinations/FeatureServer"
+  },
+  {
+   "name": "Proposed_building_height_changes",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Proposed_building_height_changes/FeatureServer"
+  },
+  {
+   "name": "Proposed_OurCity_OurPlan",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Proposed_OurCity_OurPlan/FeatureServer"
+  },
+  {
+   "name": "ProposedCityPlan",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/ProposedCityPlan/FeatureServer"
+  },
+  {
+   "name": "Public_amenities_PT",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Public_amenities_PT/FeatureServer"
+  },
+  {
+   "name": "Public_Showers",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Public_Showers/FeatureServer"
+  },
+  {
+   "name": "Public_Wi_Fi_Locations",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Public_Wi_Fi_Locations/FeatureServer"
+  },
+  {
+   "name": "Rapid_Transport_Route",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Rapid_Transport_Route/FeatureServer"
+  },
+  {
+   "name": "Recycled_Water_Pipe",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Recycled_Water_Pipe/FeatureServer"
+  },
+  {
+   "name": "Regulated_vegetation",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Regulated_vegetation/FeatureServer"
+  },
+  {
+   "name": "Regulated_vegetation_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Regulated_vegetation_v5/FeatureServer"
+  },
+  {
+   "name": "Residential_density",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Residential_density/FeatureServer"
+  },
+  {
+   "name": "Residential_density_CityPlan_Consultation",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Residential_density_CityPlan_Consultation/FeatureServer"
+  },
+  {
+   "name": "Residential_density_v6",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Residential_density_v6/FeatureServer"
+  },
+  {
+   "name": "Retaining_Wall",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Retaining_Wall/FeatureServer"
+  },
+  {
+   "name": "Ridges_and_significant_hills_protection",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Ridges_and_significant_hills_protection/FeatureServer"
+  },
+  {
+   "name": "Ridges_and_significant_hills_protection_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Ridges_and_significant_hills_protection_v5/FeatureServer"
+  },
+  {
+   "name": "RidgesAndSignificantHillsProtection",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/RidgesAndSignificantHillsProtection/FeatureServer"
+  },
+  {
+   "name": "Road_Closures_139040_b",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Road_Closures_139040_b/FeatureServer"
+  },
+  {
+   "name": "Road_Segment",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Road_Segment/FeatureServer"
+  },
+  {
+   "name": "Rural_landscape_and_environment_precinct",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Rural_landscape_and_environment_precinct/FeatureServer"
+  },
+  {
+   "name": "Rural_landscape_environment_precinct",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Rural_landscape_environment_precinct/FeatureServer"
+  },
+  {
+   "name": "Scoreboard",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Scoreboard/FeatureServer"
+  },
+  {
+   "name": "Seat",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Seat/FeatureServer"
+  },
+  {
+   "name": "SeawallLine_CityPlan_V6",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/SeawallLine_CityPlan_V6/FeatureServer"
+  },
+  {
+   "name": "Sentinel_Macro_Invertebrates",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Sentinel_Macro_Invertebrates/FeatureServer"
+  },
+  {
+   "name": "Sentinel_Water_Quality",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Sentinel_Water_Quality/FeatureServer"
+  },
+  {
+   "name": "service_d1be9134099e4a6db3a84d618bab57c4",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/service_d1be9134099e4a6db3a84d618bab57c4/FeatureServer"
+  },
+  {
+   "name": "Sewer_Connection",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Sewer_Connection/FeatureServer"
+  },
+  {
+   "name": "Sewer_Fitting",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Sewer_Fitting/FeatureServer"
+  },
+  {
+   "name": "Sewer_Maintenance_Hole",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Sewer_Maintenance_Hole/FeatureServer"
+  },
+  {
+   "name": "Sewer_Pipe_Non_Pressure",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Sewer_Pipe_Non_Pressure/FeatureServer"
+  },
+  {
+   "name": "Sewer_Pipe_Pressure",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Sewer_Pipe_Pressure/FeatureServer"
+  },
+  {
+   "name": "Sewer_Valves",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Sewer_Valves/FeatureServer"
+  },
+  {
+   "name": "Sign",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Sign/FeatureServer"
+  },
+  {
+   "name": "Softfall_Play_Area",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Softfall_Play_Area/FeatureServer"
+  },
+  {
+   "name": "Southport_PDA_Boundary",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Southport_PDA_Boundary/FeatureServer"
+  },
+  {
+   "name": "Spectator_Seating",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Spectator_Seating/FeatureServer"
+  },
+  {
+   "name": "State_significant_species",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/State_significant_species/FeatureServer"
+  },
+  {
+   "name": "State_significant_species_",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/State_significant_species_/FeatureServer"
+  },
+  {
+   "name": "State_significant_species_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/State_significant_species_v5/FeatureServer"
+  },
+  {
+   "name": "Storage_Tank",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Storage_Tank/FeatureServer"
+  },
+  {
+   "name": "Stormwater_End_Structure",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Stormwater_End_Structure/FeatureServer"
+  },
+  {
+   "name": "Stormwater_GPT_Complex",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Stormwater_GPT_Complex/FeatureServer"
+  },
+  {
+   "name": "Stormwater_GPT_Simple",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Stormwater_GPT_Simple/FeatureServer"
+  },
+  {
+   "name": "Stormwater_Inlet_Trench",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Stormwater_Inlet_Trench/FeatureServer"
+  },
+  {
+   "name": "Stormwater_Monitoring_Station",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Stormwater_Monitoring_Station/FeatureServer"
+  },
+  {
+   "name": "Suburbs",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Suburbs/FeatureServer"
+  },
+  {
+   "name": "Sump",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Sump/FeatureServer"
+  },
+  {
+   "name": "Surface_Drain",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Surface_Drain/FeatureServer"
+  },
+  {
+   "name": "survey123_60d6c02eab5b457e90d5fde68698c5c0_fieldworker",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/survey123_60d6c02eab5b457e90d5fde68698c5c0_fieldworker/FeatureServer"
+  },
+  {
+   "name": "Switchboard",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Switchboard/FeatureServer"
+  },
+  {
+   "name": "Table_Outdoor",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Table_Outdoor/FeatureServer"
+  },
+  {
+   "name": "Tap",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Tap/FeatureServer"
+  },
+  {
+   "name": "Tap1",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Tap1/FeatureServer"
+  },
+  {
+   "name": "Temporary_Road_Closure",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Temporary_Road_Closure/FeatureServer"
+  },
+  {
+   "name": "Test_Traffic_Signals_view",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Test_Traffic_Signals_view/FeatureServer"
+  },
+  {
+   "name": "The_Spit_Master_Plan_Area",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/The_Spit_Master_Plan_Area/FeatureServer"
+  },
+  {
+   "name": "Traffic_Area",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Traffic_Area/FeatureServer"
+  },
+  {
+   "name": "Traffic_Count",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Traffic_Count/FeatureServer"
+  },
+  {
+   "name": "Traffic_Signal",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Traffic_Signal/FeatureServer"
+  },
+  {
+   "name": "Transport_route_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Transport_route_v5/FeatureServer"
+  },
+  {
+   "name": "Urban_Forest",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Urban_Forest/FeatureServer"
+  },
+  {
+   "name": "Vegetation_management",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Vegetation_management/FeatureServer"
+  },
+  {
+   "name": "Vegetation_management_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Vegetation_management_v5/FeatureServer"
+  },
+  {
+   "name": "Vegetation_protection_order",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Vegetation_protection_order/FeatureServer"
+  },
+  {
+   "name": "Vegetation_protection_order_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Vegetation_protection_order_v5/FeatureServer"
+  },
+  {
+   "name": "Vehicle_Access",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Vehicle_Access/FeatureServer"
+  },
+  {
+   "name": "Waste_Collection_Point",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Waste_Collection_Point/FeatureServer"
+  },
+  {
+   "name": "Waste_Sewer_Pump",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Waste_Sewer_Pump/FeatureServer"
+  },
+  {
+   "name": "Water_Body",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Water_Body/FeatureServer"
+  },
+  {
+   "name": "Water_Feature",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Water_Feature/FeatureServer"
+  },
+  {
+   "name": "Water_Fitting",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Water_Fitting/FeatureServer"
+  },
+  {
+   "name": "Water_Hydrant",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Water_Hydrant/FeatureServer"
+  },
+  {
+   "name": "Water_Maintenance_Hole",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Water_Maintenance_Hole/FeatureServer"
+  },
+  {
+   "name": "Water_Service_Connection",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Water_Service_Connection/FeatureServer"
+  },
+  {
+   "name": "Water_Valve",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Water_Valve/FeatureServer"
+  },
+  {
+   "name": "WaterSupplyBufferArea_CityPlanV6",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/WaterSupplyBufferArea_CityPlanV6/FeatureServer"
+  },
+  {
+   "name": "WaterSupplyProperties_CityPlanV6",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/WaterSupplyProperties_CityPlanV6/FeatureServer"
+  },
+  {
+   "name": "WaterTreatmentPlant_CityPlan_V6",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/WaterTreatmentPlant_CityPlan_V6/FeatureServer"
+  },
+  {
+   "name": "Waterways_CityPlanV6",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Waterways_CityPlanV6/FeatureServer"
+  },
+  {
+   "name": "Weir",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Weir/FeatureServer"
+  },
+  {
+   "name": "Wheel_Wash",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Wheel_Wash/FeatureServer"
+  },
+  {
+   "name": "Woongoolba_flood_mitigation_catchment_area",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Woongoolba_flood_mitigation_catchment_area/FeatureServer"
+  },
+  {
+   "name": "Woongoolba_flood_mitigation_catchment_area_v5",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Woongoolba_flood_mitigation_catchment_area_v5/FeatureServer"
+  },
+  {
+   "name": "Works_Water_Pump",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Works_Water_Pump/FeatureServer"
+  },
+  {
+   "name": "WSUD_Area",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/WSUD_Area/FeatureServer"
+  },
+  {
+   "name": "Zone",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Zone/FeatureServer"
+  },
+  {
+   "name": "Waze_traffic_test",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Waze_traffic_test/FeatureServer"
+  },
+  {
+   "name": "Scour_Protection_1",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Scour_Protection_1/FeatureServer"
+  },
+  {
+   "name": "Insurance_Flood_Event_2026",
+   "type": "FeatureServer",
+   "url": "https://services.arcgis.com/3vStCH7NDoBOZ5zn/ArcGIS/rest/services/Insurance_Flood_Event_2026/FeatureServer"
+  }
+ ],
+ "qld_state": [
+  {
+   "folder": "FloodCheck",
+   "name": "2010To2011InterimFloodLines",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/2010To2011InterimFloodLines/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "BasicStudies",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/BasicStudies/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "BasinExtremeEvents",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/BasinExtremeEvents/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "BasinOnePercentAEP",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/BasinOnePercentAEP/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "ComprehensiveStudies",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ComprehensiveStudies/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "FloodCheck_Print",
+   "type": "GPServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck_Print/GPServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "FloodGauges",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodGauges/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "Floods_Brisbane_1893",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Floods_Brisbane_1893/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "Floods_BrisbaneAndIpswich_1974",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Floods_BrisbaneAndIpswich_1974/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "Floods_Roma_2011",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Floods_Roma_2011/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "FloodStudies",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodStudies/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "FloodWarningNetworkBOM",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodWarningNetworkBOM/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "GaugingStationsDNRME",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/GaugingStationsDNRME/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "LocalGovernmentAuthorities",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/LocalGovernmentAuthorities/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "MapIndex",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/MapIndex/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "QueenslandBasins",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/QueenslandBasins/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "QueenslandSubBasins",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/QueenslandSubBasins/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "RapidHazardAssessmentMapSeries",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/RapidHazardAssessmentMapSeries/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "RapidHazardAssessment",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/RapidHazardAssessment/MapServer"
+  },
+  {
+   "folder": "FloodCheck",
+   "name": "Towns",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Towns/MapServer"
+  },
+  {
+   "folder": "Elevation",
+   "name": "Contours",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Contours/MapServer"
+  },
+  {
+   "folder": "Elevation",
+   "name": "ElevationProjectExtents",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ElevationProjectExtents/MapServer"
+  },
+  {
+   "folder": "Elevation",
+   "name": "MountainRanges",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/MountainRanges/MapServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "ActiveCropping",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ActiveCropping/MapServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "EnvironmentallySensitiveAreasCategoryA",
+   "type": "FeatureServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/EnvironmentallySensitiveAreasCategoryA/FeatureServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "EnvironmentallySensitiveAreasCategoryA",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/EnvironmentallySensitiveAreasCategoryA/MapServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "EnvironmentallySensitiveAreasCategoryB",
+   "type": "FeatureServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/EnvironmentallySensitiveAreasCategoryB/FeatureServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "EnvironmentallySensitiveAreasCategoryB",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/EnvironmentallySensitiveAreasCategoryB/MapServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "FireScarMapping",
+   "type": "FeatureServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FireScarMapping/FeatureServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "FireScarMapping",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FireScarMapping/MapServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "Fisheries",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Fisheries/MapServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "KoalaPlan",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/KoalaPlan/MapServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "LandTypes",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/LandTypes/MapServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "MattersOfStateEnvironmentalSignificance",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/MattersOfStateEnvironmentalSignificance/MapServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "NrmInvestmentPrograms",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/NrmInvestmentPrograms/MapServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "ParksFireHistory",
+   "type": "FeatureServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ParksFireHistory/FeatureServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "ParksFireHistory",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ParksFireHistory/MapServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "ParksMarineMoorings",
+   "type": "FeatureServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ParksMarineMoorings/FeatureServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "ParksMarineMoorings",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ParksMarineMoorings/MapServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "ParksMarineProtectedAreas",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ParksMarineProtectedAreas/MapServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "ParksTerrestrialProtectedAreas",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ParksTerrestrialProtectedAreas/MapServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "SLATS",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/SLATS/MapServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "SuratCumulativeMgmtArea",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/SuratCumulativeMgmtArea/MapServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "WaterAndWetlandBiodiversity",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/WaterAndWetlandBiodiversity/MapServer"
+  },
+  {
+   "folder": "Environment",
+   "name": "WetlandProtection",
+   "type": "MapServer",
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/WetlandProtection/MapServer"
+  }
+ ],
+ "counts": {
+  "gc": 256,
+  "qld": 45
+ }
+}
