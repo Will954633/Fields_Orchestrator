@@ -987,3 +987,22 @@ HogQL failure, so its deck detector had never run in 8 snapshots of "0 incidents
 that detector tested V4 readers against `forward_cta_clicked`, a V3-only event.
 Ledger 1/2 — nothing proposed. REC-onsite-003 (kill-switch state + slot mount) remains the binding
 constraint on the domain. Cycle doc: `cycles/2026-W33/2026-08-16/onsite_cycle_20260816_1716.md`.
+
+## 2026-08-23 — ops weekly cycle
+🔧 Ops: 22 actionable (2 fixed, 2 need Will) · board raw ERROR=11 STALE=10
+
+- **Fixed** [STEP117-HOUSE-GATE-FALSE-RED]: step 117 failed the whole nightly run for 3 nights
+  on an empty queue. `count_needing_analysis()` ignores the `_is_house()` gate that
+  `fetch_candidates()` applies — 17 matched the filter, 0 were houses (all strata units).
+  Gate-drained queue now exits success; Rule 7b assertion moved post-loop; latent
+  `cursor.limit()`-on-a-generator AttributeError fixed. Verified exit 0. `ed909676`.
+- **Fixed** [FB-APPROVAL-DOUBLE-POLL-ON-HEARTBEAT-FAIL]: `except Exception: poll()` meant a
+  heartbeat write failure silently re-ran a poller that PUBLISHES to Facebook — ~10h of
+  double-polls with no heartbeat. Import-only guard now. `9efdde94`.
+- **REC-ops-005**: nine jobs declare a cadence but appear in no crontab, cron.d or systemd
+  timer — they have never run on schedule, only once at creation. Draft cron lines at
+  `artifacts/REC-ops-005_cron_lines_DRAFT.txt`. Crontab untouched.
+- **REC-ops-006**: Gmail OAuth dead again (5th time since 07-24); FPF sent 0/4 emails on
+  08-21. Raised as a decision — publish the consent screen, not re-auth-again.
+- Disclosed: I left TWO stray rows (`fb_approval_poll_TESTPROBE`, `rl_ops_actions`) in `job_runs` rather than delete
+  it (deleting heartbeats is absolutely forbidden to ops). Needs authorised removal.
