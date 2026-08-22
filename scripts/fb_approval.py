@@ -138,14 +138,20 @@ def main():
     if a.cmd == "propose":
         propose(a.text, [t for t in a.tags.split(",") if t])
     elif a.cmd == "poll":
+        # poll() PUBLISHES to a public Facebook page, so it must run exactly once per
+        # invocation. It used to sit inside a try whose except re-ran it, which meant any
+        # heartbeat failure (or a mid-flight poll error) silently double-polled AND left no
+        # heartbeat — the board then read "not firing" while the poller was in fact running
+        # twice. Import guard only; poll() runs once; a heartbeat failure is raised, not
+        # swallowed, so it lands in logs/fb_approval.log instead of vanishing.
         try:
             from job_status import record_job_result
-            poll(a.dry_run)
-            if not a.dry_run:
-                record_job_result("fb_approval_poll", "success", cadence_hours=1,
-                                  title="FB-organic Telegram approval poller", detail="ok")
         except Exception:
-            poll(a.dry_run)
+            record_job_result = None
+        poll(a.dry_run)
+        if record_job_result and not a.dry_run:
+            record_job_result("fb_approval_poll", "success", cadence_hours=1,
+                              title="FB-organic Telegram approval poller", detail="ok")
     elif a.cmd == "list":
         _list()
 
