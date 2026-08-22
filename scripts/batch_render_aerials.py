@@ -48,6 +48,7 @@ sys.path.insert(0, "/home/fields/Feilds_Website/07_Valuation_Comps")
 
 from shared.env import load_env
 from shared.db import get_gold_coast_db
+from shared import image_derivatives as deriv
 from job_status import job_run
 
 load_env()
@@ -57,6 +58,36 @@ import render_property_aerial as ra  # noqa: E402  (needs load_env first)
 SUBURBS = ("robina", "varsity_lakes", "burleigh_waters")
 BLOB_ROOT = Path("/data/blobs/property-images/aerial")
 PUBLIC_ROOT = "https://blobs.fieldsestate.com.au/property-images/aerial"
+
+# The container `boundary.png` lives under; blob names are relative to it.
+DERIV_CONTAINER = "property-images"
+
+
+def ensure_derivatives(suburb, doc_id):
+    """Generate the 480/960 WebP renditions PropertyHeroV2 requests via `srcSet`.
+
+    ⚠ This is not cosmetic. The hero builds `boundary.480.webp`/`boundary.960.webp`
+    unconditionally for any `.png` aerial URL, and a 404 candidate inside `srcSet`
+    fails the <img> outright — it does NOT fall back to `src`. So an aerial whose
+    derivatives were never written renders as a BROKEN hero, not a slow one. Writing
+    the .png without them (which this script did until 2026-08-22) shipped exactly
+    that: 47 live for-sale heroes broken. See fix-history [AERIAL-HERO-SRCSET-404].
+
+    The source render is ~1280px wide and derivatives never upscale, so this emits
+    only 480 and 960 — the two widths the hero advertises. Idempotent (skips widths
+    already on disk). Returns the count of widths newly written.
+    """
+    blob_name = f"aerial/{suburb}/{doc_id}/boundary.png"
+    before = deriv.existing_derivatives(DERIV_CONTAINER, blob_name)
+    try:
+        got = deriv.make_derivatives_from_disk(DERIV_CONTAINER, blob_name)
+    except deriv.DecodeError as exc:
+        print(f"    ! aerial derivative decode failed: {exc}")
+        return 0
+    if got is None:
+        print(f"    ! aerial png not on disk for derivatives: {blob_name}")
+        return 0
+    return len(set(got) - set(before))
 
 
 
@@ -136,7 +167,7 @@ def main():
 
     with job_run("batch_render_aerials", cadence_hours=168,
                  title="Boundary Aerial Render") as beat:
-        rendered = skipped = failed = 0
+        rendered = skipped = failed = derived = 0
         eligible = 0
 
         for suburb in suburbs:
@@ -158,6 +189,10 @@ def main():
                 final = out_dir / "boundary.png"
                 if final.exists() and not args.force:
                     skipped += 1
+                    # The .png being present does not mean the WebP renditions are.
+                    # Backfill any missing width so a previously-rendered aerial can
+                    # never keep a broken srcset (see ensure_derivatives).
+                    derived += ensure_derivatives(suburb, doc["_id"])
                     continue
                 try:
                     path, note = ra.render(db, suburb, doc, "sun", str(out_dir))
@@ -188,11 +223,15 @@ def main():
                                                 "aerial_boundary_at": time.strftime("%Y-%m-%dT%H:%M:%S")},
                                        "$unset": {"aerial_boundary_failed": ""}})
                 rendered += 1
+                # Renditions must ship with every fresh render — the hero requests
+                # them by name and 404s the whole image if they are absent.
+                derived += ensure_derivatives(suburb, doc["_id"])
                 if rendered % 50 == 0:
                     print(f"    {suburb}: {rendered} rendered")
 
         beat.metrics = {"rendered": rendered, "skipped": skipped,
-                        "failed": failed, "eligible": eligible}
+                        "failed": failed, "eligible": eligible,
+                        "derivatives_written": derived}
 
         # Rule 7b — an empty queue is success; eligible-but-nothing-rendered is not.
         if eligible and not rendered and not skipped:
@@ -200,8 +239,10 @@ def main():
                 f"{eligible} properties eligible but 0 rendered and 0 skipped "
                 f"({failed} failed) — the cadastre lookup or the Static Maps key is broken")
 
-        beat.detail = f"{rendered} rendered, {skipped} already present, {failed} without a parcel"
-        print(f"\n  rendered {rendered} · skipped {skipped} · failed {failed}")
+        beat.detail = (f"{rendered} rendered, {skipped} already present, "
+                       f"{failed} without a parcel, {derived} derivatives written")
+        print(f"\n  rendered {rendered} · skipped {skipped} · failed {failed} "
+              f"· derivatives {derived}")
 
 
 if __name__ == "__main__":
