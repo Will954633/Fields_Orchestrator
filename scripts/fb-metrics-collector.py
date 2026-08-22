@@ -227,6 +227,12 @@ def parse_aggregate_row(row):
         "comment": int(get_action_value(actions, "comment")),
         "post_save": int(get_action_value(actions, "onsite_conversion.post_save")),
         "video_views": int(get_action_value(actions, "video_view")),
+        "leads": int(get_action_value(actions, "lead")),
+        "msg_conversations_started": int(get_action_value(
+            actions, "onsite_conversion.messaging_conversation_started_7d")),
+        "msg_first_reply": int(get_action_value(
+            actions, "onsite_conversion.messaging_first_reply")),
+        "msg_blocks": int(get_action_value(actions, "onsite_conversion.messaging_block")),
         "cost_per_link_click": (
             round(spend / link_clicks, 4) if link_clicks > 0 else None
         ),
@@ -289,6 +295,17 @@ def parse_daily_row(row):
         "comment": int(get_action_value(actions, "comment")),
         "post_save": int(get_action_value(actions, "onsite_conversion.post_save")),
         "video_views": int(get_action_value(actions, "video_view")),
+        # Lead-form submissions and Messenger conversations. Neither was captured before
+        # 2026-08-23, so a CONVERSATIONS-objective campaign (click-to-Messenger) recorded
+        # spend with no outcome of any kind and read as a plain zero-conversion waster.
+        # ⚠ A started conversation is NOT a qualified contact — see the 93 Burleigh read
+        # (8/8 conversations, 0 qualified, 3 self-declared misclicks). Report, don't reward.
+        "leads": int(get_action_value(actions, "lead")),
+        "msg_conversations_started": int(get_action_value(
+            actions, "onsite_conversion.messaging_conversation_started_7d")),
+        "msg_first_reply": int(get_action_value(
+            actions, "onsite_conversion.messaging_first_reply")),
+        "msg_blocks": int(get_action_value(actions, "onsite_conversion.messaging_block")),
         "cost_per_view_content": (
             round(float(get_action_value(cost_per, "view_content")), 4)
             if get_action_value(cost_per, "view_content") != "0" else None
