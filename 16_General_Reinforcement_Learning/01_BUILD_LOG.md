@@ -1006,3 +1006,41 @@ constraint on the domain. Cycle doc: `cycles/2026-W33/2026-08-16/onsite_cycle_20
   08-21. Raised as a decision — publish the consent screen, not re-auth-again.
 - Disclosed: I left TWO stray rows (`fb_approval_poll_TESTPROBE`, `rl_ops_actions`) in `job_runs` rather than delete
   it (deleting heartbeats is absolutely forbidden to ops). Needs authorised removal.
+
+## 2026-08-23 — seo cycle (weekly, contract) — SHIPPED, not proposed
+
+Briefing tier **aging** (10d) → full standing authorisations. Ledger 0/2 at start.
+Doc: `cycles/2026-W34/2026-08-23/seo_cycle_20260823_0700.md`.
+
+- **SEO-001:** `overview` title → `{suburb} Property Market 2026: Median Price & Growth Data`
+  + matching H1 and JSON-LD headline. The cluster is 402 impressions / **0 clicks** with two of
+  three queries on page one (8.5 desktop, 9.3) — the 08-13 cycle read it as a rank problem off
+  mobile-blended averages and skipped it. It is a click problem. Commit `38de5d92`.
+- **SEO-002:** removed **6 stale "Updated March 2026"** meta claims, one on a page at pos 8.4
+  with zero clicks. Removed, not refreshed — a hardcoded date always goes stale again.
+- **SEO-003:** **Rule 5 fix in public tags** — `direction` promised "[2026 Forecast]" and
+  "price projections" on every suburb. Rule 5 forbids predictions. Reworded to indicators.
+- **SEO-004:** entity sweep. `/houses-for-sale/:suburb` `| Fields` → `| Fields Real Estate`;
+  canonical Facebook URL at 3 missed call sites; and the big one — `netlify.toml` shadows
+  **four `/about*` URLs** with three static files in which **three organization names claimed
+  one root URL** ("Fields Real Estate" / "Fields Estate" / "Fields Research"). `/about` had no
+  structured data at all; added a RealEstateAgent node byte-identical to root.tsx.
+  Commits `07822316`, `fe13a1da`, `5a300771`. **Result: `names in use : Fields Real Estate`,
+  one name across all 9 sampled pages, `entity_name_drift` cleared.**
+- **SEO-005:** **widened `brand_serp_signal.py` 4 → 9 pages.** The 4-page sample had reported
+  the site clean on 08-22 while all of the above was live. Fix for the class, not the instance.
+- **SEO-006:** discovered the **goal-1 query set** the brief said was UNKNOWN. Every term lands
+  on `/houses-for-sale/:suburb` (pos 22-41); `/for-sale-v3` ranks for **none** of it — only
+  brand and noise. → REC-seo-004.
+- **SEO-007:** 46 URLs to IndexNow + Bing (both 200), incl. 9 legacy `/market-metrics/*` for
+  301 consolidation. Verified first that the migration is clean (301 ✓, sitemap ✓, canonical ✓,
+  internal links ✓) — it is crawl lag, not a defect, and reported as such.
+- **SEO-008:** evidenced Rule 5 directive to `articles` — 4 headline-field + 7 body-copy
+  single-valuation figures live on `/for-sale-v3`, incl. `$1,726,668`, the figure Will's brief
+  records as already having reached the brand SERP. Still live 10 days on.
+- Proposed **REC-seo-004** (which page owns home-search intent) and **REC-seo-006** (delete the
+  `/about*` static shadow, or delete the routes). Withdrew my own **REC-seo-005** mid-cycle
+  after finding its scope was wrong — 4 URLs, not 1.
+- Gates: `npm run build` before every push (4 batched commits, 4 builds); JSON-LD parsed before
+  every push; live Googlebot fetch after every deploy; 12 actions to `rl_seo_actions`; 3
+  fix-history entries in `logs/fix-history/2026-08-23.md`.
