@@ -217,8 +217,11 @@ free document.
 - Buyer hypotheses tested: acreage-downsizers (Mudgeeraba belt) · local "buy what you can't
   renovate" · Sydney value migration.
 
-**Assets**
+**Assets** (the live page is the hub; everything else is a spoke)
+- ⭐ **Live listing page (share this):** `https://fieldsestate.com.au/93-burleigh-street/` — public, lead-capturing, trackable, always current. Config: `scripts/conjunction_landing_configs/93-burleigh-street-burleigh-waters.json`; built file `Feilds_Website/01_Website/public/93-burleigh-street/index.html`.
+- **Buyer info pack (PDF, email attachment):** `03_Facebook/Campaigns/2026-08-20_93Burleigh_Messenger/93_Burleigh_St_Information_Pack.pdf` (Drive: `…/folders/14YWteZ7ZLjoZr4-JCNR_gdamfx139Wqw`); regenerate via `make_infopack.py`.
 - Photos (Drive): `…/folders/1_2JpRLNXgj-FECJgX2ObNf_VNMajQ-Fe`
 - Ad review mockups (Drive): `…/folders/14YWteZ7ZLjoZr4-JCNR_gdamfx139Wqw`
 - Paid campaign: `93 Burleigh St — Messenger Carousel` (`120252341379830134`, PAUSED)
 - Builder + gotchas: `03_Facebook/Campaigns/2026-08-20_93Burleigh_Messenger/`
+- ⚠ **Distance discipline (learned here):** measure "walk to the beach" to the **nearest point on the coastline** (the sand runs the whole coast), not to a named beach POI pin — those sit km away and overstate it. 93 Burleigh = 947 m straight-line to nearest sand → a fair **~1 km walk**. Keep the ads, PDF and live page consistent on it. The page's build-config rarity/comps analysis still references "Burleigh Heads Beach" (far pin) — reconcile if regenerated.
