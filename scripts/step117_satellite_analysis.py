@@ -419,14 +419,20 @@ class SatelliteAnalysisRepository:
             batch = min(int(remaining), 5000) if limit > 0 else 0
 
             def _load(coll=collection, query=q, lim=batch):
-                cursor = coll.find(query)
                 # Houses only — see _is_house(). Filtered here rather than in the query
                 # because dwelling class is derived from several fields plus the address,
                 # which Mongo cannot express.
-                cursor = (d for d in cursor if _is_house(d))
-                if lim > 0:
-                    cursor = cursor.limit(lim)
-                return list(cursor)
+                # ⚠ The limit MUST be applied after the house gate, not via cursor.limit():
+                # the gate turns the cursor into a generator, so cursor.limit() raised
+                # AttributeError on any run that passed --batch-size.
+                out = []
+                for d in coll.find(query):
+                    if not _is_house(d):
+                        continue
+                    out.append(d)
+                    if lim > 0 and len(out) >= lim:
+                        break
+                return out
 
             docs = cosmos_retry(_load, f"{suburb}.fetch_candidates", log=print)
             for doc in docs:
@@ -555,10 +561,14 @@ def main() -> None:
         if not repo.suburbs:
             raise EmptyWorkSetError("No target suburb collections available.")
 
+        # ⚠ This count is the MONGO FILTER only. It does NOT apply the _is_house() gate,
+        # which cannot be expressed in a query, so it over-reports the real work set.
+        # Treat it as a ceiling, never as "work exists" — see the empty-set branch below.
+        total_needing = None
         if not args.skip_count:
             backlog = repo.count_needing_analysis()
             total_needing = sum(backlog.values())
-            print("Needing satellite analysis per suburb:")
+            print("Matching the filter, before the houses-only gate:")
             for suburb, count in backlog.items():
                 print(f"  - {suburb}: {count}")
             print(f"  Total: {total_needing}\n")
@@ -573,7 +583,23 @@ def main() -> None:
 
         candidates = repo.fetch_candidates(limit=args.batch_size)
         if not candidates:
-            raise EmptyWorkSetError("No properties need satellite analysis.")
+            # An empty QUEUE is success; an empty RESULT where work existed is failure
+            # (CLAUDE.md Rule 7b). Those are different things here and this branch used to
+            # conflate them: it raised EmptyWorkSetError whenever the gate filtered
+            # everything out, so a night where every unanalysed listing was an apartment
+            # went red. Measured 2026-08-22: 17 matched the filter across the three target
+            # suburbs, 0 were houses, and the step has failed the nightly run since.
+            # Non-houses are excluded deliberately (see _is_house) so that is a drained
+            # queue, not a broken fetch. Only the unexplained case still raises.
+            matched = "unknown (--skip-count)" if total_needing is None else total_needing
+            print(
+                f"✓ Nothing eligible: {matched} matched the filter, none are houses. "
+                "Non-houses are excluded by design (see _is_house) — this is a drained "
+                "queue, not a failure."
+            )
+            monitor.log_metric("properties_processed", 0)
+            monitor.finish(status="success")
+            return
 
         print(f"Loaded {len(candidates)} candidate properties\n")
 
@@ -682,6 +708,16 @@ def main() -> None:
         if stats.processed > 0 and error_ratio > 0.5:
             raise RuntimeError(
                 f"Error ratio {error_ratio:.2%} exceeds 50% threshold; marking failure."
+            )
+
+        # Rule 7b: the empty-set branch above now treats a gate-drained queue as success,
+        # so the outcome assertion has to live here instead — where "we found work and did
+        # none of it" is unambiguous. This is the case that must never report success.
+        if candidates and stats.successes == 0:
+            raise RuntimeError(
+                f"loaded {len(candidates)} eligible house(s) and wrote satellite_analysis "
+                f"for none (errors={stats.errors}, no-coords={stats.skipped_no_coords}, "
+                f"maps-errors={stats.skipped_maps_error})"
             )
 
         monitor.finish(status="success")
