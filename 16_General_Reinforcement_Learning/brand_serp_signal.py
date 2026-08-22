@@ -60,7 +60,22 @@ CANONICAL_NAME = "Fields Real Estate"      # Will's ruling, 2026-08-13
 SITE = "https://fieldsestate.com.au"
 
 # The pages a person researching the business actually lands on.
-BRAND_PAGES = ["/", "/why-fields", "/for-sale-v3", "/analyse-your-home"]
+#
+# (2026-08-23) WIDENED from four to nine. The four-page sample reported "names in use:
+# Fields Real Estate" on 2026-08-22 — true of its sample, false of the site. Outside it,
+# /houses-for-sale/:suburb was still emitting the bare "| Fields" suffix and
+# /about/will-simpson was asserting "Fields Estate" in both its <title> and its schema
+# worksFor node. A sample that excludes the "who we are" page cannot answer the one
+# question this sensor exists to answer, and it reported clean while the drift was live.
+# See logs/fix-history/2026-08-23.md [SEO-ENTITY-DRIFT-RESIDUAL].
+#
+# The added five are: the two author/about pages (the actual "who we are" entry points a
+# seller reaches from a flyer or a referral), one /houses-for-sale suburb page (the goal-1
+# query cluster), the news hub, and one market-intelligence hub — between them these cover
+# every template that emits its own brand suffix rather than inheriting root's.
+BRAND_PAGES = ["/", "/why-fields", "/for-sale-v3", "/analyse-your-home",
+               "/about", "/about/will-simpson", "/houses-for-sale/Robina",
+               "/news", "/market-intelligence/Robina"]
 
 # Brand queries we care about. Used against Search Console, not scraped.
 BRAND_TERMS = ["fields real estate", "fields estate", "fieldsestate", "fields gold coast",
