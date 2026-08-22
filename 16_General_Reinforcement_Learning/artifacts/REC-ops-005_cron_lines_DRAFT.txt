@@ -1,0 +1,45 @@
+# REC-ops-005 — DRAFT cron lines for the nine jobs that declare a cadence but sit in no scheduler.
+#
+# Drafted by the ops RL cycle 2026-08-23. NOT APPLIED. The crontab is Will-only after the
+# 2026-07-30 wipe that destroyed all 94 jobs, so nothing here has been installed — this file
+# exists so approving it is a paste rather than a re-derivation.
+#
+# Before pasting, decide the question in the recommendation's --ask: are all nine still
+# WANTED? The four direct-call jobs in particular feed a list of real people to phone, and
+# scheduling them is a business decision, not a repair.
+#
+# Times are AEST and chosen to avoid the 20:30-22:40 nightly pipeline window and the
+# 00:00-02:00 block already crowded with justcall_sync (01:20) and the CEO exports.
+#
+# ── Direct phone calls — daily, ORDER IS LOAD-BEARING ────────────────────────────────────
+# id4me_append feeds build_call_list (202 candidates were blocked on it at last run);
+# build_call_list feeds call_list_to_sheet; read_call_outcomes pulls Will's notes back out
+# of the sheet and must run BEFORE the list is rebuilt or the day's outcomes are overwritten.
+# Spacing is 25 min, which comfortably covers each job's observed runtime.
+15 3 * * * set -a && source /home/fields/Fields_Orchestrator/.env && set +a && /home/fields/venv/bin/python3 /home/fields/Fields_Orchestrator/20_Direct_Phone_Calls/scripts/read_call_outcomes.py >> /home/fields/Fields_Orchestrator/logs/read_call_outcomes.log 2>&1
+40 3 * * * set -a && source /home/fields/Fields_Orchestrator/.env && set +a && /home/fields/venv/bin/python3 /home/fields/Fields_Orchestrator/20_Direct_Phone_Calls/scripts/id4me_append_runner.py --run >> /home/fields/Fields_Orchestrator/logs/id4me_append.log 2>&1
+5 4 * * * set -a && source /home/fields/Fields_Orchestrator/.env && set +a && /home/fields/venv/bin/python3 /home/fields/Fields_Orchestrator/20_Direct_Phone_Calls/scripts/build_call_list.py --build >> /home/fields/Fields_Orchestrator/logs/build_call_list.log 2>&1
+30 4 * * * set -a && source /home/fields/Fields_Orchestrator/.env && set +a && /home/fields/venv/bin/python3 /home/fields/Fields_Orchestrator/20_Direct_Phone_Calls/scripts/call_list_to_sheet.py >> /home/fields/Fields_Orchestrator/logs/call_list_to_sheet.log 2>&1
+
+# ── Off-market report poller — daily ─────────────────────────────────────────────────────
+# Last ran 2026-08-13, the day it was written.
+50 2 * * * set -a && source /home/fields/Fields_Orchestrator/.env && set +a && /home/fields/venv/bin/python3 /home/fields/Fields_Orchestrator/scripts/offmarket_report_poller.py >> /home/fields/Fields_Orchestrator/logs/offmarket_report_poller.log 2>&1
+
+# ── Weekly backfills — Monday early, all declare cadence 168h ────────────────────────────
+# Each last ran once on 2026-08-06/07, the day it was written. Staggered so two heavy
+# Cosmos sweeps never overlap (backfill_osm_water_features touched 23,748 documents on its
+# only run, so it gets its own slot).
+10 3 * * 1 set -a && source /home/fields/Fields_Orchestrator/.env && set +a && /home/fields/venv/bin/python3 /home/fields/Fields_Orchestrator/scripts/backfill_osm_water_features.py >> /home/fields/Fields_Orchestrator/logs/backfill_osm_water_features.log 2>&1
+45 3 * * 1 set -a && source /home/fields/Fields_Orchestrator/.env && set +a && /home/fields/venv/bin/python3 /home/fields/Fields_Orchestrator/scripts/backfill_design_envelope.py >> /home/fields/Fields_Orchestrator/logs/backfill_design_envelope.log 2>&1
+15 4 * * 1 set -a && source /home/fields/Fields_Orchestrator/.env && set +a && /home/fields/venv/bin/python3 /home/fields/Fields_Orchestrator/scripts/repoint_listing_images.py >> /home/fields/Fields_Orchestrator/logs/repoint_listing_images.log 2>&1
+45 4 * * 1 set -a && source /home/fields/Fields_Orchestrator/.env && set +a && /home/fields/venv/bin/python3 /home/fields/Fields_Orchestrator/scripts/backfill_missing_listing_photos.py >> /home/fields/Fields_Orchestrator/logs/backfill_missing_listing_photos.log 2>&1
+
+# ⚠ repoint_listing_images runs BEFORE backfill_missing_listing_photos on purpose:
+# backfill_missing_listing_photos.py's own header (2026-08-07) says it exists to re-queue
+# the listings repoint_listing_images left pointing at photos we do not hold.
+#
+# ── Verify after pasting ────────────────────────────────────────────────────────────────
+#   crontab -l | grep -cE 'read_call_outcomes|id4me_append_runner|build_call_list|call_list_to_sheet|offmarket_report_poller|backfill_osm_water_features|backfill_design_envelope|repoint_listing_images|backfill_missing_listing_photos'
+#   -> expect 9
+# Then let one cycle pass and re-check the Process Registry page; the nine STALE rows
+# should read OK. If any goes ERROR instead, that is the honest state and ops will triage it.
