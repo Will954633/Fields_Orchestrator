@@ -50,6 +50,29 @@ def blob_name_from_url(url):
     return path[len(prefix):] if path.startswith(prefix) else None
 
 
+def _blob_names_served(doc):
+    """Blob names for every photo the public API can serve, deduped, order-stable.
+
+    property.mjs builds the gallery (and its srcset) from `photo_tour_order` FIRST,
+    then `property_images` — so a derivative must exist for a photo in EITHER array,
+    not just `property_images`. When a listing's photos are re-uploaded to a new
+    date-folder, `property_images` moves to it but `photo_tour_order` keeps pointing
+    at the old folder; generating only for `property_images` left that old folder
+    with no renditions, and the listing-level widths flag then made the browser
+    request `.960.webp` files that 404 and get ORB-blocked — a blank gallery. See
+    logs/fix-history/2026-08-22.md [GALLERY-SRCSET-STALE-FOLDER-404].
+    """
+    out, seen = [], set()
+    for field in ('photo_tour_order', 'property_images'):
+        for item in (doc.get(field) or []):
+            url = item.get('url') if isinstance(item, dict) else item
+            nm = blob_name_from_url(url)
+            if nm and nm not in seen:
+                seen.add(nm)
+                out.append(nm)
+    return out
+
+
 def collect(db, suburbs, limit):
     """Live listings as (suburb, _id, [blob_name, ...]), capped at `limit` photos.
 
@@ -59,9 +82,8 @@ def collect(db, suburbs, limit):
     groups, n = [], 0
     for suburb in suburbs:
         for doc in db[suburb].find({'listing_status': 'for_sale'},
-                                   {'property_images': 1}):
-            got = [nm for nm in (blob_name_from_url(u)
-                                 for u in (doc.get('property_images') or [])) if nm]
+                                   {'property_images': 1, 'photo_tour_order': 1}):
+            got = _blob_names_served(doc)
             if not got:
                 continue
             if limit and n + len(got) > limit:
