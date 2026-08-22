@@ -92,6 +92,43 @@ def buildings_for(doc, tile):
     out.sort(key=lambda o:(-o['subject'],-len(o['pts'])))
     return out, round(mpp,5)
 
+def _addr_head(a):
+    if not a: return None
+    import re
+    return re.sub(r'\s+',' ',a.split(',')[0].strip().lower()) or None
+
+def twin_join_geo(coll):
+    """Self-heal: a freshly-scraped for_sale doc often lacks geometry that a cadastral
+    'twin' for the SAME parcel already carries (see fix-history SOLAR-NEW-LISTING-UNENRICHED
+    / [[offmarket_property_twin_dedup]]). Denormalise LATITUDE/LONGITUDE/cadastral_polygon/
+    aerial_boundary_url from a UNIQUELY-matching twin so the listing becomes solar-eligible.
+    Conservative: only joins when exactly one twin shares the address head; never overwrites
+    a field the listing already has."""
+    twins={}; ambiguous=set()
+    for t in coll.find({'cadastral_polygon.rings':{'$exists':True},'aerial_boundary_url':{'$nin':[None,'']},
+                        'LATITUDE':{'$nin':[None]}},
+                       {'address':1,'LATITUDE':1,'LONGITUDE':1,'cadastral_polygon':1,'aerial_boundary_url':1}):
+        h=_addr_head(t.get('address'))
+        if not h: continue
+        if h in twins: ambiguous.add(h)
+        twins[h]=t
+    joined=0
+    for d in coll.find({'listing_status':'for_sale'},
+                       {'address':1,'LATITUDE':1,'LONGITUDE':1,'cadastral_polygon':1,'aerial_boundary_url':1}):
+        need=(not d.get('cadastral_polygon',{}).get('rings')) or d.get('LATITUDE') is None or not d.get('aerial_boundary_url')
+        if not need: continue
+        h=_addr_head(d.get('address'))
+        if not h or h in ambiguous: continue
+        tw=twins.get(h)
+        if not tw or tw['_id']==d['_id']: continue
+        upd={}
+        if not d.get('cadastral_polygon',{}).get('rings'): upd['cadastral_polygon']=tw['cadastral_polygon']
+        if d.get('LATITUDE') is None: upd['LATITUDE']=tw['LATITUDE']; upd['LONGITUDE']=tw.get('LONGITUDE')
+        if not d.get('aerial_boundary_url'): upd['aerial_boundary_url']=tw['aerial_boundary_url']
+        if upd:
+            cosmos_retry(coll.update_one,{'_id':d['_id']},{'$set':upd}); joined+=1
+    return joined
+
 def main():
     sys.path.insert(0,'/home/fields/Fields_Orchestrator/scripts')
     try:
@@ -105,6 +142,10 @@ def main():
             yield B()
     db=get_gold_coast_db()
     with job_run('solar_data_precompute', cadence_hours=168, title='Solar experience precompute') as beat:
+        # self-heal geometry from twins first, so new listings become solar-eligible
+        tjoin=0
+        for sub in SUBS: tjoin+=twin_join_geo(db[sub])
+        print(f'twin-joined geometry onto {tjoin} listing(s)')
         # gather candidates, group by tile
         cand=[]
         for sub in SUBS:
@@ -127,9 +168,9 @@ def main():
                 except Exception as e:
                     err+=1; print('  ERR',d.get('address'),str(e)[:80])
             del tile
-        beat.metrics={'stored':done,'no_tile':notile,'errors':err,'candidates':len(cand)}
-        beat.detail=f'{done} stored, {notile} no-tile, {err} err'
-        print(f'DONE: {done} stored / {len(cand)} candidates / {notile} no-tile / {err} err')
+        beat.metrics={'stored':done,'no_tile':notile,'errors':err,'candidates':len(cand),'twin_joined':tjoin}
+        beat.detail=f'{done} stored, {tjoin} twin-joined, {notile} no-tile, {err} err'
+        print(f'DONE: {done} stored / {len(cand)} candidates / {tjoin} twin-joined / {notile} no-tile / {err} err')
         if done==0 and len(cand)>0: raise RuntimeError('0 stored though candidates existed')
 
 if __name__=='__main__': main()
