@@ -48,7 +48,8 @@ def build(days=14, dry_run=False):
 
     # spend per ad (window)
     ads = defaultdict(lambda: {"spend": 0.0, "impressions": 0, "clicks": 0, "view_content": 0,
-                               "landing_page_views": 0, "name": None})
+                               "landing_page_views": 0, "name": None,
+                               "msg_started": 0, "msg_blocks": 0})
     for d in sm["ad_daily_metrics"].find({"date": {"$gte": cut}}):
         a = ads[d.get("ad_id")]
         a["spend"] += float(d.get("spend_aud") or 0)
@@ -56,6 +57,10 @@ def build(days=14, dry_run=False):
         a["clicks"] += int(d.get("clicks") or 0)
         a["view_content"] += int(d.get("view_content") or 0)
         a["landing_page_views"] += int(d.get("landing_page_views") or 0)
+        # THIRD surface: click-to-Messenger. Captured by fb-metrics-collector.py from
+        # 2026-08-23. Deliberately NOT added to `conversions` — see the flag block below.
+        a["msg_started"] += int(d.get("msg_conversations_started") or 0)
+        a["msg_blocks"] += int(d.get("msg_blocks") or 0)
         a["name"] = d.get("ad_name") or a["name"]
 
     # real vs test leads per ad (window). TWO conversion surfaces, both matter:
@@ -105,9 +110,18 @@ def build(days=14, dry_run=False):
         conv = real + web                        # GC-served conversions (form + on-site), the true reward
         cpl_real = round(a["spend"] / real, 2) if real else None
         cpc_conv = round(a["spend"] / conv, 2) if conv else None   # cost per GC conversion (form+site)
+        msg, msg_blk = a["msg_started"], a["msg_blocks"]
+        cost_per_msg = round(a["spend"] / msg, 2) if msg else None
         flags = []
         if a["spend"] >= 15 and conv == 0 and test == 0:
-            flags.append("wasteful")            # spend, no conversions at all → cull candidate
+            # A click-to-Messenger ad has no Instant Form and no on-site submit, so it can
+            # never score a `conversion` here and would always top the cull list on a metric
+            # it cannot move. Flag it for what it is; the operator must read the actual
+            # conversations to judge it.
+            flags.append("messaging_unread" if msg else "wasteful")
+        if msg and msg_blk:
+            # People blocking the Page is the strongest negative signal Messenger emits.
+            flags.append("messaging_blocks")
         if cpc_conv is not None and cpc_conv <= 8:
             flags.append("scale")               # ≤$8/conversion → scale candidate
         elif cpc_conv is not None and cpc_conv <= 25:
@@ -127,6 +141,13 @@ def build(days=14, dry_run=False):
             "ctr": round(a["clicks"] / a["impressions"], 4) if a["impressions"] else 0,
             "real_leads": real, "web_leads": web, "conversions": conv, "test_leads": test,
             "cost_per_real_lead": cpl_real, "cost_per_conversion": cpc_conv, "flags": flags,
+            # ⚠ UNQUALIFIED. A started Messenger conversation is an interaction, not a lead.
+            # 2026-08-23, 93 Burleigh carousel: 8 conversations at $11.96 each — cheaper than
+            # any form CPL we have ever bought — and all 8, read verbatim, were worthless
+            # (3 said they tapped the photo by accident, 3 blocked the Page, 0 were a GC
+            # buyer or seller). Never promote this number into `conversions`.
+            "msg_conversations": msg, "msg_blocks": msg_blk,
+            "cost_per_msg_conversation": cost_per_msg,
         })
     rows.sort(key=lambda r: (-(("scale" in r["flags"])), -(r["conversions"]), -r["spend_aud"]))
 
@@ -170,6 +191,10 @@ def build(days=14, dry_run=False):
                    "active_ads": len(rows)},
         "scale_candidates": [r for r in rows if "scale" in r["flags"]][:12],
         "cull_candidates": [r for r in rows if "wasteful" in r["flags"]][:12],
+        # Cannot be judged from numbers alone — the operator must open the Page inbox and
+        # read them. Kept out of cull_candidates so they are not culled on a metric they
+        # cannot move, and out of scale_candidates so they are not scaled on a fake win.
+        "messaging_unjudged": [r for r in rows if "messaging_unread" in r["flags"]][:12],
         "campaigns": campaigns,
         "top_ads": rows[:20],
         "recent_ad_actions": recent_actions,   # FB-funnel + ad_lifecycle actions, onboarded (M2c)
@@ -196,6 +221,13 @@ def _summary(s):
     print(f"\nCULL candidates ({len(s['cull_candidates'])}):")
     for r in s["cull_candidates"][:6]:
         print(f"  {r['ad_name'][:34]:<34} ${r['spend_aud']:>6} 0c  [{r['status']}]")
+    mu = s.get("messaging_unjudged") or []
+    if mu:
+        print(f"\nMESSENGER — conversations bought, quality UNJUDGED ({len(mu)}):")
+        print("  (go read them: Page inbox 889412530933297. A conversation is not a lead.)")
+        for r in mu[:6]:
+            print(f"  {r['ad_name'][:34]:<34} ${r['spend_aud']:>6} {r['msg_conversations']} convos "
+                  f"@ ${r['cost_per_msg_conversation']} · {r['msg_blocks']} blocks  [{r['status']}]")
     print("\nBy campaign:")
     for c in s["campaigns"][:6]:
         print(f"  {(c['campaign'] or '—')[:40]:<40} ${c['spend']:>7.0f}  conv={c['conversions']} (f{c['real_leads']}/w{c['web_leads']}) test={c['test_leads']} cost/conv={c['cost_per_conversion']}")
