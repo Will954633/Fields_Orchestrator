@@ -1119,3 +1119,68 @@ renders deliberately on /property, so removing it is Will's call, not a bug fix.
 
 Measured: FB page article trial answered — `post_fan_reach: 1` on every page post since
 March (n=18). The constraint is distribution, not format.
+
+## 2026-08-23 11:00 — articles cycle (chained)
+
+Opened the GSC query data (`system_monitor.seo_landing_performance`, 30d to 2026-08-22) for the
+first time and used it to answer the question the 10:00 cycle left open.
+
+- **Falsified last cycle's hypothesis.** `major-projects` does not win on search demand — it
+  ranks **position 48.7**. Its 11 sessions are not organic-search driven, so they were never
+  evidence about query demand.
+- **The real finding: how-it-sold ranks well and is under-deployed.** Where an article exists it
+  sits at **mean position 7.0, CTR 2.1%** — but articles cover only **30 of 417** address
+  queries (189 of 3,603 impressions). The problem is coverage, not format.
+- **Built the first demand-led backlog** — 15 sold homes with existing search demand and no
+  article, 312 impr/30d. Honest EV is 6–7 clicks/month; the case is intent
+  (`searched_address` P(reward)=0.60, n=11), stated as directional.
+- **Fixed `[ARTICLE-AUTHOR-DEFAULT-REGRESSION]`** — the 2026-08-13 byline fix corrected the
+  corpus but not the generator, so 9 published articles had regressed to "Fields Research" and
+  were also missing the `/about/will` author-entity link. Both generator defaults fixed and
+  pushed; corpus 113/113.
+- Retired 1 genuinely duplicate draft; **rejected 5 of 6 flags from my own similarity gate**
+  after reading them.
+- Proposed 2 drafts (#FD24, #407E) after verifying all 5 subject listings are still `for_sale`
+  at the quoted prices.
+- **Error, recorded:** proposed a published page-1 article by mistake (#6246). A NO tap would
+  have unpublished it, because `cmd_poll` does not check the article was ever a draft. Withdrawn
+  before any poll ran; article verified intact. `[ARTICLE-APPROVAL-PROPOSED-WRONG-ID]`.
+- Nothing proposed to Will. Ledger unchanged at 1/2.
+- **Next:** choose a *subset* of the 15 to write, so the untouched remainder is a control for
+  "does an article add address-query demand or split it with the property page?"
+
+## 2026-08-23 11:00 — onsite cycle (weekly)
+Shipped REC-onsite-003 (approved 08-18, unshipped): mounted `PersonalizationSlot` on `/off-market`
+(OffMarketV4, end of Part 01) and `/property` (PropertyPageV2, after the comparables).
+`onsite_exp_offmarket_1` had assigned 247 users an arm and rendered to none of them. Added
+`personalization_exposure` (control included) + `personalization_cta_click` so arms are graded on
+what rendered, not on what PostHog assigned. Served `onsite_exp_property_1` (control/own_range/
+no_contact → `#bridge`). Retired `onsite_exp_analyseyourhome_1` — indistinguishable from control on
+a surface now at 6 page views/week. Fixed `arm_grader.py`: a zero-conversion control no longer
+yields `lift=36585365.85×  → leading`; dropped the master kill-switch from FLAGS. Instrumented
+`ReportAnchor` (no effect at first read, 3.7% → 3.7% of deck entries, 0 clicks — kill deferred one
+week for a real denominator). Proposed REC-onsite-005: `for_sale_page_v1` still 25/25/25/25 with
+all three arms lagging control over 1,530 users. Commits `45065400` (site), `0d1127fc` (orch).
+Doc: `cycles/2026-W34/2026-08-23/onsite_cycle_20260823_1100.md`
+
+## 2026-08-23 11:40 — articles cycle (chained, 3rd today)
+Wrote the **treatment arm** of a pre-registered control group: 14 sold addresses with measured
+GSC address-query demand and no article, split into matched pairs (125 v 127 impr/30d,
+suburb-balanced), 7 written as drafts and 7 deliberately left unwritten
+(`rl_articles_signal` cycle `20260823_1140`). Answers whether a how-it-sold article ADDS
+address demand or splits it with the property page; read-out after 2026-09-22. n=7/arm —
+a control group, not a powered test. Added `--address` targeting to `run_how_it_sold.py` so the
+generator can be aimed at demand rather than recency.
+Found **why the backlog existed**: `fields-automation` self-blocks weekly — 7 jobs inside a
+2h05m window on a single-concurrency runner with no `timeout-minutes` anywhere; 5 runs
+cancelled *unstarted* on 08-16/17 (no `Worker_*.log` for any of them), `how_it_sold` among
+them. Fix written and YAML-validated for all 13 workflows; the PAT is 403 on
+`.github/workflows` → **REC-articles-005**, recurs tonight until shipped.
+Fixed the byline regression at its real source — **two writers, not one**:
+`fields-automation/scripts/push_to_ghost.py` (not `push-ghost-draft.py`, patched at 11:00)
+mapped 9 article types to a `Fields Research` byline; corpus now 120/120. Also fixed raw ISO
+dates in prose at source (4 drafts) and `article_approval.py`'s drip cap crashing instead of
+refusing. Verified OpenAI is at **zero credits account-wide** — vision degrades silently
+(Rule 7b); broadcast to all domains. 1 draft proposed, 6 queued at 3/day in `ARTICLES_PLAN.md`
+P1c. Chain stopped: the cap means the rest cannot go until tomorrow.
+Doc: `cycles/2026-W34/2026-08-23/articles_cycle_20260823_1140.md`
