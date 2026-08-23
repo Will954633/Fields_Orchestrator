@@ -138,8 +138,13 @@ def create_article(title, html, tags=None, excerpt=None, feature_image=None,
         "tags": tags or [],
         "custom_excerpt": excerpt or "",
         "feature_image": feature_image or "",
-        "author": author or "Fields Research",
-        "author_slug": author_slug or "fields",
+        # ⚠ Will, 2026-08-13: ALL articles are authored by Will Simpson. The corpus was
+        # corrected that day but this default was not, so 10 articles (9 published) had
+        # regressed to 'Fields Research' by 2026-08-23. `author_slug='will'` is load-
+        # bearing beyond the byline: ArticlePage gates the author avatar and the
+        # /about/will entity link on it. See [ARTICLE-AUTHOR-DEFAULT-REGRESSION].
+        "author": author or "Will Simpson",
+        "author_slug": author_slug or "will",
         "author_image": "",
         "created_at": now,
         "updated_at": now,
@@ -297,8 +302,8 @@ def main():
     parser.add_argument("--force-publish", action="store_true",
                         help="bypass Will's Telegram review gate (logged; have a reason)")
     parser.add_argument("--publish", action="store_true", help="Publish immediately instead of draft")
-    parser.add_argument("--author", help="Author name (default: Fields Research)")
-    parser.add_argument("--author-slug", help="Author slug (default: fields)")
+    parser.add_argument("--author", help="Author name (default: Will Simpson)")
+    parser.add_argument("--author-slug", help="Author slug (default: will)")
 
     # Update mode
     parser.add_argument("--update", metavar="ARTICLE_ID", help="Update an existing article by ID")
