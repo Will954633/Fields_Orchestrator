@@ -11,11 +11,14 @@ Burleigh Waters** ([`listings/93-burleigh-street-burleigh-waters/`](listings/93-
 ```
 Buyer_Acquisition_Service/
 ├── README.md                  ← this file (program overview + workflow)
-├── _program/                  ← listing-agnostic program docs
+├── _program/                  ← listing-agnostic program docs + shared tools
 │   ├── CONJUNCTION_PROGRAM_BUILD_PLAN.md   (rationale for each tool)
 │   ├── CONJUNCTION_PROGRAM_BUILT.md        (full inventory + commits)
 │   ├── INCIDENT_agent_listing_disparagement.md
-│   └── tools/photos/          (shared photo-enhance pipeline — run per address)
+│   └── tools/
+│       ├── photos/            (shared photo-enhance pipeline — run per address)
+│       ├── council_data/      (§5) council/state data catalog — council_catalog.py + catalog.json
+│       └── dd/                (§5) due-diligence: dd_pull.py, flood_reality.py, dd_pack.py
 ├── _templates/LISTING/        ← copy this to start a new listing
 └── listings/
     └── <slug>/                ← one dossier per property
@@ -23,6 +26,7 @@ Buyer_Acquisition_Service/
         ├── PLAN.md  BUYER_THESIS.md  INSPECTION_BRIEF.md  CAMPAIGN_COPY.md
         ├── photos/{original,twilight}/
         ├── handouts/          (buyer info-pack PDF etc.)
+        ├── dd/                (§5) dd_data.json + Flood Reality + Due-Diligence Pack PDFs
         └── ads/{mockups/, AD_IDS.md}
 ```
 
@@ -150,6 +154,15 @@ python3 scripts/campaign_lead_report.py --slug <slug>     # interest breakdown
 Leads land in `system_monitor.campaign_leads`. The "what interested you most" field tells us whether
 land, shed, downstairs or renovation is pulling — across properties, not just anecdotally.
 
+### Step 10 — assemble the buyer due-diligence pack (full detail in §5)
+```bash
+python3 _program/tools/dd/dd_pull.py --address "…"                 # -> listings/<slug>/dd/dd_data.json
+python3 _program/tools/dd/flood_reality.py --address "…" --out …   # the flood one-pager
+python3 _program/tools/dd/dd_pack.py --data listings/<slug>/dd/dd_data.json   # the full DD pack PDF
+```
+Pulls comprehensive council + state data by lot/plan into buyer-facing documents. **Clear the flood
+framing with the listing agent, and `claim_gate.py` the claims, before it reaches any buyer.**
+
 ---
 
 ## 3. The thinking artefacts (per property)
@@ -175,7 +188,81 @@ Guard B — it never gets an adverse positioning verdict. Build rationale:
 
 ---
 
-## 5. Hard-won lessons (don't relearn these)
+## 5. The Buyer Due-Diligence Data System (built 2026-08-23)
+
+The differentiator for the conjunction service: we hand a serious buyer **"everything we could pull
+from council + state data so you can do your homework"** — to a depth no listing agent offers, short
+of a physical building & pest. It disarms objections (flood especially) with sourced data instead of
+leaving them unanswered, and it's a genuine reason for a buyer to give us their details.
+
+### 5.1 How we access council data — there is no master file to download; the *catalog* is the master
+Gold Coast City and Queensland state both run **ArcGIS REST servers** whose service directory is
+enumerable in one call — that catalogue *is* the master index, and it's **auth-free**, queryable per
+parcel by `LOTPLAN` or by geometry.
+- **Gold Coast City** (ArcGIS Online org `3vStCH7NDoBOZ5zn`) — **256 FeatureServers**: flood, zoning,
+  overlays, sewer/water/stormwater, roads, development applications, bushfire, landslide, heritage,
+  cadastre, biodiversity…
+- **QLD state spatial** (`spatial-gis.information.qld.gov.au`) — FloodCheck (1% AEP basin studies),
+  Historic Flood Lines, Elevation, Environment.
+- Non-spatial/bulk: QLD CKAN `data.qld.gov.au/api` and `data.gov.au` (not usually needed for a parcel).
+
+```bash
+cd _program/tools/council_data
+python3 council_catalog.py                 # crawl both roots -> catalog.json (the master manifest)
+python3 council_catalog.py --grep flood    # search the saved catalog by keyword
+```
+⚠ QLD state services live UNDER their folder — a service URL must be `{root}/{folder}/{name}/{type}`
+or it returns a misleading `499 Token Required`. `council_catalog.py` handles this; don't hand-build
+QLD URLs without the folder segment.
+
+### 5.2 The tool chain (catalog → pull → render)
+```
+council_catalog.py ──► catalog.json ──► dd_pull.py ──► dd_data.json ──► dd_pack.py ──► DD Pack PDF
+                                            │                        └─► flood_reality.py ─► Flood 1-pager
+                                            └─ merges the flood/zoning fields already stored in Mongo
+```
+All three DD tools are in [`_program/tools/dd/`](_program/tools/dd/); see its README for arguments.
+
+1. **`dd_pull.py --address "…"`** — resolves the authoritative parcel from the GC cadastre by
+   `LOTPLAN` (⚠ **not** a geocode — a geocoded point can miss the lot by ~200 m; always query at the
+   cadastral centroid), queries **~19 curated DD layers** (flood overlay + designated level + depth +
+   ICA insurance-flood model, acid-sulfate, bushfire, landslide, heritage, min-lot, road hierarchy,
+   nearby DAs within 400 m, sewer/water/stormwater, QLD FloodCheck 1% AEP + historic flood lines),
+   merges the stored flood/zoning fields, and writes `listings/<slug>/dd/dd_data.json` — per-layer
+   `{hit, attributes, source_url, as_at, status}`, errors captured per-layer, not fatal.
+2. **`flood_reality.py --address "…" --historical "…"`** — the **Flood one-pager** (the centrepiece).
+   Reads the stored flood fields and renders the four-layer story: conservative overlay → designated
+   vs ground level (m AHD) with a level-diagram → the ICA insurer model → historical/extreme finding →
+   the three official searches.
+3. **`dd_pack.py --data listings/<slug>/dd/dd_data.json`** — the full **5-section Buyer DD Pack PDF**:
+   cover → flood → hazards & overlays → location/services → nearby development → next-steps + sources.
+
+Outputs land in `listings/<slug>/dd/`. Both PDFs are Fields-branded (they copy the palette/header from
+`flood_reality.py` / `make_infopack.py`). Offer them to **serious** buyers, not the public feed.
+
+### 5.3 What we can and can't get
+| Obtainable | Not obtainable |
+|---|---|
+| Flood (overlay, designated level, modelled depth), ICA insurer flood model, hazards, overlays, road class, services mains, nearby DAs, zoning, cadastre, historic flood-line extents | **Property-level insurance CLAIM history** — privacy-protected, no public register. Do **not** build on "actual claims made." |
+| Human-ordered (guide the buyer): title search (easements — Titles Qld, paid), building-records/final-cert search (Council, paid), Council Flood Search cert, a live **insurance premium quote** ($ = the market pricing the risk) | A **building & pest** — physical inspection. We compensate with the honest condition disclosure + recommend an inspector. |
+
+The **historical-flood** question resolves via QLD FloodCheck / Historic_Flood_Lines: for 93 Burleigh
+**no recorded historic floodline reaches the block** (the state lines map other catchments); the only
+modelled extent touching it is an **extreme Hinze Dam PMF / dam-failure** scenario — a model, not a
+record. Always keep that distinction.
+
+### 5.4 Editorial & conjunction guardrails (non-negotiable for flood)
+- **Never assert a property "won't flood."** Present data + source + as-at date, conditional, and keep
+  the honest caveats (93's ground sits **−0.15 m below** the designated level, so the yard/downstairs
+  is the exposed part — say so).
+- **Run `claim_gate.py` (Step 5)** over every DD/marketing claim. The gate can't tell a *listing price*
+  from a *valuation* — a lone `$` figure will FAIL; sign it off only if it's the labelled asking price.
+- **Clear the flood/DD framing with the listing agent first** (do-no-harm). Template:
+  the listing's `dd/NOTE_TO_TYLER_flood_framing.md`.
+
+---
+
+## 6. Hard-won lessons (don't relearn these)
 
 1. **Floor-area field was contaminated** — use `shared.floor_area.resolve_internal_floor_area`.
 2. **"Rectangular" is usually wrong** — most blocks are wedges; `block_geometry` measures it.
@@ -190,10 +277,17 @@ Guard B — it never gets an adverse positioning verdict. Build rationale:
 8. **A buyer-facing asset built outside the tools still owes the rules.** This session's info pack +
    ads were drafted fast and skipped `comparable_set.py`/`claim_gate.py` and full agent attribution —
    see the 93 README open items. Run the gates over anything before it goes public.
+9. **Query council layers at the cadastral centroid (by `LOTPLAN`), not a geocode.** A geocoded address
+   point can sit ~200 m off the lot and miss every polygon (Rule 8). `dd_pull.py` resolves the parcel
+   from the cadastre first.
+10. **Meta "account_status: 3" (unsettled) freezes ALL writes** — an unpaid balance blocks creating or
+    editing ad creatives *and* activating campaigns; it is **not** a policy ban (`disable_reason: 0`).
+    If an ad write returns a "Permissions error", check `account_status` before anything else; the fix
+    is to settle the balance in Ads Manager → Billing.
 
 ---
 
-## 6. Open items carried forward
+## 7. Open items carried forward
 - Backup gap: `enrich_properties_for_sale.py` + `generate_suburb_statistics.py` (under
   `Feilds_Website`) are **not git-tracked** — fixes are VM-only until they get a repo home.
 - 93: attribute the listing agent in the info-pack PDF + ad copy; run `claim_gate.py` over both;
