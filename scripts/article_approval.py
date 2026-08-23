@@ -334,6 +334,12 @@ def main():
     p = sub.add_parser("propose"); p.add_argument("--id", required=True)
     p.add_argument("--allow-breach", action="store_true",
                    help="propose despite Rule 5 breaches (only when all are false positives)")
+    # cmd_propose has always read a.force in the rate-limit branch, and the flag was
+    # never defined — so on the one day the cap was actually reached (2026-08-23) the
+    # command raised AttributeError instead of printing its own explanation. A guard
+    # that crashes instead of refusing reads as a broken tool, not a deliberate limit.
+    p.add_argument("--force", action="store_true",
+                   help="propose past the daily drip cap (there should be a real reason)")
     p.set_defaults(f=cmd_propose)
     p = sub.add_parser("poll"); p.add_argument("--dry-run", action="store_true"); p.set_defaults(f=cmd_poll)
     p = sub.add_parser("list"); p.set_defaults(f=cmd_list)
