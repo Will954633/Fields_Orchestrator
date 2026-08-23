@@ -149,6 +149,7 @@ def collect_suburb(coll, now):
     docs = list(coll.find(LIVE, {
         "address": 1, "property_type": 1, "classified_property_type": 1,
         "bedrooms": 1, "valuation_data": 1, "enriched_data.floor_area_sqm": 1,
+        "url_slug": 1,
     }))
     total = len(docs)
     if total == 0:
@@ -165,11 +166,23 @@ def collect_suburb(coll, now):
     stale_comp_subjects = 0
     computed_ages = []
     missing_floor_area = missing_land_size = 0
-    # Integrity contradictions — each is a document disagreeing with itself.
-    contra_insufficient_but_valued = 0
+    # ⚠ NOT an integrity contradiction, despite where it used to live.
+    # `valuation_data.summary.insufficient_data` is `len(chart_points) < 5`
+    # (precompute_valuations.py:3824) — a SCATTER-PLOT sufficiency flag, not a claim
+    # about whether the valuation is sound. A property can carry a perfectly good
+    # reconciled figure and still have too few points to draw the chart, and the
+    # frontend renders it honestly as a chart warning. Reading it as
+    # "valued but insufficient data" reported 7 fake contradictions and set this
+    # domain's agenda off them. Kept as an observation, named for what it measures.
+    chart_thin_but_valued = 0
     contra_valued_no_range = 0
     contra_directional_with_figure = 0
     directional_disagreement = 0
+    # The attached-dwelling half of the book. The house engine is excluded from these
+    # BY DECISION (05-what-we-exclude.md), so any reconciled figure it has written on one
+    # is not the live product and must never be counted as coverage — the live unit
+    # product lives in Gold_Coast.unit_valuations and is joined in collect().
+    attached_slugs, attached_no_slug, house_rv_on_attached = [], 0, 0
 
     for d in docs:
         rv = _dig(d, RV)
@@ -244,6 +257,14 @@ def collect_suburb(coll, now):
         _ptype = str(d.get("classified_property_type")
                      or d.get("property_type") or "").strip().lower()
         is_house = _ptype in ("house", "detached house")
+        # Vacant land is neither — it has no dwelling to value by either engine.
+        if not is_house and _ptype not in ("vacant land", "land", ""):
+            slug = d.get("url_slug")
+            if slug:
+                attached_slugs.append(slug)
+            else:
+                attached_no_slug += 1
+            house_rv_on_attached += has_rv
         if has_rv:
             if ENVELOPE_MIN <= rv < ENVELOPE_MAX:   # strict ceiling, mirrors production
                 in_envelope += 1
@@ -269,7 +290,7 @@ def collect_suburb(coll, now):
                 suppressed_above += 1
 
         if _dig(d, "valuation_data.summary.insufficient_data") is True and has_rv:
-            contra_insufficient_but_valued += 1
+            chart_thin_but_valued += 1
 
         used = _dig(d, "valuation_data.summary.n_included_in_valuation")
         if isinstance(used, int):
@@ -347,8 +368,19 @@ def collect_suburb(coll, now):
             "land_size": missing_land_size,
             "land_size_pct": _pct(missing_land_size, total),
         },
+        # The attached half, raw. Coverage for these is resolved in collect() against
+        # the live unit engine; nothing here is a coverage number.
+        "attached": {
+            "total": len(attached_slugs) + attached_no_slug,
+            "slugs": attached_slugs,
+            "missing_url_slug": attached_no_slug,
+            "house_engine_figure_written": house_rv_on_attached,
+        },
+        # Observations, not contradictions. See the note at chart_thin_but_valued.
+        "observations": {
+            "chart_thin_but_valued": chart_thin_but_valued,
+        },
         "integrity": {
-            "insufficient_data_but_valued": contra_insufficient_but_valued,
             "valued_without_range": contra_valued_no_range,
             "directional_but_figure_present": contra_directional_with_figure,
             "directional_flags_disagree": directional_disagreement,
@@ -372,9 +404,43 @@ def collect():
             continue
         per_suburb[s] = collect_suburb(db[s], now)
 
+    # ── The attached-dwelling book, read from the engine that actually serves it ──
+    # The live attached-dwelling product is written to a SEPARATE collection,
+    # Gold_Coast.unit_valuations, keyed by _id = url_slug and gated on `publishable`
+    # (precompute_unit_valuations.py:103). Until 2026-08-23 this sensor never read it and
+    # reported house-engine output on units as though it were coverage — the third Rule 8
+    # failure by this instrument against itself (REC-valuation-002, approved 2026-08-18).
+    unit_coll = db["unit_valuations"] if "unit_valuations" in existing else None
+    for s, v in per_suburb.items():
+        att = v.get("attached")
+        if not att:
+            continue
+        slugs = att.pop("slugs", [])
+        if unit_coll is None:
+            att["engine"] = "unit_valuations COLLECTION NOT FOUND — coverage unknown"
+            continue
+        recs = list(unit_coll.find({"_id": {"$in": slugs}},
+                                   {"publishable": 1, "decline_reason": 1}))
+        pub = sum(1 for r in recs if r.get("publishable") is True)
+        declines = Counter(r.get("decline_reason") or "(none recorded)"
+                           for r in recs if r.get("publishable") is not True)
+        att.update({
+            "engine": "unit_valuations",
+            "records_found": len(recs),
+            "missing_record": len(slugs) - len(recs),
+            "publishable": pub,
+            "coverage_pct": _pct(pub, att["total"]),
+            "decline_reasons": dict(declines.most_common()),
+        })
+
     live = [v for v in per_suburb.values() if v.get("total_for_sale")]
     total = sum(v["total_for_sale"] for v in live)
     valued = sum(v["valued"] for v in live)
+    att_total = sum(v["attached"]["total"] for v in live)
+    att_pub = sum(v["attached"].get("publishable") or 0 for v in live)
+    att_house_rv = sum(v["attached"]["house_engine_figure_written"] for v in live)
+    house_total = total - att_total
+    house_valued = valued - att_house_rv
     exclusion = Counter()
     integrity = Counter()
     for v in live:
@@ -386,12 +452,35 @@ def collect():
         "generated_at": now,
         "suburbs": SUBURBS,
         "missing_collections": missing_collections,
+        # ⚠ The blended `coverage_pct` is NOT a clean number and must not be quoted as one:
+        # its numerator counts house-engine figures written on attached dwellings the house
+        # method is excluded from by decision. The book splits in two, and the split is the
+        # honest reading. Kept only for continuity with earlier cycles.
         "book": {
             "total_for_sale": total,
             "valued": valued,
             "unvalued": total - valued,
             "coverage_pct": _pct(valued, total),
             "unvalued_pct": _pct(total - valued, total),
+            "blended_do_not_quote": True,
+        },
+        "book_by_engine": {
+            "house": {
+                "engine": "reconciled_valuation (precompute_valuations.py)",
+                "total": house_total,
+                "valued": house_valued,
+                "coverage_pct": _pct(house_valued, house_total),
+            },
+            "attached": {
+                "engine": "unit_valuations.publishable (precompute_unit_valuations.py)",
+                "total": att_total,
+                "valued": att_pub,
+                "coverage_pct": _pct(att_pub, att_total),
+                # Not coverage. The count of attached dwellings carrying a house-engine
+                # figure the house method is excluded from writing — an upper bound on
+                # how wrong the blended number above is.
+                "house_engine_figure_written": att_house_rv,
+            },
         },
         "exclusion_reasons_all": dict(exclusion.most_common()),
         "integrity_all": dict(integrity),
@@ -401,9 +490,18 @@ def collect():
 
 def render(doc):
     b = doc["book"]
-    print(f"valuation_signal: {b['valued']}/{b['total_for_sale']} of the live for-sale book "
-          f"carries a reconciled valuation ({b['coverage_pct']}%) — "
-          f"{b['unvalued']} unvalued ({b['unvalued_pct']}%)")
+    be = doc.get("book_by_engine") or {}
+    h, a = be.get("house", {}), be.get("attached", {})
+    print(f"valuation_signal: the live for-sale book splits by engine — quoting one "
+          f"blended coverage number is what this sensor got wrong until 2026-08-23.")
+    print(f"  houses   {h.get('valued')}/{h.get('total')} ({h.get('coverage_pct')}%) "
+          f"— reconciled_valuation")
+    print(f"  attached {a.get('valued')}/{a.get('total')} ({a.get('coverage_pct')}%) "
+          f"— unit_valuations.publishable "
+          f"(house engine has written a figure on {a.get('house_engine_figure_written')} "
+          f"of these; that is not coverage)")
+    print(f"  blended  {b['valued']}/{b['total_for_sale']} ({b['coverage_pct']}%) "
+          f"⚠ do not quote — numerator mixes engines")
     if doc["missing_collections"]:
         print(f"  ⚠ collections not found: {', '.join(doc['missing_collections'])}")
     for s, v in doc["per_suburb"].items():
