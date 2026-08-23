@@ -27,7 +27,12 @@ NOW = datetime.now(timezone.utc)
 COLL = "rl_arm_grades"
 
 # The live experiment flags (arms) to grade. Extend as new flag experiments ship.
-FLAGS = ["for_sale_page_v1", "discover_mode_v1", "offmarket_gate_v1", "genrl_personalization_v1"]
+# ⚠ `genrl_personalization_v1` was removed from this list on 2026-08-23. It is the MASTER
+# KILL-SWITCH, not an experiment: it has one value (`true`) at 100% rollout, so grading it
+# produced a single row that could only ever read "control" and told a reader nothing except
+# how many people loaded a page. The arms it gates are `onsite_exp_*`, which are picked up
+# dynamically from rl_onsite_experiments below.
+FLAGS = ["for_sale_page_v1", "discover_mode_v1", "offmarket_gate_v1"]
 # Events that count as the true reward (identified-seller candidate).
 REWARD_EVENTS = ["address_search", "analyse_home_address_submit", "analyse_home_submit_success",
                  "offmarket_qualify", "forsale_ladder_complete"]
@@ -80,7 +85,14 @@ def _grade(variants):
         v["rate"] = v["conv"] / v["users"] if v["users"] else 0
     ctrl = next((v for v in variants if str(v["variant"]).lower() in ("control", "false", "off", "0")), None) \
         or min(variants, key=lambda v: v["rate"])
-    base = ctrl["rate"] or 1e-9
+    # ⚠ NO SYNTHETIC BASE. This used to be `ctrl["rate"] or 1e-9`, which turned a control
+    # with ZERO conversions into a division by 1e-9 and printed
+    #   range_specific  users=82 conv=3 rate=3.7% lift=36585365.85×  → leading
+    # on 2026-08-23. A control that has never converted gives you no base to divide by;
+    # the honest lift is undefined, not thirty-six million. Same family as
+    # [ARM-GRADE-ONE-CONV] (2026-08-16): a verdict manufactured out of an absence.
+    base = ctrl["rate"]
+    no_control_signal = ctrl["conv"] == 0
     for v in variants:
         v["lift_vs_control"] = round(v["rate"] / base, 2) if base else None
         v["rate"] = round(v["rate"], 4)
@@ -92,6 +104,13 @@ def _grade(variants):
             v["verdict"] = "control"
         elif v["users"] < MIN_USERS_PER_ARM:
             v["verdict"] = "inconclusive_need_more_N"
+        elif no_control_signal:
+            # The control has not converted once. "Beating" it is beating an absence: at these
+            # volumes one more control conversion — a single different visitor — would erase the
+            # ordering entirely. There is nothing to promote against, and calling it a winner is
+            # how a false positive gets shipped. Named distinctly so a reader can tell this from
+            # "not enough users": the users are there, the comparison is not.
+            v["verdict"] = "inconclusive_no_control_signal"
         elif v["rate"] > ctrl["rate"] and v["conv"] >= MIN_TOTAL_CONV and lead_floor > ctrl["rate"]:
             v["verdict"] = "leading"        # promote candidate
         elif v["rate"] < ctrl["rate"] and lag_ceiling < ctrl["rate"]:
