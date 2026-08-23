@@ -161,7 +161,7 @@ def build_index(articles):
             "feature_image": article.get("feature_image"),
             "key_topics": topics,
             "word_count": wc,
-            "author": article.get("author", "Fields Research"),
+            "author": article.get("author", "Will Simpson"),  # Will, 2026-08-13
             "indexed_at": datetime.now(timezone.utc).isoformat(),
         }
         docs.append(doc)
