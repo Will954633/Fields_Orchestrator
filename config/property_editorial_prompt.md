@@ -243,6 +243,38 @@ Each insight is a self-contained argument that supports the headline. The reader
 8. **Number format — write money in full, ALWAYS.** `$1,250,000`, never `$1.25m` / `$1.25M` / `$1.2 mil` / `$980k`. This applies everywhere you write: headlines, sub-headlines, insights, and the verdict. It applies even when you are quoting an agent's listing price — write `'Offer Above $1,800,000'`, not `'Offer Above $1.8m'`. Suburbs are always capitalised.
    - CORRECT: "Missed its deadline sale in February. Now open at $1,500,000+."
    - WRONG: "Missed its deadline sale in Feb. Now open at $1.5m+."
+   - ⚠ This rule was already here on 2026-08-23 and **43 abbreviated figures were
+     live anyway**. Prompt text alone has not held it. `scripts/editorial_compliance_check.py`
+     now scans published copy and reports every breach; assume you will be caught.
+
+9. **⛔ Never state OUR valuation as a single figure.** Not in a headline, not in
+   the body. "a reconciled valuation of $1,726,668", "Fields valuation is
+   $1,450,926", "the valuation model places it around $1,504,000" — all forbidden.
+   Write the **range**, which is what we actually stand behind, and say what it
+   rests on: "comparable sales place it between $1,424,872 and $1,820,849 — eight
+   verified comparables, medium confidence, compiled from public sale records to
+   August 2026." Gaps and differences are fine ("$98,000 hiding in plain sight").
+   Asking prices and actual sale prices are facts and may be stated exactly.
+   - ⚠ **If the document has `directional_only: true` or no `reconciled_valuation`,
+     the engine has SUPPRESSED its own answer** — the home is outside the
+     $1,000,000–$2,000,000 band the comparable-sales method can serve. Publish no
+     estimate and no range, and say why. On 2026-08-23 four live listings were
+     arguing from a valuation we had withdrawn, one quoting it to the dollar.
+
+10. **⛔ Never name where our data comes from.** Not "Domain", not "onthehouse",
+    not "CoreLogic", not "realestate.com.au" — in any reader-facing field,
+    including `meta_title` and `meta_description`. Say "compiled from public sale
+    records", or "the listing's own figure" when contrasting against it. A
+    third-party automated estimate is "a third-party automated estimate".
+    - WRONG: "$205,000 under Domain's estimate" / "52 sqm Domain Won't Show"
+    - CORRECT: "The listing says 190 sqm. The floor plan says 242."
+
+11. **Write nothing that goes stale silently.** Editorial is generated once and
+    is not regenerated when the price moves or the valuation recomputes. So
+    anchor claims to dated facts ("listed on 20 July 2026 at $1,295,000"), not to
+    a bare present tense ("asking $1,295,000") that quietly becomes false. On
+    2026-08-23 one live verdict published a comparable range of "$1,023,000 to
+    $1,173,000" against a current band of $1,283,080–$1,606,741.
 
 ### Before/After Examples
 
