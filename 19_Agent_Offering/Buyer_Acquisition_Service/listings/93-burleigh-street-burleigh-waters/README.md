@@ -34,14 +34,18 @@ required; Development.i **Nil**. Dual-occ meets density (411 m²/dwelling) but i
 front-setback story, unverified — outstanding question for Tyler.
 
 ## Comparable range (public sale records, 4-bed Burleigh Waters)
-$1,710,000 – $2,350,000 (renovated cluster ~$2.1M); $1,915,000 sits below the cluster on condition.
+$1,710,000 – $2,350,000 (renovated cluster ~$2,100,000); $1,915,000 sits below the cluster on condition.
 
 ## ⚠ Open items / reconciliation
-- **Agent attribution:** the landing page names Tyler Benson / Coomera Realty. Confirm the **info
-  pack PDF** and **ad copy** also attribute the listing agent (program rule: attribute on *every*
-  public asset). Currently they say "working alongside the listing agent" without the name — fix.
-- **Claim gate:** run `claim_gate.py --slug 93-burleigh-street-burleigh-waters` over the ad + PDF
-  claims; they were drafted outside the gate this session.
+- **Agent attribution:** landing page ✓, info pack PDF ✓ (now names Tyler Benson, Coomera Realty).
+  Ad primary text: source copy updated in `launch_messenger_carousel.py`, but the **creatives could
+  not be regenerated** — the Meta ad account is **status 3 (unsettled, ~$157 unpaid balance)** and
+  blocks writes. Settle the balance in Ads Manager billing, then regenerate creatives + re-point ads.
+- **Claim gate:** RUN — see [`dd/CLAIM_GATE_signoff.md`](dd/CLAIM_GATE_signoff.md). Fixed "$2.1M"→
+  "$2,100,000"; the single "$1,915,000" is signed off as a **list price, not a valuation**; the comps
+  pre-flight is satisfied by the info pack + landing page. Cleared for publish once Tyler + billing OK.
+- ⚠ **Ad account blocker:** status 3 / unpaid balance blocks BOTH creative edits AND campaign
+  activation until settled.
 - **Comps provenance:** the PDF comps were pulled ad-hoc; regenerate via `comparable_set.py` (has the
   adversarial claim test + the beach-distance threshold-sensitivity warning) before the next refresh.
 - **Landing config vs live page:** the live page is hand-built. The generator **config**

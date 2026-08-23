@@ -43,15 +43,16 @@ PRIMARY = {
  "A": ("Want to move closer to Burleigh without giving up your space? 93 Burleigh Street is "
        "822m² — proper backyard, a 7×6.2m powered workshop, a 220m² home — and a 1km walk from "
        "Burleigh Beach. It's unrenovated, which is exactly why it's $1,915,000. Message me for "
-       "the full property pack."),
+       "the full property pack. Marketed in conjunction with Tyler Benson, Coomera Realty."),
  "B": ("Buy the things you can't renovate. 93 Burleigh Street, Burleigh Waters: 822m², ~19.9m "
        "frontage, a 1km walk to the beach — and a 44m² powered workshop. The kitchen and bathroom "
        "are original, which is exactly why it's $1,915,000. Change the house; keep the land and "
-       "location for good. Message me for the property pack."),
+       "location for good. Message me for the property pack. Marketed in conjunction with Tyler Benson, Coomera Realty."),
  "C": ("What does $1,915,000 buy walking distance to Burleigh Beach? 93 Burleigh Street, Burleigh "
        "Waters: 822m² of land, a 220m² home (4 bed, 3 bath), a 7×6.2m workshop and a big backyard "
        "— a 1km walk from the sand. The catch? It hasn't been renovated, so you're not paying for "
-       "someone else's. Message me for the floorplan, data + a video walkthrough."),
+       "someone else's. Message me for the floorplan, data + a video walkthrough. "
+       "Marketed in conjunction with Tyler Benson, Coomera Realty."),
 }
 
 # card = (image filename stem in cards_clean/<arm>/, name/headline, description)
