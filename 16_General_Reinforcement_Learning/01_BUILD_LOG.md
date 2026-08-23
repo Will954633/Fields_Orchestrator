@@ -1184,3 +1184,74 @@ refusing. Verified OpenAI is at **zero credits account-wide** — vision degrade
 (Rule 7b); broadcast to all domains. 1 draft proposed, 6 queued at 3/day in `ARTICLES_PLAN.md`
 P1c. Chain stopped: the cap means the rest cannot go until tomorrow.
 Doc: `cycles/2026-W34/2026-08-23/articles_cycle_20260823_1140.md`
+
+## 2026-08-23 — valuation cycle 2 (read-only)
+
+📐 47.7% of the for-sale book valued (n=214) · 33.2% envelope-suppressed · MAE 8.05% (n=581, quoted, not re-measured).
+
+- **Approved REC-valuation-002 never shipped.** Approved 2026-08-18; `valuation_signal.py`'s
+  last commit is 2026-08-13, working tree clean, `briefings/valuation.md` still cites the
+  disproved 28.3%/n=113, and the rec's graded metric (`insufficient_data_but_valued` 7→0 by
+  today) reads 5. The domain cannot self-serve — the sensor carries a Rule 7 heartbeat, so
+  it is monitoring code. Raised **REC-valuation-003**: name an executor, or grant a one-file
+  read-logic exemption.
+- **Re-derived live unit-engine coverage independently: 38/107 = 35.5%** (robina 27/55,
+  varsity_lakes 11/27, burleigh_waters 0/25). Confirms REC-002's 34.2% (38/111) — same 38
+  properties. Dominant blocker `no_class_matched_comparables`, 50 of 69 declines. Median
+  `n_comps` 12 vs the house engine's 8.
+- **Burleigh Waters 0/2,235 publishable is CORRECT behaviour, not an outage.** 1,294 records
+  compute a full range and are then withheld by the suburb accuracy gate
+  (`unit_valuation.py:482`, `within10` 46.5% below threshold). The refusal is right; it is
+  just silent — 1,202 rows carry no `decline_reason`. Recorded so nobody re-diagnoses it.
+- Record: `16_Valuation/experiments/2026-08-23-unit-engine-coverage-and-bw-accuracy-gate.md`.
+  Nothing written to any property document, method file or website. No backtest run.
+- Open question for next cycle: 29 live attached dwellings carry a house-engine figure where
+  the unit engine declined — does any reader see it? Not traced; no claim made.
+
+## 2026-08-23 16:00 AEST — Weekly brief cycle 3 (2026-W34)
+
+**7 of 7 domains ran** — first full sweep (the `--max-turns` ceiling fixed last week held).
+10 open recommendations, **5 briefed**, 1 merged, 1 executed, 3 deferred with reasons.
+
+**Will answered all five of last week's items** (verdicts recorded 08-17/08-18 with his own
+reasoning). First clean sweep since the cycle started. Only unactioned chat message was
+"Start briefing" (08-21) — a request to run the cycle, not a verdict; stamped `actioned_at`.
+
+**Briefed:** REC-articles-004 (seller-only positioning tier published on competitors' listings
+via the uncredentialed API — verified live by me on all 3), REC-articles-005 (automation
+self-blocks weekly; recurs tonight 20:00 UTC), REC-ads-005 (Messenger carousel buying
+accidental taps, 3 Page blocks), REC-ops-006 (Gmail dead, 5th occurrence, Testing-mode consent
+screen), REC-geo-003 (/about denies we are an agency; AI surfaces quote it 3/3).
+
+**Merged/sequenced:** REC-seo-006 folded into item 5 and directed rather than briefed — seo
+said "either is fine", so it is engineering hygiene. seo deletes the static `/about*` files so
+the React routes serve, *before* geo's copy edits land, otherwise geo edits a file nobody is
+served.
+
+**Executed rather than briefed — the finding of the cycle:** REC-valuation-002, approved by
+Will 2026-08-18, had sat **five days with no owner**. The raising domain was structurally
+barred (`valuation_signal.py` carries a Rule 7 heartbeat → outside autonomous scope), and the
+ledger has `verdict → ship → grade` with **nothing that names who acts**. Shipped it myself
+(`f09c50b4`): sensor joins `Gold_Coast.unit_valuations` on `url_slug` gated on `publishable`;
+book split by engine (houses 58/107 = 54.2%, attached 38/107 = 35.5%); blended 47.7% retained
+but flagged `blended_do_not_quote`; `insufficient_data_but_valued` renamed
+`chart_thin_but_valued` and moved out of `integrity` (5 false positives → 0);
+`briefings/valuation.md` §1/§3 corrected and §7 given the standing-authorisation question.
+Logged `[RL-APPROVED-BUT-UNOWNED]`. **REC-002 overstated its scope** — 2 of its 4 claimed edits
+were already in the file; fed back to valuation.
+
+**Verification done before briefing, not after:** fetched all 3 gated-tier payloads live;
+re-ran the Gmail pre-flight (`dead — invalid_grant`); pulled account-wide 7d FB spend
+($294.60 across 2 campaigns, confirming ads' "only live campaign" claim is true *now* —
+Will paused Home Owner Funnel on 08-21); read live `/about` (confirmed "licensed" = 0
+occurrences). One claim did not survive first contact and was re-checked rather than reported:
+articles' repro command for REC-004 used a `['property'][...]` wrapper the API does not return
+— the finding held, the repro did not. Fed back.
+
+**Health flagged:** ops's own `rl_weekly_ops` heartbeat is stale (last run 2026-08-15) although
+ops ran and wrote a doc at 06:12 today — the domain auditing our self-monitoring is the one not
+self-reporting. All seven briefs are 10 days `aging`, and two now contain statements that are
+false (ads §2 "all spend paused"; valuation §1 carried a disproved figure until today).
+
+One Telegram sent, 5 tappable rows, tokens printed beside each question. `mark-briefed` run
+before the send, per the contract.
