@@ -1044,3 +1044,78 @@ Doc: `cycles/2026-W34/2026-08-23/seo_cycle_20260823_0700.md`.
 - Gates: `npm run build` before every push (4 batched commits, 4 builds); JSON-LD parsed before
   every push; live Googlebot fetch after every deploy; 12 actions to `rl_seo_actions`; 3
   fix-history entries in `logs/fix-history/2026-08-23.md`.
+
+## GEO cycle — 2026-08-23 08:00 AEST
+
+- **Bing recovered on its own on 2026-08-14** — 0 impressions for 22 days (07-23→08-13), then
+  13/18/59/62/68/57/55, back to the ~70/day baseline; `InIndex` bottomed 1,982 and has climbed
+  monotonically to 2,021. That is **two days before** the AI-crawler fix (08-16) and **nine days
+  before** the 403→200 change (08-23). **Neither geo action caused it**, and last cycle's
+  cloaking hypothesis is ruled out as the cause of the cliff — the divergence was still live
+  when impressions returned. Recorded as a grading caveat on REC-geo-002, exactly as Will
+  instructed when approving it.
+- **TIER-1 GEO-020 — shipped REC-geo-002** (approved 08-18, unshipped 5 days). `geo-block.js`
+  serves non-AU/NZ IPs the real page at 200 and annotates it (`x-fields-region` header,
+  `fields_region` cookie) instead of 403+`noindex`. Build passed, ONE commit `4e1ca6cb`,
+  deploy `6a8a1d7ec4b1d20008b743cd`. Verified from a US residential IP: ordinary Chrome now
+  200 / 214,959 bytes / no noindex — byte-identical to bingbot, Googlebot, GPTBot,
+  OAI-SearchBot, ClaudeBot, PerplexityBot. AU unaffected. Visible region notice deliberately
+  not shipped (`hydrateRoot(document)` ⇒ edge HTML injection is a hydration mismatch; needs a
+  `root.tsx` component, which is a perf-gated render-path change).
+  fix-history `[GEO-BLOCK-403-TO-200]`.
+- **TIER-1 GEO-021 — last cycle's open question answered: NO.** Access alone did not fix the
+  description. Seven days after every AI crawler was unblocked, the three GEO-018 queries
+  reproduce 3/3: "primarily a data company rather than a traditional real estate agency";
+  absent from "best real estate agent Robina 4226"; no fieldsestate.com.au connection for the
+  brand+founder query (top hit still Will's former agency).
+- **TIER-1 GEO-022 — traced the misdescription to our own copy.** The answer opened with a
+  near-verbatim quote of `OverviewSection.tsx:390`. `/about` visible text: "Fields Research" ×6,
+  "licensed" ×0, "real estate agency" ×1 — and that occurrence is `<h2>Independence</h2>`
+  saying *"not affiliated with any real estate agency"*, sitting directly beneath JSON-LD
+  (seo, 08-23) declaring the page's mainEntity a `RealEstateAgent` with a Licensed Real Estate
+  Agent founder. One page, both claims, and LLMs follow prose over schema.
+- **TIER-1 GEO-024 — did NOT re-submit to IndexNow/Bing:** seo's `20260823_0700` cycle already
+  submitted the same 46 URLs today. Duplicate churn avoided, non-action recorded.
+- **TIER-3 REC-geo-003** — five copy edits with exact before/after in
+  `REC-geo-003_DRAFT_about_page_agency_identity.md`. Needs Will because the `Independence`
+  reword trades editorial credibility for agency-identity clarity, and needs seo because §5
+  reserves copy to one writer. Holding 1/2.
+
+## 2026-08-23 09:00 — ads weekly cycle
+- **Ads restarted since last cycle** ($294.60): Seller Intent GC v1 ran 08-18→21 ($198.91, 2 real
+  GC seller leads @ $99.45 — the first paid seller leads ever), paused by Will 08-21. 93 Burleigh
+  Messenger carousel is LIVE ($95.69). Brief §2 ("all paused") is out of date.
+- **Read all 8 Messenger conversations verbatim: 0 qualified, 3 self-declared misclicks, 3 Page
+  blocks.** The $11.96/conversation headline is a tap-counting artefact — a Messenger-destination
+  carousel converts photo-zoom taps into "conversations".
+- **Fixed `[MESSENGER-CONV-INVISIBLE]`**: `ad_daily_metrics` never captured `lead` or
+  `onsite_conversion.messaging_*`, so the only live campaign had no outcome column and read as a
+  0-conversion cull candidate. Collector + `ads_signal.py` updated (257 rows backfilled); a new
+  "MESSENGER — quality UNJUDGED" section surfaces them without counting them as conversions.
+- Proposed **REC-ads-005** (switch the carousel destination or stop it). Ledger 1/2 — second slot
+  held deliberately, arm-level seller read banked for the relaunch instead.
+- Cycle doc: `cycles/2026-W34/2026-08-23/ads_cycle_20260823_0900.md`
+
+## 2026-08-23 10:00 — articles cycle
+Acted on the open seo directive (Rule 5 breach on /for-sale-v3) and found it was wider than
+reported. Three server-side gaps: `property.mjs` served all 71 live listings' internal
+editorial working fields (`_draft1`, `_reflection`, `_backfill_data`, `_agent_briefings`,
+`_factcheck_failures` — 1,374,315 chars, zero consumers); `decision-feed-v3.mjs` shipped the
+seller-only `gated` positioning tier (pricing strategy, negotiation buffer, first-offer
+advice, agency ranking) on other agencies' listings; and the root defect — editorial is
+generated once and never revalidated, so 4 listings were publishing an argument built on a
+valuation the engine has since suppressed or dropped.
+
+Shipped (1 build, 2 files): `stripInternals()` in property.mjs; `positioning_analysis`
+withheld from the feed (payload −22%); `statesSingleValuation()` Rule 5 headline assertion.
+Data: 66 fields / 39 listings rewritten from current values, 4 listings unpublished to
+`needs_review`. Prompt rules 9-11 added. New standing guard
+`scripts/editorial_compliance_check.py` (job_run, 24h, raises on scanned==0) — NOT on cron,
+handed to seo/ops.
+
+Left to seo deliberately: 38 abbreviated-currency figures in meta_title/meta_description
+(their scope) + 4 verified stale asking prices. Proposed REC-articles-004 — the gated tier
+renders deliberately on /property, so removing it is Will's call, not a bug fix.
+
+Measured: FB page article trial answered — `post_fan_reach: 1` on every page post since
+March (n=18). The constraint is distribution, not format.
