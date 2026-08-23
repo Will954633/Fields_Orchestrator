@@ -30,8 +30,11 @@ def crawl_qld(folders=("FloodCheck", "Historic_Flood_Lines", "Elevation", "Envir
     out = []
     for f in folders:
         for s in j(f"{QLD}/{f}").get("services", []):
-            url = f"{QLD}/{s['name'].split('/')[-1]}/{s['type']}"
-            out.append({"folder": f, "name": s["name"].split("/")[-1], "type": s["type"], "url": url})
+            name = s["name"].split("/")[-1]
+            # QLD state services live UNDER their folder — the URL must carry {folder}/{name}
+            # or the endpoint returns a misleading "Token Required" (499). See fix 2026-08-23.
+            url = f"{QLD}/{f}/{name}/{s['type']}"
+            out.append({"folder": f, "name": name, "type": s["type"], "url": url})
         time.sleep(0.05)
     return out
 

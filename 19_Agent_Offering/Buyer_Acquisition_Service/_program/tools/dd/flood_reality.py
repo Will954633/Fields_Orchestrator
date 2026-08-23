@@ -37,7 +37,7 @@ def find_flood(address):
     walk(z)
     return out
 
-def build(address, agent, agency, out):
+def build(address, agent, agency, out, historical=None):
     f = find_flood(address)
     dfl   = f.get("flood_designated_level_m")
     grd   = f.get("flood_ground_level_m")
@@ -48,6 +48,12 @@ def build(address, agent, agency, out):
     ica_note = f.get("ica_note","")
     street, suburb = address.split(",")[0].strip(), (address.split(",")[1].strip() if "," in address else "")
     today = datetime.date.today().strftime("%B %Y")
+    if historical:
+        hist_html = ('<h2>5 &middot; Has it ever actually flooded?</h2>'
+                     f'<div class="ica" style="background:#eef4ee;border-color:#cfe0cf">{historical}</div>')
+    else:
+        hist_html = ('<div class="pending"><b>Being added:</b> historical actual-inundation, sourced '
+                     'from Queensland state flood studies; this sheet will be updated when confirmed.</div>')
     # level diagram geometry (map 3.6–4.6 m AHD to 0–100%)
     def pct(v): return max(0, min(100, (v-3.6)/(4.6-3.6)*100))
     dfl_y, grd_y = 100-pct(dfl), 100-pct(grd)
@@ -116,8 +122,7 @@ by a surveyor. This home is two-storey &mdash; the main living and bedrooms are 
 <div class="ica">{'<b>This parcel falls within NONE of the five ICA insurance flood-probability bands</b> (1-in-5-year through 1-in-2000-year).' if ica_clear else 'See ICA model result below.'}
 <br><span style="font-size:9pt;color:#3a5a3c">{ica_note}</span></div>
 
-<div class="pending"><b>Being added:</b> historical actual-inundation (did the 2017 and 2022 events reach
-this block) &mdash; sourced from Queensland state flood studies; this sheet will be updated when confirmed.</div>
+{hist_html}
 
 <h2>4 &middot; The searches that settle it (we recommend all three)</h2>
 <div class="do"><ul>
@@ -143,4 +148,5 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--address", required=True); ap.add_argument("--agent", default="the listing agent")
     ap.add_argument("--agency", default=""); ap.add_argument("--out", required=True)
-    a = ap.parse_args(); build(a.address, a.agent, a.agency, a.out)
+    ap.add_argument("--historical", default=None, help="resolved historical-inundation finding (from dd_pull)")
+    a = ap.parse_args(); build(a.address, a.agent, a.agency, a.out, a.historical)

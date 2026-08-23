@@ -1286,271 +1286,271 @@
    "folder": "FloodCheck",
    "name": "2010To2011InterimFloodLines",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/2010To2011InterimFloodLines/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/2010To2011InterimFloodLines/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "BasicStudies",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/BasicStudies/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/BasicStudies/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "BasinExtremeEvents",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/BasinExtremeEvents/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/BasinExtremeEvents/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "BasinOnePercentAEP",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/BasinOnePercentAEP/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/BasinOnePercentAEP/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "ComprehensiveStudies",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ComprehensiveStudies/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/ComprehensiveStudies/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "FloodCheck_Print",
    "type": "GPServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck_Print/GPServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/FloodCheck_Print/GPServer"
   },
   {
    "folder": "FloodCheck",
    "name": "FloodGauges",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodGauges/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/FloodGauges/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "Floods_Brisbane_1893",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Floods_Brisbane_1893/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/Floods_Brisbane_1893/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "Floods_BrisbaneAndIpswich_1974",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Floods_BrisbaneAndIpswich_1974/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/Floods_BrisbaneAndIpswich_1974/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "Floods_Roma_2011",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Floods_Roma_2011/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/Floods_Roma_2011/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "FloodStudies",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodStudies/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/FloodStudies/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "FloodWarningNetworkBOM",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodWarningNetworkBOM/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/FloodWarningNetworkBOM/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "GaugingStationsDNRME",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/GaugingStationsDNRME/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/GaugingStationsDNRME/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "LocalGovernmentAuthorities",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/LocalGovernmentAuthorities/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/LocalGovernmentAuthorities/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "MapIndex",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/MapIndex/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/MapIndex/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "QueenslandBasins",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/QueenslandBasins/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/QueenslandBasins/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "QueenslandSubBasins",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/QueenslandSubBasins/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/QueenslandSubBasins/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "RapidHazardAssessmentMapSeries",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/RapidHazardAssessmentMapSeries/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/RapidHazardAssessmentMapSeries/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "RapidHazardAssessment",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/RapidHazardAssessment/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/RapidHazardAssessment/MapServer"
   },
   {
    "folder": "FloodCheck",
    "name": "Towns",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Towns/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FloodCheck/Towns/MapServer"
   },
   {
    "folder": "Elevation",
    "name": "Contours",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Contours/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Elevation/Contours/MapServer"
   },
   {
    "folder": "Elevation",
    "name": "ElevationProjectExtents",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ElevationProjectExtents/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Elevation/ElevationProjectExtents/MapServer"
   },
   {
    "folder": "Elevation",
    "name": "MountainRanges",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/MountainRanges/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Elevation/MountainRanges/MapServer"
   },
   {
    "folder": "Environment",
    "name": "ActiveCropping",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ActiveCropping/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/ActiveCropping/MapServer"
   },
   {
    "folder": "Environment",
    "name": "EnvironmentallySensitiveAreasCategoryA",
    "type": "FeatureServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/EnvironmentallySensitiveAreasCategoryA/FeatureServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/EnvironmentallySensitiveAreasCategoryA/FeatureServer"
   },
   {
    "folder": "Environment",
    "name": "EnvironmentallySensitiveAreasCategoryA",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/EnvironmentallySensitiveAreasCategoryA/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/EnvironmentallySensitiveAreasCategoryA/MapServer"
   },
   {
    "folder": "Environment",
    "name": "EnvironmentallySensitiveAreasCategoryB",
    "type": "FeatureServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/EnvironmentallySensitiveAreasCategoryB/FeatureServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/EnvironmentallySensitiveAreasCategoryB/FeatureServer"
   },
   {
    "folder": "Environment",
    "name": "EnvironmentallySensitiveAreasCategoryB",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/EnvironmentallySensitiveAreasCategoryB/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/EnvironmentallySensitiveAreasCategoryB/MapServer"
   },
   {
    "folder": "Environment",
    "name": "FireScarMapping",
    "type": "FeatureServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FireScarMapping/FeatureServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/FireScarMapping/FeatureServer"
   },
   {
    "folder": "Environment",
    "name": "FireScarMapping",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/FireScarMapping/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/FireScarMapping/MapServer"
   },
   {
    "folder": "Environment",
    "name": "Fisheries",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Fisheries/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/Fisheries/MapServer"
   },
   {
    "folder": "Environment",
    "name": "KoalaPlan",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/KoalaPlan/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/KoalaPlan/MapServer"
   },
   {
    "folder": "Environment",
    "name": "LandTypes",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/LandTypes/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/LandTypes/MapServer"
   },
   {
    "folder": "Environment",
    "name": "MattersOfStateEnvironmentalSignificance",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/MattersOfStateEnvironmentalSignificance/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/MattersOfStateEnvironmentalSignificance/MapServer"
   },
   {
    "folder": "Environment",
    "name": "NrmInvestmentPrograms",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/NrmInvestmentPrograms/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/NrmInvestmentPrograms/MapServer"
   },
   {
    "folder": "Environment",
    "name": "ParksFireHistory",
    "type": "FeatureServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ParksFireHistory/FeatureServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/ParksFireHistory/FeatureServer"
   },
   {
    "folder": "Environment",
    "name": "ParksFireHistory",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ParksFireHistory/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/ParksFireHistory/MapServer"
   },
   {
    "folder": "Environment",
    "name": "ParksMarineMoorings",
    "type": "FeatureServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ParksMarineMoorings/FeatureServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/ParksMarineMoorings/FeatureServer"
   },
   {
    "folder": "Environment",
    "name": "ParksMarineMoorings",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ParksMarineMoorings/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/ParksMarineMoorings/MapServer"
   },
   {
    "folder": "Environment",
    "name": "ParksMarineProtectedAreas",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ParksMarineProtectedAreas/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/ParksMarineProtectedAreas/MapServer"
   },
   {
    "folder": "Environment",
    "name": "ParksTerrestrialProtectedAreas",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/ParksTerrestrialProtectedAreas/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/ParksTerrestrialProtectedAreas/MapServer"
   },
   {
    "folder": "Environment",
    "name": "SLATS",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/SLATS/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/SLATS/MapServer"
   },
   {
    "folder": "Environment",
    "name": "SuratCumulativeMgmtArea",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/SuratCumulativeMgmtArea/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/SuratCumulativeMgmtArea/MapServer"
   },
   {
    "folder": "Environment",
    "name": "WaterAndWetlandBiodiversity",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/WaterAndWetlandBiodiversity/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/WaterAndWetlandBiodiversity/MapServer"
   },
   {
    "folder": "Environment",
    "name": "WetlandProtection",
    "type": "MapServer",
-   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/WetlandProtection/MapServer"
+   "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/WetlandProtection/MapServer"
   }
  ],
  "counts": {
