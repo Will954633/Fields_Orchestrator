@@ -45,8 +45,16 @@ composition effect**: 45 of its 54 listings are attached dwellings or above the 
 So the honest coverage gap on the house method is **15 properties**, of which about 9 are a
 sourceable missing input. There is no large coverage win hiding here — which is itself the
 finding, and it redirects this domain away from coverage and toward the two surfaces that
-are genuinely thin: **attached dwellings (28.3% valued, n = 113, dominated by empty
-comparable pools)** and comp-pool depth.
+are genuinely thin: **attached dwellings (35.5% valued, 38 of 107, dominated by
+`no_class_matched_comparables` — 72% of declines, NOT empty comparable pools)** and
+comp-pool depth.
+
+> **Corrected 2026-08-23** (REC-valuation-002, approved by Will 2026-08-18). The former
+> figure — 28.3% of n=113, "dominated by empty comparable pools" — was house-engine output
+> measured against attached dwellings the house method is excluded from by decision. The
+> live attached product is `Gold_Coast.unit_valuations` gated on `publishable`. Where that
+> engine does fire it uses a **median of 12** comparables, healthier than the house
+> engine's median of 8 — so the blocker was never pool thinness.
 
 ## 2. Current state — what is ON, OFF, or PAUSED, and deliberately so
 
@@ -57,7 +65,7 @@ comparable pools)** and comp-pool depth.
 | Design envelope $1M–$2M, detached houses | **ON, deliberately** | Structural, not a policy choice — the estimate cannot exceed its priciest comparable. Outside it we suppress **both** figure and range. This is correct behaviour and is not to be "fixed". |
 | Waterfront | **Out of scope by decision** | Varsity Lakes has only 18 waterfront comparables. Decided, not open. |
 | Attached dwellings — **house** method | **Excluded by decision** | They inflate every published accuracy figure. `05-what-we-exclude.md`. |
-| Attached dwellings — **own** method | **LIVE since 2026-08-10** | `[UNITS-VALUATION-LIVE]` — units/townhouses now get a measured range of their own. ⚠ This is why `05-what-we-exclude.md` is no longer the whole story, why the $1M–$2M envelope must never be applied to a unit, and why this surface (28.3% valued, n = 113) is now the domain's largest honest opportunity. |
+| Attached dwellings — **own** method | **LIVE since 2026-08-10** | `[UNITS-VALUATION-LIVE]` — units/townhouses now get a measured range of their own. ⚠ This is why `05-what-we-exclude.md` is no longer the whole story, why the $1M–$2M envelope must never be applied to a unit, and why this surface (**35.5% valued, 38 of 107** — corrected 2026-08-23 from 28.3%/n=113, which was the house engine read against units) is now the domain's largest honest opportunity. |
 | The ±12.2% band | **An EMPIRICAL 80% band** | NOT a confidence interval. It was called a "90% CI" on two live pages until 2026-08-07, when it actually contained the sale 58% of the time. |
 | `16_Valuation/` folder governance | **Binding** | Experiment record before any method change ships; append-only. Predates this domain and outranks it. |
 | This domain's write access | **OFF in week one** | See §4. Deliberate, and Will's call to widen. |
@@ -70,7 +78,8 @@ comparable pools)** and comp-pool depth.
    both, and never let the raw one travel alone.
 2. **Coverage rises where it honestly can** — i.e. where the blocker is a missing input we
    can source (floor area 7, land size 2 on the house method), not where the method is
-   correctly refusing. The attached-dwelling surface (28.3%, n = 113) is the larger prize.
+   correctly refusing. The attached-dwelling surface (**35.5%, 38 of 107**, blocker
+   `no_class_matched_comparables`) is the larger prize.
 3. **No live claim about valuation accuracy or the range is false.** Zero instances of "90%
    confidence interval" language, zero unreproducible accuracy figures in public copy.
 4. **Accuracy does not drift** without somebody noticing in the same week it moves.
