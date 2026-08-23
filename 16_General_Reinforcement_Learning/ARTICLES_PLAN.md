@@ -74,11 +74,92 @@ sellers, and you must say so whenever you cite this corpus.
 
 ## 3. The plan, in priority order
 
-### P1 — Fix the body, not the hook (highest value, evidence is strongest)
-The read-depth number is the most actionable fact we have. Take the articles with a strong
-headline and collapsing scroll and work out *where* readers leave. Then fix the structure and
-measure whether scroll moves. Start with the flagship (37 sessions, 10.1%).
-- Success = average scroll on a revised article rises, measured, with n stated.
+### P1 — ✅ CLOSED 2026-08-16 — and it was not the body, it was the exit
+P1 was written as "fix where readers leave". The audit that should have come first showed
+something simpler and worse: **0 of 90 published articles linked `/analyse-your-home`, and
+88 of 90 carried no non-disclaimer internal link at all.** Neither template CTA pointed
+there either. `/analyse-your-home` is the only page where `address_search` /
+`analyse_home_address_submit` fire, and `submitted_address` is the reward (lift 50.5,
+n=9 conversions). **The funnel had no entrance, so "0 converters" was never evidence about
+the format.**
+
+Shipped (commits `2e6e85b8`, `4289682e`, both verified live):
+- Mid + end CTAs lead with `/analyse-your-home/<suburb>`; clicks emit `article_cta_click`.
+- Internal article links canonicalised to `/articles/:slug` (they all went via a 301).
+- The card-index merge bug — every SSR article page rendered the wrong category and **no
+  suburb**, because the route loader's PLACEHOLDER `category`/`scope`/`suburbs` are defined
+  values and the merge copied them over the index. `INDEX_OWNED_KEYS` now protects them.
+- The mid-article CTA no longer splits a section off its heading (it was landing between
+  "The Result" and the result).
+
+**The lesson to carry, because it has now cost three cycles:** verify by *rendering the
+page and reading it*, not by reading the source. The three defects above were all invisible
+in the diff and all obvious in one screenshot.
+
+**What P1 was originally about is still open** and is now testable for the first time:
+does moving `## The Result` earlier (shipped in the generator prompt on 2026-08-13) raise
+read depth? Needs an article generated through the new prompt — first `how_it_sold` run
+after 2026-08-13 — plus `paid_avg_scroll_pct`. Success = scroll rises, n stated.
+
+### P1b — Draft residue is a THIRD defect class the editorial gate cannot see
+The gate checks Rule 5. It has now passed, in three separate cycles: a duplicate pair
+contradicting itself (24% vs 24.5%), a self-correction left in the prose
+(`"+4.9% — correction: +4.4%"`), and a **prompt instruction rendered as body copy**
+(`<p><em>Editorial opinion.</em></p>`, on an article Will had personally approved and which
+was live). Before sending any draft, scan for residue as well as compliance:
+`Editorial opinion`, `correction:`, `[INSERT|TBC|TODO]`, `as an AI`, and a same-suburb
+same-hook duplicate check against the PUBLISHED corpus. A clean gate result says nothing
+about any of these.
+
+### P1c — ⏳ OPEN — the demand-led drip queue (6 drafts waiting, and a control group)
+Written 2026-08-23 12:45. **This is the next session's first job and it is time-sensitive.**
+
+Seven how-it-sold drafts were written this cycle against addresses that already carry measured
+Search Console demand. **One was proposed; six are queued.** The drip cap is 3 per 24h and it
+had already been reached (`article_approval.py propose` refuses; do not `--force` without a
+reason). Send the rest at 3/day, highest demand first:
+
+| # | article id | address | impr/30d |
+|---|---|---|---|
+| 1 | `6a8a5264710ff61068cbc047` | 180 Christine Avenue, Burleigh Waters | 38 | ← proposed 2026-08-23
+| 2 | `6a8a5264710ff61068cbc04a` | 40 Palma Crescent, Varsity Lakes | 26 |
+| 3 | `6a8a5264710ff61068cbc04d` | 12 Wayville Place, Robina | 18 |
+| 4 | `6a8a5264710ff61068cbc04c` | 5 Chelsea Place, Robina | 14 |
+| 5 | `6a8a5264710ff61068cbc049` | 4/44 Frascott Avenue, Varsity Lakes | 11 |
+| 6 | `6a8a5264710ff61068cbc04b` | 3/1 Lakefront Crescent, Varsity Lakes | 10 |
+| 7 | `6a8a5264710ff61068cbc048` | 9 Skua Street, Burleigh Waters | 8 |
+
+**⚠ Do not write the other seven backlog addresses.** They are a pre-registered control group
+(`rl_articles_signal`, cycle `20260823_1140`), matched on impressions (125 v 127) and suburb.
+Writing them destroys the only control this domain has ever had. They are: 55/9 Moores Crescent,
+17 Pitta Place, 1/5 Peacock Place, 2710/397 Christine Avenue, 2/5 Bottlewood Court,
+41 Olympus Drive, 41 Watts Drive. Read out after 2026-09-22.
+
+**Aiming the generator:** `run_how_it_sold.py --suburb <s> --address "<street address>"`
+(repeatable) targets a specific sale, ignoring the date window and the `article_generated`
+flag. Added 2026-08-23 for exactly this. Requires `AZURE_COSMOS_URI` (set it from
+`COSMOS_CONNECTION_STRING`); push with `scripts/push_to_ghost.py --mode how_it_sold
+--all-unpushed`, which creates drafts only.
+
+### P0 — ✅ CLOSED 2026-08-13 21:20 — the 15 how-it-sold drafts are live
+Will approved **REC-articles-002** via Telegram (token `A3B8`, 10:29:32Z). All 15 were
+re-scanned by the body-level gate (15/15 clean, whole corpus 100/100) and published in one
+batch with a **single** Netlify build. `approved_by` reads
+`will_recommendation:REC-articles-002`, not `will_telegram`, so the provenance is not
+misstated, and all 15 overrides are recorded in `system_monitor.article_publish_overrides`.
+**Published corpus 73 → 88**; `articles.json` verified at 88 and three URLs verified 200 live.
+
+**The judgement, written down because the next session will face it too.** The per-article
+Telegram gate drips at 3/day by design. Executing a decision Will had *already made* through
+that gate would have taken five days and 15 builds. The invariant the gate protects is *Will
+decides* — and he decided, through a route (a full recommendation with claim, evidence and N)
+that gave him strictly more to go on than a Telegram card does. The guard's own docstring
+anticipates exactly this: "a documented, loud escape hatch survives contact with reality."
+**Use the override only when you can name his approval and cite its token.** A draft he has
+not seen still goes to Telegram, one at a time.
+
+**12 drafts remain** (4 Varsity Lakes market-data, 2 of which are near-duplicates; and the
+rest). These have NOT been approved — they go through `article_approval.py propose`, 3/day.
 
 ### P2 — Distribute the 60 undistributed
 Nothing else you do matters if articles are never seen. Order by likely value using the hook
@@ -113,11 +194,27 @@ answering it invokes the CMA obligation plus the s216(6) bar on passing it to an
 posting without disclosing the licence is astroturfing under ACL s18 — PropertyChat states
 it reports such businesses to the ACCC.
 
-### P3 — Feed the hook evidence into generation
-The generator's angle selection is a hardcoded 14-rule table scoring property attributes,
-and its prompt is static. It has never seen `content_hook_corpus`. Closing that is the
-difference between a writer and a learner. Propose the mechanism; it changes generation, so
-it needs Will.
+### P3 — ✅ SHIPPED 2026-08-13 21:10 — the generator now reads its own outcomes
+**REC-articles-003** approved by Will (token `F6E6`). Merged to `fields-automation` as one
+commit **`d8895c0c`**, five files, all md5-verified:
+`pipeline/learning_context.py` (new) renders `pipeline/data/learning_snapshot.json` (new,
+committed so the prompt input stays diff-reviewable, regenerated by
+`scripts/build_learning_snapshot.py`) into every How It Sold and Watch This Sale prompt —
+6,085 chars of measured headline CTR, read-depth, and abstracted dead hook mechanics, with
+`caution_hook_corpus_has_no_lead_outcomes` carried verbatim. `article_prompt_template.md`
+moves `## The Result` from section 6 to section 3 and drops the target length to 800–1000.
+
+⚠ **Not yet graded, and the claim is narrow.** It expects `paid_avg_scroll_pct` on newly
+generated How It Sold articles to rise from 10.1% (n=37, one article) to >20% by 2026-09-30.
+Nothing has been generated through the new prompt yet — the next scheduled `how_it_sold` run
+is the first test. **Do not claim this worked until an article written by it has been measured.**
+
+⚠ **A trap this cost an hour to avoid, and it will still be there next time.**
+`/home/fields/fields-automation` is a **stale clone** — `pipeline/claude_max_client.py` is on
+GitHub and imported by `article_generator.py`, but is neither present nor tracked locally. So a
+diff against the local tree shows phantom changes (it flagged an `anthropic.Anthropic →
+make_client` swap that had already landed on remote). **Fetch from GitHub and diff against
+that before pushing anything to this repo.** See fix-history `[REC-003-STALE-BASE]`.
 
 ### P4 — ✅ CLOSED 2026-08-13 — and it was far bigger than "two breaches"
 The "two live editorial breaches (71 of 73 pass)" figure was wrong, and wrong for a
