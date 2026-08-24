@@ -573,15 +573,25 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
         return f"Figure {w} — {cap}"
 
     _sups = "⁰¹²³⁴⁵⁶⁷⁸⁹"
+    _refwords = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+                 "ten"]
     _refs: list[str] = []
 
+    def _refmark(n):
+        return "".join(_sups[int(d)] for d in str(n))
+
+    def _refword(n):
+        return _refwords[n - 1] if n <= len(_refwords) else str(n)
+
     def _cite(entry):
-        """Register a reference, return its superscript mark. Deduped by text, so one
-        source cited twice shares a number. Unicode superscripts survive the
-        markdown->HTML escaper and are not ASCII digits, so FactBook.verify ignores them."""
+        """Register a reference; return a superscript that HYPERLINKS to its entry in the
+        References section. Deduped by text. Anchor ids use words (#ref-one) so no ASCII
+        digit reaches the markdown -- FactBook.verify only sees the unicode superscript,
+        which it ignores."""
         if entry not in _refs:
             _refs.append(entry)
-        return "".join(_sups[int(d)] for d in str(_refs.index(entry) + 1))
+        n = _refs.index(entry) + 1
+        return f"[{_refmark(n)}](#ref-{_refword(n)})"
 
     for _sn in (1, 2, 3, 4):          # section numbers are furniture, not figures
         fb.num(f"sec_{_sn}", _sn)
@@ -740,6 +750,20 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
         if svg:
             charts["dom"] = svg
             latest = fb.num("dom_latest", dom["latest"])
+            sd = b["suburb_display"]
+            if sm is not None:
+                med_up = sm["yoy_pct"] >= 0
+                moved = "risen" if med_up else "eased"
+                price_word = "still rising" if med_up else "easing"
+            else:
+                moved, price_word = "moved", "moving"
+            # PIVOT — sits ABOVE the days-on-market chart (Will 2026-08-25): frame the two
+            # price points already seen, then turn to buyer demand, ahead of the chart.
+            P.append(
+                f"We need to consider these two data points together. The {sd} median has "
+                f"{moved} over the past year, but a price is a lagging number: it confirms "
+                f"what buyers have already done, not what they are about to do. The more "
+                f"forward-looking signal is buyer demand — how quickly homes are selling.\n")
             P.append(
                 f"Next, we need to take a close look at how the number of days homes are "
                 f"taking to sell is changing. This is a key buyer demand signal, with low "
@@ -756,7 +780,6 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
             # hardcoded "from around half that a year ago" claimed DOM had doubled, when
             # Burleigh Waters' had in fact SHORTENED (37 -> 29 days). Sign-aware on both
             # price and liquidity; strictly no forecast.
-            sd = b["suburb_display"]
             tl = dom["timeline"]
             _days = [p.get("median_days_on_market") for p in tl
                      if p.get("median_days_on_market")]
@@ -772,28 +795,19 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
                             and p.get("median_days_on_market"):
                         year_ago = p["median_days_on_market"]
                         break
-            if sm is not None:
-                med_up = sm["yoy_pct"] >= 0
-                moved = "risen" if med_up else "eased"
-                price_word = "still rising" if med_up else "easing"
-            else:
-                moved, price_word = "moved", "moving"
-
-            P.append(
-                f"We need to consider these two data points together. The {sd} median has "
-                f"{moved} over the past year, but a price is a lagging number: it confirms "
-                f"what buyers have already done, not what they are about to do. The more "
-                f"forward-looking signal is buyer demand — how quickly homes are selling.\n")
-
-            # A single cited research statement, superscript-referenced (item 10): the US
-            # Federal Reserve sentence was cut; the mechanism now rests on Fields' own
-            # measured lead/lag finding, listed in References at the end.
+            # (item 2) The claim is substantiated by three peer-reviewed papers, one of
+            # them Australian; each superscript hyperlinks to its entry in References.
+            # These are real, source-verified citations (RePEc / journal sites), not
+            # placeholders. The US Federal Reserve line was cut (Will).
+            _P1 = ("Genesove, D. & Han, L. (2012). “Search and Matching in the Housing "
+                   "Market.” Journal of Urban Economics, 72(1), 31–45.")
+            _P2 = ("Carrillo, P. E. (2013). “To Sell or Not to Sell: Measuring the Heat of "
+                   "the Housing Market.” Real Estate Economics, 41(2), 310–346.")
+            _P3 = ("Khezr, P. & Menezes, F. (2015). “Time on the Market and Price Change: "
+                   "The Case of Sydney Housing Market.” Applied Economics, 47(5), 485–498.")
             research = ("Housing-market research finds that as demand eases, homes take "
                         "longer to sell before the median itself gives way"
-                        + _cite("Fields, “Leading vs Lagging Indicators of Gold Coast House "
-                                "Prices” and “What Drives Gold Coast House Prices” — Fields’ "
-                                "analysis of 27 economic series across eight Gold Coast "
-                                "suburbs, 2015–2025."))
+                        + _cite(_P1) + _cite(_P2) + _cite(_P3))
             if year_ago is not None:
                 ya = fb.num("dom_year_ago", int(round(year_ago)))
                 delta = dom["latest"] - year_ago
@@ -869,8 +883,7 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
                 f"{yoy} over the year. Those national forces reach every market; the "
                 f"question is what has offset them here. The answer is not in the price "
                 f"figures at all, but in who is moving, where the work is, and what the same "
-                f"money buys. Read what follows as context, not a promise about what comes "
-                f"next.\n")
+                f"money buys.\n")
         else:
             P.append(f"## 3. What sits underneath {b['suburb_display']}'s market?\n")
             P.append(
@@ -879,8 +892,7 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
                 f"median has eased {yoy} over the year. But a price is only the surface. "
                 f"What a national average cannot see is the demand underneath a market — who "
                 f"is moving, where the work is, and what the same money buys — and that is "
-                f"what decides how far a market has to fall. Read what follows as context, "
-                f"not a promise about what comes next.\n")
+                f"what decides how far a market has to fall.\n")
 
         # -- who is moving (migration), with the land-value comparison folded in
         #    (Will 2026-08-25): trimmed to the headline interstate-gain fact, and the
@@ -1170,16 +1182,23 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
     # A monitoring framework: what Fields would watch, and the conditional it rests on.
     # Historical relationship + 'if X then historically Y', not a forecast; names data
     # to follow, not an action to take.
+    # Reformatted (Will 2026-08-25): unbolded and broken into scannable dials + short
+    # lines, so a reader's eye can pick out the labels of what to watch.
+    P.append("So here is what we would be watching from here, and would suggest you "
+             "watch too — four dials:")
+    P.append("- **Wage growth**")
+    P.append("- **The oil price** that drove the recent inflation")
+    P.append("- **Household spending**")
+    P.append("- **Time on market**")
     P.append(fb.allow_literal(
-        f"**So here is what we would be watching from here, and would suggest you watch "
-        f"too: wage growth, the oil price that drove the recent inflation, household "
-        f"spending, and time on market. Our own concern is that wage growth has already "
-        f"slowed while the inflation pressure behind the rate rises has not fully "
-        f"resolved. If wage growth keeps falling and household spending turns down with "
-        f"it, that is the combination that has, in our data, preceded softer prices 3 to "
-        f"4 months on — and a days-on-market figure that keeps climbing would be the "
-        f"earliest confirmation. None of that has happened yet; they are simply the dials "
-        f"worth watching.**") + "\n")
+        "Our own concern: wage growth has already slowed, while the inflation pressure "
+        "behind the rate rises has not fully resolved."))
+    P.append(fb.allow_literal(
+        "If wage growth keeps falling and household spending turns down with it, that is "
+        "the combination that has — in our data — preceded softer prices 3 to 4 months "
+        "on. A days-on-market figure that keeps climbing would be the earliest "
+        "confirmation."))
+    P.append("None of that has happened yet. These are simply the dials worth watching.\n")
     P.append(
         f"To go further: {_link('fundamentals')} on what the Gold Coast market rests on, "
         f"and {_link('robina_intel')} for how {b['suburb_display']} is trading right now.\n")
@@ -1215,8 +1234,8 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
     if _refs:
         P.append("## References\n")
         for _i, _entry in enumerate(_refs, 1):
-            _mark = "".join(_sups[int(_d)] for _d in str(_i))
-            P.append(fb.allow_literal(f"{_mark} {_entry}"))
+            P.append(fb.allow_literal(
+                f"[[ref:{_refword(_i)}]]{_refmark(_i)} {_entry}"))
 
     return "\n".join(P), fb, charts
 
@@ -1302,7 +1321,15 @@ def md_to_html(md: str, title: str, hero: dict | None,
         def _stash(m):
             links.append((m.group(1), m.group(2)))
             return f"\x00L{len(links)-1}\x00"
-        s = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", _stash, s)
+        # links: external https, and internal #fragment anchors (reference superscripts)
+        s = re.sub(r"\[([^\]]+)\]\(((?:https?://|#)[^)]+)\)", _stash, s)
+        # reference targets [[ref:word]] -> an id span (stashed past the escaper)
+        anchors = []
+
+        def _astash(m):
+            anchors.append(m.group(1))
+            return f"\x00A{len(anchors)-1}\x00"
+        s = re.sub(r"\[\[ref:([a-z]+)\]\]", _astash, s)
         s = (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
               .replace("--", "&mdash;"))
         s = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
@@ -1311,6 +1338,8 @@ def md_to_html(md: str, title: str, hero: dict | None,
             anchor = (f'<a href="{url}" style="color:var(--accent);'
                       f'text-decoration:underline">{text}</a>')
             s = s.replace(f"\x00L{i}\x00", anchor)
+        for i, word in enumerate(anchors):
+            s = s.replace(f"\x00A{i}\x00", f'<span id="ref-{word}"></span>')
         return s
 
     out, rows, i = [], [], 0
@@ -1339,6 +1368,13 @@ def md_to_html(md: str, title: str, hero: dict | None,
             if svg:
                 out.append(svg)
             i += 1
+            continue
+        if ln.startswith("- "):
+            items = []
+            while i < len(lines) and lines[i].startswith("- "):
+                items.append(f"<li>{inline(lines[i][2:])}</li>")
+                i += 1
+            out.append("<ul>" + "".join(items) + "</ul>")
             continue
         if ln.startswith("### "):
             out.append(f"<h3>{inline(ln[4:])}</h3>")
@@ -1599,8 +1635,10 @@ def build(address, suburb=None, out_dir=None, want_html=True,
         # The markdown is the archival/plain-text form; charts are an HTML/print
         # concern, so the placeholder becomes a readable marker rather than a
         # dangling token.
-        fh.write(re.sub(r"\{\{CHART:(\w+)\}\}",
-                        lambda m: f"*[chart: {m.group(1)}]*", md))
+        _archival = re.sub(r"\{\{CHART:(\w+)\}\}",
+                           lambda m: f"*[chart: {m.group(1)}]*", md)
+        _archival = re.sub(r"\[\[ref:[a-z]+\]\]", "", _archival)   # strip anchor markers
+        fh.write(_archival)
 
     html_path = None
     if want_html:
