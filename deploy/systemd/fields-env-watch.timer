@@ -1,0 +1,10 @@
+[Unit]
+Description=Check every minute whether .env changed and re-deliver to services (REC-ops-004)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=60s
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target
