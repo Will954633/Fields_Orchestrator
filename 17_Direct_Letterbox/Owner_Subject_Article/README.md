@@ -275,3 +275,64 @@ already carries "the number in my head might not be real"; `anchor` just names i
 Related memory: `two_article_workflows_public_and_posted`, `adjusted_comparables_evidence`,
 `data_source_undercapture_reset`, `union_median_pipeline`, `valuation_design_envelope`,
 `homeowner_mindset_brief`.
+
+---
+
+## 12. The data pipeline and how it is kept fresh (added 2026-08-24)
+
+The article body is composed from five **context files**. Three refresh from live
+sources; two are human-maintained. Every figure the reader sees is minted from one
+of these, then verified by `factbook.verify()`.
+
+| Context file | Feeds | Source / refresher | Freshness |
+|---|---|---|---|
+| `macro_context.json` | national picture, "why it turned", the headline | **human** Cotality `history` + `stats`; `update_macro_context.py` recomputes `derived` (falling-streak, Brisbane flip) — no external fetch | staleness-gated in `load_macro()` |
+| `fundamentals_context.json` | Q3 migration/affordability, Q4 lead/lag figures | **human**, cited to `14_Articles/Market_Research` dossiers | staleness-gated in `load_fundamentals()` |
+| `labour_context.json` | jobs (vacancies/capita, unemployment), the WPI + household-spending charts | `update_labour_context.py` → ABS Data API (Labour Force, Job Vacancies, WPI, Monthly Household Spending Indicator) | self-monitors (Rule 7) |
+| `arbitrage_context.json` | "what the same money buys" (Robina vs Sydney) | `build_arbitrage.py` → onthehouse sold medians + our union median | `retrieved_at` |
+| `comparison_examples.json` | the two real-home Street View cards | `build_comparison_examples.py` → Google Street View (dedicated key) | `retrieved_at` |
+
+**Keeping it fresh — `refresh_article_data.py` is the single scheduled entry point.**
+It runs all four refreshers, then **asserts each file is fresh**, and self-reports via
+`job_status` (job `owner_article_data_refresh`). It **raises** (Rule 7b) if a required
+pull failed or a required file is older than its bound — so a dead ABS pull or an
+onthehouse block shows up on the **Fields Systems Health** sheet instead of quietly
+feeding the mail-out last month's numbers. It also carries `uses_provisional_macro`
+through to the heartbeat.
+
+```bash
+python3 refresh_article_data.py --no-heartbeat   # ad-hoc, validated end-to-end
+# cron (install from the MAIN checkout after merge; VM is Australia/Brisbane):
+# 0 6 * * 0 set -a && . ./.env && set +a && \
+#   /home/fields/venv/bin/python 17_Direct_Letterbox/Owner_Subject_Article/refresh_article_data.py \
+#   >> logs/owner_article_data_refresh.log 2>&1
+```
+
+### The price-trajectory system
+`subject_trajectory.py` runs the real valuation engine as-of four dates (18/12/6/0
+months) via a frozen clock + `<=T` comp pool — no engine edits, no lookahead. Backed
+by `trajectory_backtest.py` (n=60): the 18-month **direction** tracks the suburb 98% of
+the time; 6-month segments are noise. So the copy speaks only to the whole-window move.
+
+### The research engine that feeds this
+Migration, jobs, arbitrage, leading-indicator and "why the market turned" facts trace to
+**`14_Articles/Market_Research/`** — the central research engine (dossiers + a fortnightly
+`claude -p` cycle indexed into `system_monitor.market_research_briefs`). This article is
+one consumer of it. (This folder is also reachable at
+`14_Articles/Owner_Subject_Article` via symlink.)
+
+### ⚠ Known gaps before a real mail-out
+1. **Macro history is part-provisional.** `macro_context.json` Apr–Jun 2026 city figures
+   are flagged `provisional` placeholders so the "falling for N months / Brisbane
+   previously positive" headline could be reviewed. `derived.uses_provisional` is true,
+   and **every build prints a warning** until the real Cotality monthly city figures
+   replace them. July 2026 is confirmed and reconciled to the primary release.
+2. **The calibrated "Our reading" is written for the current signs** (home + median
+   rising, DOM lengthening). Before running across many suburbs/times it should branch on
+   each home's actual signs — do not mail a home whose median is falling on this copy.
+3. **Street View / listing imagery** carries Google attribution ("Street View, Google");
+   fine as used. Do not substitute portal listing photos without rights.
+
+### Monitored jobs this asset registers
+- `owner_article_data_refresh` (this orchestrator) · `owner_article_labour_context` ·
+  `owner_article_macro_context`. All on the Process Registry / Systems Health sheet.

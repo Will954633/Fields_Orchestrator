@@ -47,10 +47,37 @@ from factbook import FactBook                                  # noqa: E402
 import guardrails                                              # noqa: E402
 import charts as charts_mod                                    # noqa: E402
 import variants as variants_mod                                # noqa: E402
+import subject_trajectory as traj_mod                          # noqa: E402
 
 # ---------------------------------------------------------------- constants
 
 SUBURBS = ["robina", "varsity_lakes", "burleigh_waters"]
+
+# Published Fields articles the piece links out to for the "why" and "what next"
+# questions -- we draw the reader to our own longer analysis rather than trying to
+# forecast in this format. Titles are the real published titles; verified present
+# 2026-08-24. The month-stamped market updates age; refresh these slugs when a new
+# monthly update publishes.
+SITE = "https://fieldsestate.com.au"
+ARTICLE_LINKS = {
+    "fundamentals": ("The fundamentals of the Gold Coast market",
+                     f"{SITE}/articles/fundamentals-of-the-gold-coast-market"),
+    "about_to_fall": ("Is the Gold Coast market about to fall?",
+                      f"{SITE}/articles/is-the-gold-coast-market-about-to-fall"),
+    "what_drives": ("What drives Gold Coast house prices",
+                    f"{SITE}/articles/what-drives-gold-coast-house-prices"),
+    "gc_update": ("Gold Coast market update — August 2026",
+                  f"{SITE}/articles/gold-coast-market-update-august-2026"),
+    "robina_update": ("Robina market update — August 2026",
+                      f"{SITE}/articles/robina-market-update-august-2026"),
+    "robina_intel": ("Robina market intelligence",
+                     f"{SITE}/market-intelligence/Robina"),
+}
+
+
+def _link(key: str) -> str:
+    title, url = ARTICLE_LINKS[key]
+    return f"[{title}]({url})"
 
 # Design envelope. Outside this band the method cannot go -- a weighted mean of
 # adjusted comparables can never exceed its priciest comparable, and the pool is
@@ -77,6 +104,14 @@ def _upper1(s: str) -> str:
     """Capitalise the first letter ONLY. str.capitalize() lower-cases the rest,
     which would quietly de-capitalise street names later in the sentence."""
     return s[:1].upper() + s[1:] if s else s
+
+
+def _month_label(month: str) -> str:
+    """'2026-06' -> 'June 2026'."""
+    try:
+        return datetime.strptime(month, "%Y-%m").strftime("%B %Y")
+    except (ValueError, TypeError):
+        return str(month)
 
 
 def slugify(address: str) -> str:
@@ -373,7 +408,73 @@ def load_macro() -> tuple[dict | None, str | None]:
     return data, None
 
 
+def _load_json(name: str) -> dict | None:
+    """Best-effort load of a context file. Returns None if missing/unreadable so
+    the consuming Q3 sub-passage simply omits itself, like every other optional
+    section -- a missing fundamentals file must never break the article."""
+    try:
+        with open(os.path.join(HERE, name)) as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
+def load_fundamentals() -> dict | None:
+    """Migration + affordability facts (human-curated, cited). Staleness-gated the
+    same way as macro: an old fundamentals block omits itself rather than printing
+    figures that may have moved."""
+    data = _load_json("fundamentals_context.json")
+    if not data:
+        return None
+    try:
+        age = (datetime.utcnow() - datetime.strptime(data["as_at"], "%Y-%m-%d")).days
+        if age > data.get("max_age_days", 120):
+            return None
+    except (KeyError, ValueError):
+        pass
+    return data
+
+
 # ---------------------------------------------------------------- composition
+
+def comparison_cards(cmp: dict, fb) -> str:
+    """Two real homes side by side — Gold Coast left, Sydney right — Street View
+    photo over a facts row, the land figure emphasised as the value gap. Returns a
+    self-contained HTML block (photos are embedded data URIs)."""
+    def card(side, home):
+        price = fb.money(f"cmp_{side}_price", home["price"])
+        land = fb.num(f"cmp_{side}_land", home["land"])
+        beds = fb.num(f"cmp_{side}_beds", home["beds"])
+        baths = fb.num(f"cmp_{side}_baths", home["baths"])
+        return (
+            f'<div class="cmp-card">'
+            f'<div class="cmp-tag">{_esc_html(home["label"])}</div>'
+            f'<img class="cmp-img" src="{home["photo_data_uri"]}" '
+            f'alt="Street view of a home in {_esc_html(home["suburb"])}" loading="lazy">'
+            f'<div class="cmp-body">'
+            f'<div class="cmp-suburb">{_esc_html(home["suburb"])}</div>'
+            f'<div class="cmp-price">{price}</div>'
+            f'<div class="cmp-facts">{beds} bed &middot; {baths} bath &middot; '
+            f'<b class="cmp-land">{land} m&sup2;</b></div>'
+            f'<div class="cmp-ctx">{_esc_html(home["context"])}</div>'
+            f'</div></div>')
+    gc, syd = cmp.get("gc"), cmp.get("syd")
+    if not (gc and syd and gc.get("photo_data_uri") and syd.get("photo_data_uri")):
+        return ""
+    attr = _esc_html(cmp.get("attribution", "Street View, Google"))
+    return (
+        '<figure class="cmp">'
+        f'<div class="cmp-grid">{card("gc", gc)}{card("syd", syd)}</div>'
+        f'<figcaption class="cmp-cap">Two real homes, near the same price: a '
+        f'{fb.num("cmp_gc_land2", gc["land"])} m&sup2; block on the Gold Coast against '
+        f'a {fb.num("cmp_syd_land2", syd["land"])} m&sup2; block in Sydney. Photos: '
+        f'{attr}. Sold-price facts from {_esc_html(gc["source"])} and '
+        f'{_esc_html(syd["source"])}.</figcaption></figure>')
+
+
+def _esc_html(s) -> str:
+    return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
 
 def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]:
     fb = FactBook()
@@ -406,195 +507,458 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
     raw_low, raw_high = fb.money("raw_low", min(raw)), fb.money("raw_high", max(raw))
     spread = fb.money("adj_spread", max(adj) - min(adj))
 
-    P = []
-    P.append(f"# {n_comps.capitalize()} sales near your street, weighed against the headlines\n")
-    P.append(
-        f"You have read that house prices are falling. The {n_comps} most recent sales "
-        f"within {radius} km of {short}, once each is adjusted to your home, and "
-        f"{b['suburb_display']}'s own recorded median point a different way from the "
-        f"national numbers. This piece sets the two side by side; it does not decide "
-        f"between them for you.\n")
+    # Subject demand-driver attributes, for Q4. Minted only where used.
+    feat = ((((subj.get("valuation_data") or {}).get("subject_property") or {})
+             .get("features") or {}).get("basic") or {})
+    md_ = (b["macro"] or {}).get("derived") or {}
+    mv, sm, dom, tj = b["movement"], b["suburb"], b["dom"], b["trajectory"]
 
-    # ---- macro
+    P = []
+    for _sn in (1, 2, 3, 4):          # section numbers are furniture, not figures
+        fb.num(f"sec_{_sn}", _sn)
+    # ---- H1 + hero, then the NATIONAL PICTURE FIRST ----------------------------
+    # Will's structure: paint the macro picture first (prices falling elsewhere),
+    # from which it follows a local owner may fear the same -> the Key Question.
+    P.append(f"# Prices are falling across the country. Will {short} fall too?\n")
+
+    # ---- the national picture (heading computed from the macro history) --------
     if b["macro"]:
+        # Templated, no-LLM headline built from the computed macro history. The full
+        # form ("falling for N months … Brisbane, previously positive, just tipped
+        # down in <month>") needs >=2 southern-falling months AND a Brisbane flip;
+        # until the history supports both it degrades to the sourced-safe line.
+        streak = md_.get("southern_falling_streak_months")
+        just = md_.get("brisbane_just_turned")
+        latest_name = md_.get("brisbane_latest_month_name")
+        if streak and streak >= 2 and just and latest_name:
+            head = (f"Southern markets have been falling for "
+                    f"{fb.word_count('macro_streak', streak)} months and Brisbane, "
+                    f"previously positive, just tipped down in "
+                    f"{fb.date('macro_bris_month', latest_name)}")
+        else:
+            head = "The southern capitals are falling"
+            bris = md_.get("brisbane_latest_pct")
+            if isinstance(bris, (int, float)) and bris < 0:
+                head += ", and Brisbane has slipped too"
+        P.append(f"## {head}\n")
         bits = [fb.allow_literal(f"{s['text']} ({s['source']}, {s['period']})")
                 for s in b["macro"]["stats"]]
-        P.append("## What the headlines say\n")
         P.append("The falls are real where they are being measured. "
                  + " ".join(x + "." for x in bits)
                  + " That is a fair picture of a national market under pressure.\n")
 
-    # ---- what sold
-    P.append("## What sold near you\n")
-    P.append(
-        f"{n_comps.capitalize()} houses have sold close to yours between {first_sale} and "
-        f"{last_sale}. The nearest is "
-        f"{fb.address('nearest_addr', nearest['address'].split(',')[0])}, {d_near} km away; "
-        f"the furthest in this set is {d_far} km. They are the evidence here, because a "
-        f"sale down the road is a real transaction, not an estimate.\n")
+        # SITUATION, completed: why did the national market fall? (cited research)
+        wt = b["macro"].get("why_turned")
+        if wt:
+            P.append(fb.allow_literal(wt["text"]) + " "
+                     + fb.allow_literal(wt["amplifier_note"])
+                     + f" ({fb.allow_literal(wt['source'])}; the fuller picture is in "
+                     f"{_link('about_to_fall')}).\n")
 
-    we = b["worked"]
-    if we:
-        c = we["comp"]
-        c_addr = fb.address("we_addr", c["address"].split(",")[0])
-        c_price = fb.money("we_price", c["sale_price"])
-        c_adj = fb.money("we_adj", c["adjusted_price"])
-        c_date = fb.date("we_date", fmt_date(c.get("sale_date")))
-        clauses = []
-        for i, m in enumerate(we["moves"]):
-            verb = "we add" if m["dollars"] > 0 else "we subtract"
-            amt = fb.money(f"we_move_{i}", abs(m["dollars"]))
-            if m["unit"] == "sqm" and m["subject"] is not None and m["comp"] is not None:
-                sv = fb.num(f"we_subj_{i}", m["subject"])
-                cv = fb.num(f"we_comp_{i}", m["comp"])
-                clauses.append(f"it has {cv} sqm of {m['label']} against your {sv}, "
-                               f"so {verb} {amt}")
-            else:
-                clauses.append(f"on {m['label']}, {verb} {amt}")
-        tail = (f", with {fb.word_count('we_other', we['n_other'])} smaller differences"
-                if we["n_other"] else "")
+        # COMPLICATION (Minto C): the Gold Coast has so far bucked the national move.
         P.append(
-            f"A raw sale price is not directly comparable to your home, though, because no "
-            f"two houses are the same. Take {c_addr}, which sold on {c_date} for "
-            f"**{c_price}** -- a real sale price. " + _upper1("; ".join(clauses))
-            + f"{tail}. Those differences restate that sale as **{c_adj}** -- an estimate of "
-            f"what that same buyer would likely have paid for a home like yours. Every sale "
-            f"below has been through the same process.\n")
+            f"Yet the Gold Coast has so far not followed. Prices in {b['suburb_display']} "
+            f"have held — risen, even — while the national market fell, bucking the trend. "
+            f"The question that raises is whether it lasts: does the Gold Coast keep "
+            f"defying the national move, or eventually turn with it?\n")
 
-    P.append("| Address | Distance | Sold | Sale price | Adjusted for your home |")
-    P.append("|---|---|---|---|---|")
-    for i, c in enumerate(comps):
-        P.append(
-            f"| {fb.address(f'ca{i}', c['address'].split(',')[0])} "
-            f"| {fb.num(f'd{i}', c['distance_km'], dp=2)} km "
-            f"| {fb.date(f'sd{i}', fmt_date(c.get('sale_date')))} "
-            f"| {fb.money(f'sp{i}', c['sale_price'])} "
-            f"| {fb.money(f'ap{i}', c['adjusted_price'])} |")
-    P.append("")
-
-    # ---- the range
-    P.append("## What these sales say about your home\n")
+    # ---- the QUESTION (Minto Q): the same question, in the owner's terms --------
     P.append(
-        f"Raw, those {n_comps} homes sold between {raw_low} and {raw_high}. Adjusted to your "
-        f"home, they land between **{adj_low} and {adj_high}** -- a range built from "
-        f"{n_comps} sales. That spread of {spread} is the estimate. It is not one number, "
-        f"and it should not be read as one; the width is the honest part, reflecting how "
-        f"the {n_comps} homes genuinely differed from yours.\n")
+        f"## The Key Question: Property markets are declining in major national cities; "
+        f"will the value of {short} decline too?\n")
+    P.append(
+        f"That is the suburb's question in its most personal form — the one that matters to "
+        f"you as the owner. Let us work through it the way an analyst would, in four steps "
+        f"from your home outward: whether its own estimate is falling now, what "
+        f"{b['suburb_display']} as a whole is doing, why the two can move differently, and "
+        f"which forces could shape its value from here. It does not tell you what to do; "
+        f"none of it is a forecast; and where the data runs out, it says so.\n")
 
-    # ---- how long homes are taking to sell
-    # Placed before the median section deliberately. The owner's first question is
-    # "will it sell at all", not "what is the number" -- and the homeowner brief
-    # §8.3 says to lead with time-on-market over medians, because it is more
-    # reliable in our data and cannot accidentally become advice.
-    dom = b["dom"]
-    if dom and dom.get("timeline"):
-        svg, cap = charts_mod.dom_chart(dom["timeline"], b["suburb_display"], fb)
+    # ==== 1. Is the value of your home declining right now? =====================
+    P.append("## 1. Is the value of your home declining right now?\n")
+    if tj:
+        svg, cap = charts_mod.trajectory_chart(tj, b["suburb_display"], fb,
+                                               subject_label=b["address_short"])
         if svg:
-            charts["dom"] = svg
-            latest = fb.num("dom_latest", dom["latest"])
-            P.append(f"## How long homes are taking to sell in {b['suburb_display']}\n")
+            charts["trajectory"] = svg
+            span = fb.num("traj_span", tj["span_months"])
+            subj_move = fb.pct("traj_subj", tj["subject_full_pct"])
+            subj_dir = "risen" if tj["subject_full_pct"] >= 0 else "eased"
             P.append(
-                f"Half the houses that sold in {b['suburb_display']} last quarter were "
-                f"under offer within {latest} days of listing, and half took longer. "
-                f"The chart below shows that figure each quarter, with the number of "
-                f"sales it is measured from underneath.\n")
-            P.append("{{CHART:dom}}")
+                f"Take the direct question first. Valuing your home from nearby sales at "
+                f"four dates across the last {span} months — each time using only the "
+                f"sales known by then — traces how its estimate has moved.\n")
+            P.append(f"**On this evidence it has {subj_dir} {subj_move}.**\n")
+            P.append("{{CHART:trajectory}}")
             P.append(f"*{cap}*\n")
+            P.append(
+                f"That is the first answer, with the caveat the chart already carries: "
+                f"each point is a range, not a single figure, and the reliable reading is "
+                f"the direction across the whole {span} months, not any single step. Each "
+                f"point is built from the {n_comps} nearest sales in the twelve months "
+                f"ending at that date — real transactions, not estimates.\n")
 
-    # ---- agreement with the suburb
-    mv, sm = b["movement"], b["suburb"]
-    if mv and sm:
-        P.append(f"## Do these sales agree with {b['suburb_display']}'s own figures?\n")
-        e_mean = fb.money("early_mean", mv["early_mean"])
-        l_mean = fb.money("late_mean", mv["late_mean"])
-        n_e = fb.word_count("n_early", mv["n_early"])
-        n_l = fb.word_count("n_late", mv["n_late"])
-        move = fb.pct("comp_move", mv["pct"])
+    # ==== 2. What is your suburb doing? ========================================
+    P.append(f"## 2. What is {b['suburb_display']} doing?\n")
+    P.append(
+        f"Your home is one data point. The suburb around it is the next ring out, and it "
+        f"is measured two ways that our own audits found hold up on a partial sample: the "
+        f"rolling median price, and how long homes take to sell.\n")
+
+    # Median price first, then days on market.
+    yoy = None
+    if sm:
         yoy = fb.pct("suburb_yoy", sm["yoy_pct"])
         window = fb.num("median_window_months", 12)
         n_sales = fb.num("n_suburb_sales", sm["n_now"])
+        med_dir = "risen" if sm["yoy_pct"] >= 0 else "eased"
         P.append(
-            f"Split the {n_comps} adjusted sales in half by date. The earlier {n_e}, from "
-            f"{fb.date('e_from', fmt_date(mv['early_from']))} to "
-            f"{fb.date('e_to', fmt_date(mv['early_to']))}, average **{e_mean}**. The later "
-            f"{n_l}, from {fb.date('l_from', fmt_date(mv['late_from']))} to "
-            f"{fb.date('l_to', fmt_date(mv['late_to']))}, average **{l_mean}**. That is a "
-            f"move of **{move}**.\n")
-        # How the two measures relate is a per-home FACT, so the sentence that
-        # characterises it has to be derived, not hardcoded. The prototype was
-        # written on a home where both read +5.8% and asserted agreement in fixed
-        # copy; on most homes they differ, and inherited copy would overclaim.
-        same_dir = (mv["pct"] > 0) == (sm["yoy_pct"] > 0)
-        gap_pp = abs(mv["pct"] - sm["yoy_pct"])
-        close = same_dir and gap_pp <= 2.5
-
-        # NOT "independently measured" -- that read to an owner as corroborated, when the
-        # figure was in fact our weaker Domain-only recomputation. It now comes from the
-        # union pipeline, so the honest description is the one that names the sources.
-        lead = (f"The {b['suburb_display']} rolling {window}-month house median moved "
-                f"**{yoy}** year-on-year, across {n_sales} sales matched between Domain "
-                f"and onthehouse. ")
-        if close:
-            verdict = ("Both point the same way, and by a similar amount.")
-        elif same_dir:
-            bigger = "these sales" if abs(mv["pct"]) > abs(sm["yoy_pct"]) else "the suburb median"
-            verdict = (f"Both point the same way, though not by the same amount -- "
-                       f"{bigger} moved further.")
-        else:
-            verdict = (f"These two records point in opposite directions, which is a fact "
-                       f"about how little {n_comps} sales can settle rather than a "
-                       f"contradiction to resolve.")
-        P.append(lead + verdict + "\n")
-
+            f"On price, the {b['suburb_display']} rolling {window}-month house median has "
+            f"**{med_dir} {yoy}** year-on-year, across {n_sales} sales.\n")
         if sm.get("series"):
-            svg, cap = charts_mod.median_price_chart(
-                sm["series"], b["suburb_display"], fb)
+            svg, cap = charts_mod.median_price_chart(sm["series"], b["suburb_display"], fb)
             if svg:
                 charts["median"] = svg
                 P.append("{{CHART:median}}")
                 P.append(f"*{cap}*\n")
 
-        mae = fb.pct("mae", MAE_PCT, signed=False)
-        halves = (n_e if mv["n_early"] == mv["n_late"] else f"{n_e} and {n_l}")
-        closing = ("The direction is the reportable part; the precision either figure "
-                   f"appears to show is more than {n_e} sales a side can carry."
-                   if close else
-                   "Neither figure is precise enough to explain the difference between "
-                   "them, so the honest reading is the direction they share, not the gap.")
+    # Corroboration between the median chart and the days-on-market chart: does your
+    # home's own 18-month trajectory agree with the suburb? (The old split-the-comps
+    # "-2.7%" line was cut: that small-sample short-window signal is noise -- WS5.)
+    if tj and sm:
+        med_move = fb.pct("traj_med", tj["median_full_pct"])
+        same = tj.get("same_direction")
+        verdict = ("the same direction" if same else "different directions")
         P.append(
-            f"Now the limits, in the same breath. Each half holds {halves} sales, which is "
-            f"a very small sample. This method's own mean absolute error is about {mae} in "
-            f"this price range -- wider than the movement it is describing. " + closing + "\n")
+            f"**And the trajectory of your own home agrees with the suburb: over the same "
+            f"{fb.num('traj_span2', tj['span_months'])} months your home's estimate moved "
+            f"{fb.pct('traj_subj2', tj['subject_full_pct'])} and the suburb median "
+            f"{med_move} — {verdict}.**\n")
+        P.append(f"**Your home has been moving with its suburb, not against it.**\n")
 
-    # ---- national vs local
-    if b["macro"] and sm:
-        an = b["macro"].get("auction_note")
-        P.append("## Where that leaves the national picture\n")
-        line = (f"So the two records point differently. The national aggregate is falling, "
-                f"while {b['suburb_display']}'s rolling median sits "
-                f"{fb.pct('suburb_yoy2', sm['yoy_pct'])} against a year earlier. ")
-        if an:
-            line += (fb.allow_literal(
-                f"Weekly auction clearances add a further gap of kind rather than degree: "
-                f"{an['text']} ({an['source']}, {an['period']}) -- but {an['caveat']}, not "
-                f"this one. ") )
-        line += ("The national and the local are describing different things at different "
-                 "scales.\n")
-        P.append(line)
+    if dom and dom.get("timeline"):
+        svg, cap = charts_mod.dom_chart(dom["timeline"], b["suburb_display"], fb)
+        if svg:
+            charts["dom"] = svg
+            latest = fb.num("dom_latest", dom["latest"])
+            P.append(
+                f"On time, half the houses that sold in {b['suburb_display']} last quarter "
+                f"were under offer within {latest} days of listing, and half took longer. "
+                f"The chart shows that figure each quarter, with the number of sales it is "
+                f"measured from underneath.\n")
+            P.append("{{CHART:dom}}")
+            P.append(f"*{cap}*\n")
 
-    # ---- limits
+            # Early interpretation: read the price vs time-on-market signals the reader
+            # has now seen, grounded in the leading-indicator research, and hand off to
+            # the demand fundamentals in the sections that follow. Strictly no forecast.
+            P.append(
+                f"Here an analyst pauses. Both price figures above point up — the "
+                f"{b['suburb_display']} median over the year, your own home over the last "
+                f"eighteen months — but a price is a lagging number: it confirms what "
+                f"buyers have already done, not what they are about to do. The more "
+                f"forward-looking signal is liquidity — how quickly homes are selling — "
+                f"and it has begun to move: {b['suburb_display']}'s median time on market "
+                f"has stretched to {latest} days last quarter, from around half that a "
+                f"year ago. The evidence bears this out: US Federal Reserve "
+                f"work published in 2025 found the supply of homes for sale leads price "
+                f"growth by roughly a year, and housing-search studies find that as "
+                f"demand eases, homes take longer to sell before the median itself gives "
+                f"way.\n")
+            _days = [p.get("median_days_on_market") for p in dom["timeline"]
+                     if p.get("median_days_on_market")]
+            dlo = fb.num("dom_range_lo", int(min(_days)))
+            dhi = fb.num("dom_range_hi", int(max(_days)))
+            P.append(
+                f"So a market where prices are still rising while time on market lengthens "
+                f"is one whose early momentum may be easing — a signal to watch, not a "
+                f"fall. And {latest} days is still quick by {b['suburb_display']}'s own "
+                f"recent record, which has run between {dlo} and {dhi} days over the past "
+                f"two years; the honest reading is heat coming out of a fast market, not a "
+                f"market in retreat.\n")
+            P.append(
+                f"**Price figures alone cannot tell you where things go next — they arrive "
+                f"too late.**\n")
+            P.append(
+                f"For that you have to look underneath them, at the demand that drives a "
+                f"market: who is moving here, whether there is work, and what people can "
+                f"afford. That is where this piece turns next.\n")
+
+    # ==== 3. Why is the suburb holding up differently? =========================
+    # Rebuilt as real, cited fundamentals: who is moving, where the work is, and
+    # what the same money buys. Every figure carries a source; the passage is
+    # evidence-with-context and stops short of a conclusion, per the editorial
+    # no-forecast rule -- the reader draws the inference.
+    fund, lab, arb = b.get("fundamentals"), b.get("labour"), b.get("arbitrage")
+    if sm and (fund or lab or arb):
+        P.append(f"## 3. Why is {b['suburb_display']} holding up differently?\n")
+        P.append(
+            f"So two records point different ways at once: nationally, values are falling — "
+            f"for the reasons set out at the start, rising rates and inflation and stretched "
+            f"affordability — yet {b['suburb_display']}'s median has risen {yoy} over the "
+            f"year. Those national forces reach every market; the question is what has "
+            f"offset them here. The answer is not in the price figures at all, but in who is "
+            f"moving, where the work is, and what the same money buys. Read what follows as "
+            f"context, not a promise about what comes next.\n")
+
+        # -- who is moving (migration) --
+        if fund and fund.get("migration"):
+            P.append(f"### Who is moving\n")
+            bits = [fb.allow_literal(f"{s['text']} ({s['source']}, {s['period']})")
+                    for s in fund["migration"]]
+            P.append(". ".join(_upper1(b) for b in bits) + ".")
+            cav = (fund.get("caveats") or {})
+            tail = ""
+            if cav.get("gc_overseas_led"):
+                tail += fb.allow_literal(cav["gc_overseas_led"]) + " "
+            if cav.get("moderating"):
+                tail += fb.allow_literal(cav["moderating"]) + " "
+            P.append(tail + "Population is the demand side of housing; these are the "
+                     "flows behind it. A place people are moving to, and the places they "
+                     "are leaving, are not under the same pressure.\n")
+
+        # -- where the work is (jobs) --
+        if lab and lab.get("states"):
+            st = lab["states"]; lbl = lab.get("labels") or {}
+            q, n, v = st.get("qld", {}), st.get("nsw", {}), st.get("vic", {})
+            P.append(f"### Where the work is\n")
+            if all(x.get("vacancies_per_1000_employed") for x in (q, n, v)):
+                P.append(fb.allow_literal(
+                    f"Labour demand is strongest here on a per-person basis. For every "
+                    f"1,000 people employed, Queensland has about "
+                    f"{q['vacancies_per_1000_employed']:.0f} job vacancies open, against "
+                    f"{n['vacancies_per_1000_employed']:.0f} in New South Wales and "
+                    f"{v['vacancies_per_1000_employed']:.0f} in Victoria "
+                    f"({lab['source']['vacancies']}, {lbl.get('vacancies_period','')}). ")
+                    + fb.allow_literal(
+                    f"Melbourne's unemployment, around {v.get('unemp_3mo_avg')}% over the "
+                    f"three months to {lbl.get('unemp_period','')}, sits about a point "
+                    f"above Queensland's ({q.get('unemp_3mo_avg')}%) and Sydney's "
+                    f"({n.get('unemp_3mo_avg')}%) ({lab['source']['unemployment']}). ")
+                    + fb.allow_literal(
+                    f"Queensland added about {round(q.get('jobs_added_yoy',0)/1000)*1000:,} "
+                    f"jobs over the year to {lbl.get('employed_period','')}.") + "\n")
+
+        # -- what the same money buys (arbitrage) --
+        if arb and arb.get("headline_comparison"):
+            r, h = arb["robina"], arb["headline_comparison"]
+            P.append(f"### What the same money buys\n")
+            rob = (f"{b['suburb_display']}'s median house, about "
+                   f"{fb.money('arb_rob_price', r['median_price'])}, sits on a "
+                   f"{fb.num('arb_rob_land', r['median_land'])} m² block; this home on "
+                   f"{fb.num('arb_subj_land', r['subject_land'])} m², "
+                   f"{fb.num('arb_beach', r['beach_km'], dp=1)} km from the beach "
+                   f"(Fields records). ")
+            syd = fb.allow_literal(
+                f"The same money in Sydney is below the city's median house price. Where "
+                f"it buys a house at all, it is an outer estate: in {h['suburb']}, about "
+                f"{h['dist_cbd_km']:.0f} km from the CBD, the median sold house is around "
+                f"${h['median_price']:,} on about {h['median_land']} m² (public sold "
+                f"records, {h['n_priced']} sales). ")
+            P.append(rob + syd + "The blocks are the fact; the beach and the commute are "
+                     "the context.\n")
+            cmp_ex = b.get("comparison")
+            if cmp_ex:
+                cards = comparison_cards(cmp_ex, fb)
+                if cards:
+                    charts["comparison"] = cards
+                    P.append("{{CHART:comparison}}")
+            if fund and fund.get("affordability"):
+                a = fund["affordability"]
+                P.append(fb.allow_literal(
+                    f"The affordability gap sits underneath it: {a['text']} ({a['source']}, "
+                    f"{a['period']}). ")
+                    + "For a buyer moving north, the equity that reaches an outer-fringe "
+                    "block in Sydney reaches more land, closer to the water, here.\n")
+
+        # -- close: no forecast + links --
+        P.append(
+            f"None of this forecasts a price. It sets out the demand side — people, work, "
+            f"value — that a national average cannot see, and leaves the reading to you. "
+            f"We go deeper on whether the local market is turning in {_link('about_to_fall')}, "
+            f"and on which indicators actually lead prices here in {_link('what_drives')}.\n")
+
+    # ==== 4. What will happen in the future? ===================================
+    # The payoff section: deploy Fields' own lead/lag research + the current live
+    # reading of the leading indicator (QLD wages), give the reader real evidence,
+    # and stop short of a conclusion. Heading is Will's; strictly no forecast [7].
+    dr = (fund or {}).get("drivers_research")
+    P.append("## 4. Is the Gold Coast market about to fall, and the value of your "
+             "property with it?\n")
+    P.append(
+        f"No one can tell you what your home will be worth next year, and anyone who names "
+        f"a figure is selling you a guess. But unknowable is not the same as unreadable. A "
+        f"market leaves a trail before it moves, and the honest way to read where it is "
+        f"heading is to watch the signals that turn first — not the price, which you have "
+        f"already seen arrives late.\n")
+
+    if dr:
+        # our empirical lead/lag finding — the evidence, cited to our own analysis
+        lag = fb.allow_literal(dr["lagging"][0]) if dr.get("lagging") else ""
+        lead_join = "; ".join(fb.allow_literal(x) for x in (dr.get("leading") or []))
+        income = fb.allow_literal(dr["income"]) if dr.get("income") else ""
+        P.append(
+            f"So we did the work. Across {fb.allow_literal(dr['scope'])}, we set out to "
+            f"separate the indicators that lead {b['suburb_display']}'s prices from the "
+            f"ones that only confirm them, and the answer runs against what most people "
+            f"watch. The number on every front page — interest rates — is a lagging one: "
+            f"{lag}. What leads, in that data, is money in people's pockets: {lead_join}. "
+            f"And underneath all of it, {income} ({_upper1(dr.get('source','Fields'))}, "
+            f"{_link('what_drives')}).\n")
+
+    # the current live readings of the two leading indicators, each as a chart
+    li = (lab or {}).get("leading_indicators") or {}
+    wpi_i, hs_i = li.get("wpi"), li.get("household_spending")
+    if wpi_i or hs_i:
+        P.append(
+            f"So the question worth asking is not where prices go next, but what those "
+            f"leading indicators are doing now. Two of them we can read straight from the "
+            f"Bureau of Statistics for Queensland, and both are below — each as the change "
+            f"on a year earlier.\n")
+        if wpi_i and wpi_i.get("series"):
+            svg, cap = charts_mod.indicator_chart(
+                wpi_i["title"], wpi_i["subtitle"], wpi_i["series"], wpi_i["source"], fb, "wpi")
+            if svg:
+                charts["wpi"] = svg
+                wp = fb.allow_literal(f"{wpi_i['latest']:.1f}%")
+                P.append(
+                    f"Wage growth — the indicator with the longest lead in our analysis — "
+                    f"has eased over the last two years, from the high fours to about {wp} "
+                    f"a year ({wpi_i['source']}, {wpi_i['period']}). It is still positive, "
+                    f"but no longer accelerating. In our data, accelerating wages preceded "
+                    f"price growth three to four months on, and fading wages preceded "
+                    f"softer conditions; this is neither — it is flat.\n")
+                P.append("{{CHART:wpi}}")
+                P.append(f"*{cap}*\n")
+        if hs_i and hs_i.get("series"):
+            svg, cap = charts_mod.indicator_chart(
+                hs_i["title"], hs_i["subtitle"], hs_i["series"], hs_i["source"], fb, "hs")
+            if svg:
+                charts["hs"] = svg
+                hp = fb.allow_literal(f"{hs_i['latest']:.1f}%")
+                P.append(
+                    f"Household spending — the strongest gauge of market strength in our "
+                    f"analysis, and a proxy for the confidence that precedes a purchase — "
+                    f"has held up, running about {hp} a year ({hs_i['source']}, "
+                    f"{hs_i['period']}). Where pay growth has eased, the till has not.\n")
+                P.append("{{CHART:hs}}")
+                P.append(f"*{cap}*\n")
+        q = ((lab or {}).get("states") or {}).get("qld") or {}
+        vac = q.get("vacancies_per_1000_employed")
+        vac_clause = (f"the roughly {fb.allow_literal(f'{vac:.0f}')} job vacancies per "
+                      f"thousand workers and the migration north from the last section"
+                      if vac else "the migration and jobs from the last section")
+        P.append(
+            f"Set the two against each other — pay growth easing, spending holding — and "
+            f"beside {vac_clause}, and you are looking at the forward part of the picture "
+            f"in one place.\n")
+
+    # the home's own attributes — one input, not the whole answer
+    land = feat.get("land_size_sqm")
+    micro = feat.get("micro_location_premium_pct")
+    bits = []
+    if land:
+        bits.append(f"a {fb.num('q4_land', land)} m² block")
+    if feat.get("pool_present"):
+        bits.append("a pool")
+    if isinstance(micro, (int, float)) and abs(micro) >= 0.03:
+        bits.append(f"a position our model reads at a {fb.pct('q4_micro', micro * 100)} "
+                    f"premium to the suburb")
+    if bits:
+        joined = (", ".join(bits[:-1]) + (", and " if len(bits) > 1 else "") + bits[-1])
+        P.append(
+            f"Closer in, your own house is what a buyer here weighs directly: {joined} — "
+            f"the features the comparable sales show buyers paying up for.\n")
+
+    caveat = fb.allow_literal(dr["caveat"]) if dr and dr.get("caveat") else \
+        "a relationship measured in the past may not hold in the future"
+    P.append(
+        f"We have set this out the way we would want it ourselves: the indicators that "
+        f"actually lead this market, where they sit today, and the plain caveat that "
+        f"{caveat}. We will not turn any of that into a single number for your home, nor "
+        f"a prediction of next year's price. But nor will we hand it all back unread. "
+        f"Here is our reading of it.\n")
+    # A calibrated assessment: what the evidence says NOW, not a forecast. SIGN-AWARE --
+    # it branches on the actual direction of the home estimate, the suburb median and
+    # days-on-market, so it reads correctly on a home/suburb that is easing, not only on
+    # one that is rising. Reports indicators + characterises the present state; never a
+    # price prediction.
+    if tj and sm:
+        subj_pct, med_pct = tj["subject_full_pct"], sm["yoy_pct"]
+        subj_up, med_up = subj_pct >= 0, med_pct >= 0
+        s_move = fb.pct("read_subj", subj_pct)
+        m_move = fb.pct("read_yoy", med_pct)
+        s_span = fb.num("read_span", tj["span_months"])
+        s_word = "risen" if subj_up else "eased"
+        m_word = "risen" if med_up else "eased"
+        dom_yoy = (b["dom"] or {}).get("yoy_days")
+        dom_rising = isinstance(dom_yoy, (int, float)) and dom_yoy > 0
+
+        if subj_up and med_up:
+            lead = (f"**Our reading: there is no evidence yet that {short} is declining.** "
+                    f"Its own estimate has {s_word} {s_move} over the {s_span} months to "
+                    f"today, and {b['suburb_display']}'s median {m_word} {m_move} over the "
+                    f"year — both still pointing up. ")
+            if dom_rising:
+                mid = ("What has changed is the pace, not the price — the lengthening time "
+                       "on market, and wage growth that has eased even as spending has "
+                       "held, describe a market carrying less momentum than a year ago. "
+                       "The honest characterisation of the evidence is slower growth and "
+                       "greater uncertainty, not a market that has turned down. ")
+            else:
+                mid = ("Time on market has not lengthened, and household spending has held "
+                       "even as wage growth eased — the momentum signals are, for now, "
+                       "steady. The honest characterisation of the evidence is continued, "
+                       "if unhurried, growth. ")
+        elif (not subj_up) and (not med_up):
+            lead = (f"**Our reading: {short} has begun to ease, in step with its suburb.** "
+                    f"Its own estimate has {s_word} {s_move} over the {s_span} months to "
+                    f"today, and {b['suburb_display']}'s median {m_word} {m_move} over the "
+                    f"year — {b['suburb_display']} is now participating in the national "
+                    f"softening rather than resisting it. ")
+            mid = (f"With time on market {'lengthening' if dom_rising else 'holding'} and "
+                   f"the leading signals off their highs, the honest characterisation is a "
+                   f"market that has turned, gently, and warrants watching closely. ")
+        else:
+            lead = (f"**Our reading: the signals for {short} are mixed.** Its own estimate "
+                    f"has {s_word} {s_move} over the {s_span} months to today, while "
+                    f"{b['suburb_display']}'s median has {m_word} {m_move} over the year — the "
+                    f"two point different ways, which on a small sample is a caution "
+                    f"against reading either as settled. ")
+            mid = ("The honest characterisation is a market losing momentum without yet a "
+                   "clear direction. ")
+        P.append(
+            lead + mid
+            + f"That is what the data says today, not a promise about next year; were the "
+            f"signals that lead prices to roll over, this reading would move with them.\n")
+    # A monitoring framework: what Fields would watch, and the conditional it rests on.
+    # Historical relationship + 'if X then historically Y', not a forecast; names data
+    # to follow, not an action to take.
+    P.append(fb.allow_literal(
+        f"**So here is what we would be watching from here, and would suggest you watch "
+        f"too: wage growth, the oil price that drove the recent inflation, household "
+        f"spending, and time on market. Our own concern is that wage growth has already "
+        f"slowed while the inflation pressure behind the rate rises has not fully "
+        f"resolved. If wage growth keeps falling and household spending turns down with "
+        f"it, that is the combination that has, in our data, preceded softer prices 3 to "
+        f"4 months on — and a days-on-market figure that keeps climbing would be the "
+        f"earliest confirmation. None of that has happened yet; they are simply the dials "
+        f"worth watching.**") + "\n")
+    P.append(
+        f"To go further: {_link('fundamentals')} on what the Gold Coast market rests on, "
+        f"and {_link('robina_intel')} for how {b['suburb_display']} is trading right now.\n")
+
+    # ==== limits ===============================================================
     P.append("## What this can't tell you\n")
     mae2 = fb.pct("mae2", MAE_PCT, signed=False)
     limits = (
         f"We publish this method's mean absolute error: about {mae2} in this price range. "
-        f"{n_comps.capitalize()} sales sit behind the range above -- a small number, stated "
-        f"plainly so you can weigh it. ")
+        f"{n_comps.capitalize()} sales sit behind your home's estimate -- a small number, "
+        f"stated plainly so you can weigh it. ")
     if sm:
         limits += (f"The {b['suburb_display']} median rests on {fb.num('n_suburb_sales2', sm['n_now'])} "
                    f"recorded sales, which is a sample of the suburb's activity rather than "
                    f"all of it. ")
-        # The union pipeline carries a 90% CI. Now that we read it instead of recomputing
-        # a bare median, disclose it -- it is the honest width of that figure.
         if sm.get("ci_low") and sm.get("ci_high"):
             limits += (f"Its {fb.pct('sub_ci_level', 90, signed=False, dp=0)} "
                        f"confidence range runs "
@@ -633,6 +997,9 @@ body{margin:0;background:var(--bg);color:var(--ink);
 h1{font-size:2.05rem;line-height:1.2;letter-spacing:-.015em;margin:0 0 1.5rem}
 h2{font:600 1.28rem/1.3 -apple-system,Segoe UI,Roboto,sans-serif;margin:2.75rem 0 .85rem;
  padding-top:1.5rem;border-top:1px solid var(--rule)}
+h3{font:600 1.06rem/1.35 -apple-system,Segoe UI,Roboto,sans-serif;margin:2rem 0 .6rem;
+ color:var(--ink)}
+a{color:var(--accent)}
 p{margin:0 0 1.15rem}
 body>.wrap>p:first-of-type{font-size:1.16rem;color:var(--muted)}
 strong{font-weight:700}
@@ -647,6 +1014,26 @@ tbody tr:nth-child(even){background:var(--band)}
 td:nth-child(2),td:nth-child(4),td:nth-child(5){white-space:nowrap;
  font-variant-numeric:tabular-nums}
 td:nth-child(5){font-weight:600;color:var(--accent)}
+.cmp{margin:1.9rem 0 1.6rem}
+.cmp-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.cmp-card{border:1px solid var(--rule);border-radius:12px;overflow:hidden;
+ background:var(--tint)}
+.cmp-tag{font:600 11px/1 -apple-system,Segoe UI,Roboto,sans-serif;letter-spacing:.1em;
+ text-transform:uppercase;color:var(--accent);padding:.7rem .8rem .5rem}
+.cmp-img{display:block;width:100%;height:auto;aspect-ratio:640/420;object-fit:cover;
+ background:var(--band)}
+.cmp-body{padding:.75rem .85rem .9rem}
+.cmp-suburb{font:600 15px/1.2 -apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink)}
+.cmp-price{font:700 20px/1.15 -apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);
+ margin:.15rem 0 .3rem;font-variant-numeric:tabular-nums}
+.cmp-facts{font:400 13.5px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;color:var(--muted)}
+.cmp-land{color:var(--accent);font-weight:700}
+.cmp-ctx{font:400 12.5px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;color:var(--muted);
+ margin-top:.25rem}
+.cmp-cap{font:400 12.5px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:var(--muted);
+ margin:.7rem 0 0}
+@media (max-width:30rem){.cmp-grid{grid-template-columns:1fr}}
+@media print{.cmp-card{break-inside:avoid}.cmp-grid{gap:.6rem}}
 .foot{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--rule);
  font:400 13px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;color:var(--muted)}
 @media (prefers-color-scheme:dark){
@@ -665,10 +1052,22 @@ def md_to_html(md: str, title: str, hero: dict | None,
                charts: dict | None = None) -> str:
     """Minimal, deliberate markdown -> HTML. Only the constructs we emit."""
     def inline(s):
+        # Extract markdown links first so their URLs are not touched by the
+        # entity-escaping below, then restore as anchors.
+        links = []
+
+        def _stash(m):
+            links.append((m.group(1), m.group(2)))
+            return f"\x00L{len(links)-1}\x00"
+        s = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", _stash, s)
         s = (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
               .replace("--", "&mdash;"))
         s = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
         s = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<em>\1</em>", s)
+        for i, (text, url) in enumerate(links):
+            anchor = (f'<a href="{url}" style="color:var(--accent);'
+                      f'text-decoration:underline">{text}</a>')
+            s = s.replace(f"\x00L{i}\x00", anchor)
         return s
 
     out, rows, i = [], [], 0
@@ -698,7 +1097,9 @@ def md_to_html(md: str, title: str, hero: dict | None,
                 out.append(svg)
             i += 1
             continue
-        if ln.startswith("## "):
+        if ln.startswith("### "):
+            out.append(f"<h3>{inline(ln[4:])}</h3>")
+        elif ln.startswith("## "):
             out.append(f"<h2>{inline(ln[3:])}</h2>")
         elif ln.startswith("# "):
             out.append(f"<h1>{inline(ln[2:])}</h1>")
@@ -854,7 +1255,7 @@ def build_cards(bundle: dict) -> list[dict]:
 
 def build(address, suburb=None, out_dir=None, want_html=True,
           skip_market_check=False, no_hero=False, verbose=True,
-          variant="report"):
+          variant="report", skip_trajectory=False):
     client = get_db()
     doc, suburb_key = resolve_subject(client, address, suburb)
     if not doc:
@@ -874,6 +1275,14 @@ def build(address, suburb=None, out_dir=None, want_html=True,
     dates = sorted(d for d in (parse_date(c.get("sale_date")) for c in comps) if d)
     span_months = max(1, round((dates[-1] - dates[0]).days / 30.44))
     macro, macro_err = load_macro()
+    # Loud, unconditional warning if the national headline would rest on placeholder
+    # macro figures. A provisional-fed "falling for N months" claim must never reach
+    # print unnoticed -- this fires on every build until the months are confirmed.
+    if macro and (macro.get("derived") or {}).get("uses_provisional"):
+        print("    ⚠ MACRO HEADLINE USES PROVISIONAL DATA: the 'falling for N months / "
+              "Brisbane previously positive' claim rests on placeholder figures in "
+              "macro_context.json. Replace the provisional months with real Cotality "
+              "figures and rerun update_macro_context.py before mailing.", file=sys.stderr)
     subj_feat = ((vd.get("subject_property") or {}).get("features") or {}).get("basic") or {}
 
     # Days-on-market, plus the assertion that it equals what the public pages show.
@@ -885,6 +1294,20 @@ def build(address, suburb=None, out_dir=None, want_html=True,
     if inconsistent:
         return {"ok": False, "stage": "consistency", "address": full_addr,
                 "errors": inconsistent}
+
+    # Four point-in-time valuations of THIS home (18/12/6/0 months ago), each run
+    # through the real engine as-of that date. Fail-soft: a home whose older
+    # anchors cannot be valued (thin historical pool) simply omits the section, the
+    # same way every other optional passage guards itself. Never let its cost or a
+    # failure break the article -- it is enrichment, not a load-bearing figure.
+    trajectory = None
+    if not skip_trajectory:
+        try:
+            trajectory = traj_mod.TrajectoryEngine(client, suburb_key).compute(doc)
+        except Exception as e:                              # noqa: BLE001
+            if verbose:
+                print(f"    ! trajectory section omitted: {type(e).__name__}: {e}",
+                      file=sys.stderr)
 
     bundle = {
         "subject": doc, "address_full": full_addr,
@@ -898,6 +1321,11 @@ def build(address, suburb=None, out_dir=None, want_html=True,
         "suburb": suburb_median_series(client, suburb_key),
         "dom": dom,
         "macro": macro,
+        "trajectory": trajectory,
+        "fundamentals": load_fundamentals(),
+        "labour": _load_json("labour_context.json"),
+        "arbitrage": _load_json("arbitrage_context.json"),
+        "comparison": _load_json("comparison_examples.json"),
     }
 
     md, fb, charts = compose(bundle, variant)
@@ -989,6 +1417,9 @@ def main():
     ap.add_argument("--no-hero", action="store_true")
     ap.add_argument("--skip-market-check", action="store_true",
                     help="skip the PropRadar listed/lease guard (dev only -- never for print)")
+    ap.add_argument("--no-trajectory", action="store_true",
+                    help="skip the 4-point price-trajectory section (faster; the "
+                         "section runs the valuation engine 4x)")
     ap.add_argument("--variant", default="report",
                     choices=["report"] + sorted(variants_mod.VARIANTS),
                     help="composition angle; see variants.py")
@@ -1011,7 +1442,8 @@ def main():
     rc = 0
     for v in wanted:
         r = build(a.address, a.suburb, a.out_dir, not a.no_html,
-                  a.skip_market_check, a.no_hero, variant=v)
+                  a.skip_market_check, a.no_hero, variant=v,
+                  skip_trajectory=a.no_trajectory)
         if not r["ok"]:
             print(f"REJECTED [{v}] at {r['stage']}: {r.get('address') or a.address}",
                   file=sys.stderr)

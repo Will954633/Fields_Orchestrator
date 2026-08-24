@@ -1,0 +1,235 @@
+{
+  "_comment": "COMPUTED by build_arbitrage.py. Robina anchored on our union median (precomputed_indexed_prices, n=265); Sydney from onthehouse sold records (CoreLogic-backed), retrieved at retrieved_at. Present as neutral 'same money, what you get' fact, never as a knock on Sydney.",
+  "retrieved_at": "2026-08-23T23:53:24+00:00",
+  "robina": {
+    "median_price": 1490000,
+    "median_land": 655,
+    "median_beds": 4,
+    "subject_land": 907,
+    "beach_km": 4.6,
+    "price_source": "Fields union median (Domain + onthehouse), n=265",
+    "land_source": "Fields sold records, n=386"
+  },
+  "price_band_pct": 8.0,
+  "sydney_matched": [
+    {
+      "suburb": "The Ponds",
+      "median_price": 1525000,
+      "median_land": 413,
+      "median_beds": 4.0,
+      "dist_cbd_km": 33.8,
+      "n_priced": 18,
+      "n_land": 7
+    },
+    {
+      "suburb": "Glenwood",
+      "median_price": 1530000,
+      "median_land": 369,
+      "median_beds": 4,
+      "dist_cbd_km": 30.1,
+      "n_priced": 7,
+      "n_land": 1
+    },
+    {
+      "suburb": "Marsfield",
+      "median_price": 1400000,
+      "median_land": 580,
+      "median_beds": 3,
+      "dist_cbd_km": 14.6,
+      "n_priced": 9,
+      "n_land": 1
+    },
+    {
+      "suburb": "Winston Hills",
+      "median_price": 1592500,
+      "median_land": 638,
+      "median_beds": 3.0,
+      "dist_cbd_km": 23.6,
+      "n_priced": 16,
+      "n_land": 3
+    }
+  ],
+  "sydney_all": [
+    {
+      "suburb": "Kellyville",
+      "median_price": 1880000,
+      "median_land": 543,
+      "median_beds": 4.0,
+      "dist_cbd_km": 28.9,
+      "n_priced": 16,
+      "n_land": 5
+    },
+    {
+      "suburb": "Baulkham Hills",
+      "median_price": 1850000,
+      "median_land": 734,
+      "median_beds": 4,
+      "dist_cbd_km": 24.2,
+      "n_priced": 11,
+      "n_land": 4
+    },
+    {
+      "suburb": "Glenwood",
+      "median_price": 1530000,
+      "median_land": 369,
+      "median_beds": 4,
+      "dist_cbd_km": 30.1,
+      "n_priced": 7,
+      "n_land": 1
+    },
+    {
+      "suburb": "Quakers Hill",
+      "median_price": 1145500,
+      "median_land": 420,
+      "median_beds": 3.5,
+      "dist_cbd_km": 33.3,
+      "n_priced": 18,
+      "n_land": 2
+    },
+    {
+      "suburb": "Stanhope Gardens",
+      "median_price": 1750000,
+      "median_land": 450,
+      "median_beds": 5,
+      "dist_cbd_km": 31.4,
+      "n_priced": 11,
+      "n_land": 4
+    },
+    {
+      "suburb": "The Ponds",
+      "median_price": 1525000,
+      "median_land": 413,
+      "median_beds": 4.0,
+      "dist_cbd_km": 33.8,
+      "n_priced": 18,
+      "n_land": 7
+    },
+    {
+      "suburb": "Rouse Hill",
+      "median_price": 1660000,
+      "median_land": 629,
+      "median_beds": 4,
+      "dist_cbd_km": 34.0,
+      "n_priced": 7,
+      "n_land": 2
+    },
+    {
+      "suburb": "Schofields",
+      "median_price": 1240500,
+      "median_land": null,
+      "median_beds": 4,
+      "dist_cbd_km": 35.1,
+      "n_priced": 14,
+      "n_land": 0
+    },
+    {
+      "suburb": "Riverstone",
+      "median_price": 1143500,
+      "median_land": 306,
+      "median_beds": 4.0,
+      "dist_cbd_km": 37.8,
+      "n_priced": 16,
+      "n_land": 1
+    },
+    {
+      "suburb": "Marsfield",
+      "median_price": 1400000,
+      "median_land": 580,
+      "median_beds": 3,
+      "dist_cbd_km": 14.6,
+      "n_priced": 9,
+      "n_land": 1
+    },
+    {
+      "suburb": "Carlingford",
+      "median_price": 1950000,
+      "median_land": null,
+      "median_beds": 4,
+      "dist_cbd_km": 17.7,
+      "n_priced": 7,
+      "n_land": 0
+    },
+    {
+      "suburb": "Winston Hills",
+      "median_price": 1592500,
+      "median_land": 638,
+      "median_beds": 3.0,
+      "dist_cbd_km": 23.6,
+      "n_priced": 16,
+      "n_land": 3
+    },
+    {
+      "suburb": "Seven Hills",
+      "median_price": 1150500,
+      "median_land": 556,
+      "median_beds": 4.0,
+      "dist_cbd_km": 27.1,
+      "n_priced": 20,
+      "n_land": 8
+    },
+    {
+      "suburb": "Toongabbie",
+      "median_price": 1080000,
+      "median_land": 556,
+      "median_beds": 3.0,
+      "dist_cbd_km": 25.9,
+      "n_priced": 15,
+      "n_land": 5
+    },
+    {
+      "suburb": "Girraween",
+      "median_price": 960000,
+      "median_land": 391,
+      "median_beds": 3,
+      "dist_cbd_km": 25.3,
+      "n_priced": 9,
+      "n_land": 1
+    },
+    {
+      "suburb": "Castle Hill",
+      "median_price": 1800000,
+      "median_land": 702,
+      "median_beds": 4,
+      "dist_cbd_km": 24.9,
+      "n_priced": 9,
+      "n_land": 2
+    },
+    {
+      "suburb": "Cherrybrook",
+      "median_price": 2345000,
+      "median_land": 630,
+      "median_beds": 4.5,
+      "dist_cbd_km": 22.5,
+      "n_priced": 12,
+      "n_land": 3
+    },
+    {
+      "suburb": "Beecroft",
+      "median_price": 2440944,
+      "median_land": 878,
+      "median_beds": 4.0,
+      "dist_cbd_km": 19.1,
+      "n_priced": 14,
+      "n_land": 4
+    },
+    {
+      "suburb": "Eastwood",
+      "median_price": 2085000,
+      "median_land": 348,
+      "median_beds": 3.0,
+      "dist_cbd_km": 15.0,
+      "n_priced": 8,
+      "n_land": 3
+    }
+  ],
+  "typical_sydney_land_for_price": 496,
+  "headline_comparison": {
+    "suburb": "The Ponds",
+    "median_price": 1525000,
+    "median_land": 413,
+    "median_beds": 4.0,
+    "dist_cbd_km": 33.8,
+    "n_priced": 18,
+    "n_land": 7
+  }
+}

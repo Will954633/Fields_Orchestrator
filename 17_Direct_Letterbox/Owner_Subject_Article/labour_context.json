@@ -1,0 +1,185 @@
+{
+  "leading_indicators": {
+    "wpi": {
+      "title": "Wage growth, Queensland",
+      "subtitle": "Wage Price Index, annual growth (%). A leading indicator of Gold Coast prices in our analysis.",
+      "series": [
+        {
+          "period": "2023-Q4",
+          "value": 4.8
+        },
+        {
+          "period": "2024-Q1",
+          "value": 4.6
+        },
+        {
+          "period": "2024-Q2",
+          "value": 4.6
+        },
+        {
+          "period": "2024-Q3",
+          "value": 3.9
+        },
+        {
+          "period": "2024-Q4",
+          "value": 3.7
+        },
+        {
+          "period": "2025-Q1",
+          "value": 3.6
+        },
+        {
+          "period": "2025-Q2",
+          "value": 3.6
+        },
+        {
+          "period": "2025-Q3",
+          "value": 3.4
+        },
+        {
+          "period": "2025-Q4",
+          "value": 3.3
+        },
+        {
+          "period": "2026-Q1",
+          "value": 3.4
+        },
+        {
+          "period": "2026-Q2",
+          "value": 3.4
+        }
+      ],
+      "latest": 3.4,
+      "period": "2026 Q2",
+      "source": "ABS Wage Price Index"
+    },
+    "household_spending": {
+      "title": "Household spending, Queensland",
+      "subtitle": "Monthly Household Spending Indicator, annual growth (%). Our strongest gauge of market strength.",
+      "series": [
+        {
+          "period": "2025-05",
+          "value": 5.8
+        },
+        {
+          "period": "2025-06",
+          "value": 6.2
+        },
+        {
+          "period": "2025-07",
+          "value": 6.9
+        },
+        {
+          "period": "2025-08",
+          "value": 5.7
+        },
+        {
+          "period": "2025-09",
+          "value": 5.1
+        },
+        {
+          "period": "2025-10",
+          "value": 6.5
+        },
+        {
+          "period": "2025-11",
+          "value": 6.6
+        },
+        {
+          "period": "2025-12",
+          "value": 6.5
+        },
+        {
+          "period": "2026-01",
+          "value": 5.5
+        },
+        {
+          "period": "2026-02",
+          "value": 6.0
+        },
+        {
+          "period": "2026-03",
+          "value": 9.5
+        },
+        {
+          "period": "2026-04",
+          "value": 5.8
+        },
+        {
+          "period": "2026-05",
+          "value": 5.6
+        },
+        {
+          "period": "2026-06",
+          "value": 6.1
+        }
+      ],
+      "latest": 6.1,
+      "period": "June 2026",
+      "source": "ABS Monthly Household Spending Indicator"
+    }
+  },
+  "_comment": "COMPUTED by update_labour_context.py from the ABS Data API. Do not hand-edit. Every figure is real ABS data; cite ABS Labour Force (6202.0) for unemployment/employment and Job Vacancies (6354.0) for vacancies, with the period shown.",
+  "retrieved_at": "2026-08-24T01:29:25+00:00",
+  "source": {
+    "unemployment": "ABS Labour Force, Australia (cat. 6202.0)",
+    "employment": "ABS Labour Force, Australia (cat. 6202.0)",
+    "vacancies": "ABS Job Vacancies, Australia (cat. 6354.0)",
+    "wages": "ABS Wage Price Index, Australia (cat. 6345.0)",
+    "api": "https://data.api.abs.gov.au"
+  },
+  "labels": {
+    "unemp_period": "July 2026",
+    "unemp_from": "May 2026",
+    "vacancies_period": "2026 Q2",
+    "employed_period": "July 2026",
+    "wpi_period": "2026 Q2"
+  },
+  "states": {
+    "qld": {
+      "unemp_3mo_avg": 4.1,
+      "unemp_3mo_from": "2026-05",
+      "unemp_3mo_to": "2026-07",
+      "unemp_trend": 4.2,
+      "unemp_trend_period": "2026-07",
+      "employed_now_k": 3049.9,
+      "jobs_added_yoy": 55826,
+      "employed_period": "2026-07",
+      "vacancies_k": 69.5,
+      "vacancies_period": "2026-Q2",
+      "vacancies_per_1000_employed": 22.8,
+      "wpi_yoy": 3.4,
+      "wpi_period": "2026-Q2"
+    },
+    "nsw": {
+      "unemp_3mo_avg": 4.2,
+      "unemp_3mo_from": "2026-05",
+      "unemp_3mo_to": "2026-07",
+      "unemp_trend": 4.2,
+      "unemp_trend_period": "2026-07",
+      "employed_now_k": 4562.2,
+      "jobs_added_yoy": 68442,
+      "employed_period": "2026-07",
+      "vacancies_k": 96.1,
+      "vacancies_period": "2026-Q2",
+      "vacancies_per_1000_employed": 21.1,
+      "wpi_yoy": 3.1,
+      "wpi_period": "2026-Q2"
+    },
+    "vic": {
+      "unemp_3mo_avg": 5.0,
+      "unemp_3mo_from": "2026-05",
+      "unemp_3mo_to": "2026-07",
+      "unemp_trend": 5.1,
+      "unemp_trend_period": "2026-07",
+      "employed_now_k": 3817.4,
+      "jobs_added_yoy": 43969,
+      "employed_period": "2026-07",
+      "vacancies_k": 76.4,
+      "vacancies_period": "2026-Q2",
+      "vacancies_per_1000_employed": 20.0,
+      "wpi_yoy": 3.1,
+      "wpi_period": "2026-Q2"
+    }
+  }
+}

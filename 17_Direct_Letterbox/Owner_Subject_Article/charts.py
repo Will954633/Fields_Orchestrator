@@ -29,6 +29,8 @@ Design constraints, all of them load-bearing:
 """
 from __future__ import annotations
 
+import re
+
 W = 640
 PAD_L, PAD_R, PAD_T, PAD_B = 78, 18, 26, 52   # L clears a "$1,265,000" axis label
 THIN_N = 15          # below this many sales, a quarter is not leant on
@@ -36,6 +38,18 @@ THIN_N = 15          # below this many sales, a quarter is not leant on
 
 def _esc(s) -> str:
     return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def _short_money(v) -> str:
+    """Compact dollar label for a chart mark: 1_550_677 -> '$1.5m', 985_000 ->
+    '$985k'. House style is $1,250,000 in prose; on a crowded axis/point the
+    abbreviated form is a deliberate legibility exception."""
+    v = float(v)
+    if v >= 1_000_000:
+        return f"${v/1_000_000:.1f}m"
+    if v >= 1_000:
+        return f"${round(v/1_000):,}k"
+    return f"${int(round(v)):,}"
 
 
 def _scale(vals, lo_pad=0.10, hi_pad=0.10):
@@ -142,6 +156,9 @@ CSS = """
  stroke-linejoin:round;stroke-linecap:round}
 .fig-dot{fill:var(--accent)}
 .fig-dot-thin{fill:var(--bg);stroke:var(--accent);stroke-width:1.75}
+.fig-line-ref{fill:none;stroke:var(--muted);stroke-width:2;stroke-dasharray:5 4;
+ stroke-linejoin:round;stroke-linecap:round}
+.fig-dot-ref{fill:var(--muted)}
 .fig-caption{font:400 12.5px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;
  color:var(--muted);margin:.1rem 0 1.6rem}
 @media print{.fig{page-break-inside:avoid}}
@@ -224,8 +241,8 @@ def median_price_chart(series, suburb_display, fb):
     caption = (f"Each point is the median of the previous twelve months of house sales, "
                f"so neighbouring points share most of their sales and the line is smooth "
                f"by design — it is not a quarter-by-quarter movement. The number under "
-               f"each point is how many sales it rests on. Source: Fields, from Domain "
-               f"and onthehouse.com.au records.")
+               f"each point is how many sales it rests on. Source: Fields, compiled from "
+               f"public sale records.")
     if dropped:
         caption += (" Earlier quarters exist but are not continuous with these, so "
                     "the chart shows only the most recent unbroken run rather than "
@@ -309,4 +326,144 @@ def dom_chart(timeline, suburb_display, fb):
                     f"{fb.num('chart_thin_n', THIN_N)} sales — shown, but not firm "
                     f"enough to lean on.")
     caption += " Source: Fields, the same figure shown on our Market Intelligence pages."
+    return "\n".join(svg), caption
+
+
+def trajectory_chart(traj, suburb_display, fb, subject_label=None):
+    """This home's own estimate at four points in time, in dollars.
+
+    ONE line -- the home's estimate -- because that is the figure an owner
+    recognises without translation. It is drawn in absolute dollars, not indexed
+    to a base, for the same reason. The suburb comparison lives in the prose
+    beside the chart, not as a second line the reader has to decode.
+
+    The line is wrapped in its ±range band, which is not decoration: the article's
+    whole spine is "the range is the valuation, never a single figure", and the
+    backtest (n=60) found the 18-month DIRECTION tracks the suburb 98% of the time
+    while individual points carry the method's ~10.5% error. So the band is kept
+    wide on purpose and the copy speaks only to the whole-window move. No fitted
+    line, no extrapolation -- four measured estimates, connected, exactly like the
+    median chart connects measured quarters.
+    """
+    pts = traj.get("points") or []
+    if len(pts) < 4:
+        return None, None
+
+    band_lo = [p["low"] for p in pts if p.get("low")]
+    band_hi = [p["high"] for p in pts if p.get("high")]
+    mids = [p["mid"] for p in pts]
+
+    height = 250
+    who = subject_label or "this home"
+    svg, g = _frame(height, f"What {who} has been worth over the last "
+                    f"{fb.num('traj_base_months', traj['span_months'])} months",
+                    "Each point is this home valued from the sales known at that "
+                    "date. Shaded band = the estimate's range.")
+
+    ymin, ymax = _scale((band_lo + band_hi) or mids, 0.10, 0.12)
+
+    n = len(pts)
+    xs = [g["x0"] + (g["x1"] - g["x0"]) * i / (n - 1) for i in range(n)]
+
+    def Y(v):
+        return g["y1"] - (v - ymin) / (ymax - ymin) * (g["y1"] - g["y0"])
+
+    # y gridlines at the band extremes, labelled in dollars
+    for v in ((min(band_lo), max(band_hi)) if band_lo and band_hi
+              else (min(mids), max(mids))):
+        y = Y(v)
+        svg.append(f'<line class="fig-grid" x1="{g["x0"]}" y1="{y:.1f}" '
+                   f'x2="{g["x1"]}" y2="{y:.1f}"/>')
+        svg.append(f'<text class="fig-axis" x="0" y="{y+4:.1f}">'
+                   f'{fb.money(f"traj_axis_{int(v)}", v)}</text>')
+
+    # ±range ribbon (wide by design -- it is the honest width of each estimate)
+    if band_lo and band_hi:
+        ribbon = ([f"{x:.1f},{Y(p['high']):.1f}" for x, p in zip(xs, pts)]
+                  + [f"{x:.1f},{Y(p['low']):.1f}"
+                     for x, p in zip(reversed(xs), reversed(pts))])
+        svg.append(f'<polygon class="fig-band" points="{" ".join(ribbon)}"/>')
+
+    # the home estimate (solid, accent) -- the one line
+    svg.append('<polyline class="fig-line" points="'
+               + " ".join(f"{x:.1f},{Y(p['mid']):.1f}" for x, p in zip(xs, pts))
+               + '"/>')
+
+    for i, (x, p) in enumerate(zip(xs, pts)):
+        svg.append(f'<circle class="fig-dot" cx="{x:.1f}" cy="{Y(p["mid"]):.1f}" r="3.6"/>')
+        # x-axis: the real month and year of each estimate
+        svg.append(f'<text class="fig-axis" x="{x:.1f}" y="{g["y1"]+16:.1f}" '
+                   f'text-anchor="middle">{_esc(p["date_label"])}</text>')
+        # point label: this estimate in compact dollars, above its dot. Mint the
+        # true value through the FactBook (discipline) though the mark shows $X.Xm.
+        fb.money(f"traj_mid_{i}", p["mid"])
+        anchor = "start" if i == 0 else ("end" if i == n - 1 else "middle")
+        svg.append(f'<text class="fig-val" x="{x:.1f}" y="{Y(p["mid"])-10:.1f}" '
+                   f'text-anchor="{anchor}">{_short_money(p["mid"])}</text>')
+    svg.append("</svg>")
+
+    caption = (f"Each point is a fresh valuation of this home from the sales of the "
+               f"twelve months ending at that date — the same adjusted-comparables "
+               f"method, run four times. The band is that "
+               f"estimate's range, kept wide on purpose: the reliable reading is the "
+               f"direction over the whole {fb.num('traj_span_cap', traj['span_months'])} "
+               f"months, not any single point. Source: Fields adjusted comparables.")
+    return "\n".join(svg), caption
+
+
+def _short_period(p: str) -> str:
+    """'2024-Q1'/'Q1 2024' -> 'Q1 24'; '2026-06' -> 'Jun 26'."""
+    p = str(p)
+    m = re.match(r"(\d{4})-(\d{2})$", p)
+    if m:
+        months = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        return f"{months[int(m.group(2))]} {m.group(1)[2:]}"
+    return _shorten_period(p)
+
+
+def indicator_chart(title, subtitle, points, source, fb, key, dp=1):
+    """A single %-over-time line: a leading-indicator series (wages, spending).
+
+    Evenly spaced (these series are consecutive quarters/months, unlike the sparse
+    suburb median), last point labelled and coloured, source in the caption. Every
+    figure minted through the FactBook, same as the other charts.
+    """
+    pts = [p for p in (points or []) if p.get("value") is not None]
+    if len(pts) < 4:
+        return None, None
+    height = 210
+    svg, g = _frame(height, title, subtitle)
+
+    vals = [p["value"] for p in pts]
+    ymin, ymax = _scale(vals, 0.22, 0.22)
+    n = len(pts)
+    xs = [g["x0"] + (g["x1"] - g["x0"]) * i / (n - 1) for i in range(n)]
+
+    def Y(v):
+        return g["y1"] - (v - ymin) / (ymax - ymin) * (g["y1"] - g["y0"])
+
+    for v in (min(vals), max(vals)):
+        y = Y(v)
+        svg.append(f'<line class="fig-grid" x1="{g["x0"]}" y1="{y:.1f}" '
+                   f'x2="{g["x1"]}" y2="{y:.1f}"/>')
+        svg.append(f'<text class="fig-axis" x="0" y="{y+4:.1f}">'
+                   f'{fb.pct(f"{key}_axis_{int(round(v*10))}", v, signed=False, dp=dp)}</text>')
+
+    svg.append('<polyline class="fig-line" points="'
+               + " ".join(f"{x:.1f},{Y(p['value']):.1f}" for x, p in zip(xs, pts)) + '"/>')
+
+    step = max(1, round(n / 7))
+    for i, (x, p) in enumerate(zip(xs, pts)):
+        last = i == n - 1
+        svg.append(f'<circle class="fig-dot" cx="{x:.1f}" cy="{Y(p["value"]):.1f}" '
+                   f'r="{3.6 if last else 2.6}"/>')
+        if i % step == 0 or last:
+            svg.append(f'<text class="fig-axis" x="{x:.1f}" y="{g["y1"]+16:.1f}" '
+                       f'text-anchor="middle">{_esc(_short_period(p["period"]))}</text>')
+    lastp = pts[-1]
+    svg.append(f'<text class="fig-val" x="{xs[-1]:.1f}" y="{Y(lastp["value"])-10:.1f}" '
+               f'text-anchor="end">{fb.pct(f"{key}_last", lastp["value"], signed=False, dp=dp)}</text>')
+    svg.append("</svg>")
+    caption = f"Annual growth, each period against a year earlier. Source: {source}."
     return "\n".join(svg), caption

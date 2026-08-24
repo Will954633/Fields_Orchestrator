@@ -1,0 +1,46 @@
+{
+  "_comment": "Topics the fortnightly research cycle refreshes. Each ACTIVE topic gets a claude -p research pass each cycle (slug maps to topics/<slug>.md; a topic with no dossier yet is researched from scratch on its first run). `focus` is the research brief the runner wraps with the shared honesty rules + the current dossier. Cost scales with the active count (~$1-2/topic/cycle); trim or add per-topic cadence if it grows.",
+  "active": [
+    {
+      "slug": "national-market-turn-2026",
+      "title": "Why the Australian housing market turned in 2026",
+      "focus": "Refresh why the national market turned and where it stands now: latest Cotality/PropTrack monthly + quarterly figures by capital, the RBA cash-rate path and inflation, listings/clearance/vendor-discount/days-on-market data, buyer and seller sentiment (Westpac-Melbourne Institute), and the ranked underlying drivers. Update any figure that has moved. Keep the verdict that the May 2026 NG/CGT change is an amplifier not the trigger unless new evidence overturns it."
+    },
+    {
+      "slug": "cgt-negative-gearing-2026",
+      "title": "Australia's 2026 negative-gearing & CGT reform",
+      "focus": "Refresh the 2026 NG/CGT reform: movement from consultation toward legislation (Treasury/ATO/Parliament), updated Treasury or independent (Grattan/PropTrack/bank) modelling, measured vs sentiment market effects, and any newly-published Queensland/Gold-Coast-specific analysis (flag if still none)."
+    },
+    {
+      "slug": "migration",
+      "title": "Migration into Queensland and the Gold Coast",
+      "focus": "Net interstate migration to Queensland vs NSW/Victoria, and net overseas migration, with the Gold Coast (SA4) specifically. Pull the latest ABS Regional Internal Migration Estimates, Regional Population, and QGSO population figures; the composition (interstate vs overseas), the trend (accelerating/moderating), and drivers. Note the honest caveat that GC growth has recently leaned more on overseas than interstate migration. This feeds the owner-subject letter's 'who is moving' leg and Market Intelligence pieces."
+    },
+    {
+      "slug": "leading-indicators",
+      "title": "Leading vs lagging indicators of Gold Coast house prices",
+      "focus": "Which indicators LEAD vs LAG house prices, with current readings for Queensland: wage growth (ABS WPI), household spending (ABS Monthly Household Spending Indicator), building approvals, auction clearance, days-on-market, months of supply. Cite Fields' own empirical analysis (articles what-drives-gold-coast-house-prices and leading-vs-lagging-indicators: household spending r~0.91, wages lead 3-4 months, rates lag ~12 months, income elasticity ~1.7) and set each against its current ABS/Cotality reading. Strictly separate the historical lead relationship from any forecast."
+    },
+    {
+      "slug": "interest-rates",
+      "title": "Interest rates, inflation and borrowing capacity",
+      "focus": "The RBA cash-rate path and outlook, headline/trimmed-mean inflation, and how rates flow through to borrowing capacity, serviceability and house prices. Latest RBA decision + Statement on Monetary Policy, market/economist pricing of the next move, and evidence on which price tiers are most rate-sensitive (e.g. Cotality's upper- vs lower-quartile split). Record economists' expectations as commentary, not fact."
+    },
+    {
+      "slug": "supply-and-approvals",
+      "title": "Housing supply, approvals and the construction pipeline",
+      "focus": "Dwelling approvals and completions (ABS), Housing Accord targets vs delivery, construction costs and insolvencies, and months-of-supply / listings — national and Queensland/Gold Coast. Assess whether supply is tightening or loosening and how that cushions or pressures prices. Note the methodology limits on scraped listings volume (undercapture) when citing local supply."
+    },
+    {
+      "slug": "sentiment",
+      "title": "Consumer and housing sentiment",
+      "focus": "Consumer sentiment and house-price expectations (Westpac-Melbourne Institute indices), 'time to buy a dwelling', and buyer/seller behaviour signals (auction clearance and withdrawal rates, vendor discounting, enquiry volumes). Track the level and direction; distinguish measured indices from anecdotal agent commentary."
+    },
+    {
+      "slug": "affordability",
+      "title": "Housing affordability — national and Queensland",
+      "focus": "Price-to-income ratios, the years-to-save-a-deposit hurdle, mortgage serviceability (share of income to service a new loan), and rental affordability, comparing Sydney/Melbourne with Brisbane/Gold Coast. Latest Cotality affordability report, ABS income data, and bank/academic measures. This underpins the owner-subject letter's Sydney-vs-Gold-Coast arbitrage framing."
+    }
+  ],
+  "backlog": []
+}

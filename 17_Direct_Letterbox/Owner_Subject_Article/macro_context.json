@@ -1,42 +1,105 @@
 {
-  "_comment": "Macro block for the owner-subject article. HUMAN-MAINTAINED. Every stat carries its own source and date. The generator REFUSES to render the macro section if as_at is older than max_age_days -- a stale macro block silently misrepresents the market, so it fails loud instead. Update after each monthly Cotality release / RBA decision.",
+  "_comment": "Macro block for the owner-subject article. Every stat carries its own source and date. The generator REFUSES to render the macro section if as_at is older than max_age_days -- a stale macro block silently misrepresents the market, so it fails loud instead. `history` is the accumulating monthly record (append one entry per Cotality release); `derived` is COMPUTED from it by update_macro_context.py -- do not hand-edit derived. `stats`/`auction_note` remain human-maintained.",
   "as_at": "2026-08-01",
   "max_age_days": 45,
+  "southern_cities": [
+    "sydney",
+    "melbourne"
+  ],
   "stats": [
     {
       "id": "cotality_monthly",
-      "text": "Cotality's five-city aggregate fell -0.9% in July 2026 and -2.0% over the July quarter, with Sydney down -3.7%, Melbourne down -3.0% and Brisbane down -0.1%",
-      "source": "Cotality",
+      "text": "Cotality's national Home Value Index fell -0.7% in July 2026, its largest monthly decline since December 2022, with Sydney down -1.4%, Melbourne -1.2%, Brisbane -0.6% and Adelaide -0.2% over the month",
+      "source": "Cotality Home Value Index",
       "period": "July 2026",
-      "numbers": [-0.9, -2.0, -3.7, -3.0, -0.1]
+      "numbers": [
+        -0.7,
+        -1.4,
+        -1.2,
+        -0.6,
+        -0.2
+      ]
     },
     {
       "id": "rba_cash_rate",
       "text": "The RBA cash rate stands at 4.35%, raised in February, March and May 2026 and held at the 16 June meeting",
       "source": "RBA",
       "period": "16 June 2026",
-      "numbers": [4.35]
+      "numbers": [
+        4.35
+      ]
     },
     {
       "id": "abs_cpi",
       "text": "Headline CPI rose 3.8% over the year to June 2026 and the trimmed mean 3.6%",
       "source": "ABS",
       "period": "June quarter 2026",
-      "numbers": [3.8, 3.6]
+      "numbers": [
+        3.8,
+        3.6
+      ]
     },
     {
       "id": "westpac_expectations",
       "text": "The Westpac-Melbourne Institute House Price Expectations Index fell -8% in July 2026 to a three-year low, though 47% of respondents still expected rises",
       "source": "Westpac-Melbourne Institute",
       "period": "July 2026",
-      "numbers": [-8, 47]
+      "numbers": [
+        -8,
+        47
+      ]
     }
   ],
   "auction_note": {
     "text": "the capital-city average clearance rate was 46.0% for the week ending 5 July 2026, with Brisbane at 23.5%",
     "source": "Cotality",
     "period": "week ending 5 July 2026",
-    "numbers": [46.0, 23.5],
+    "numbers": [
+      46.0,
+      23.5
+    ],
     "caveat": "homes in these suburbs sell predominantly by private treaty, so that figure measures a different sale process"
+  },
+  "why_turned": {
+    "_comment": "Cited explanation of WHY the national market turned, from 14_Articles/Market_Research/topics/national-market-turn-2026.md. Amplifier_note keeps the CGT change honest (not the trigger).",
+    "text": "So why are they falling? Not one reason but several arriving at once. The Reserve Bank raised interest rates three times in the first half of 2026 \u2014 forced to by a spike in global oil prices after a conflict in the Middle East pushed inflation back up \u2014 and dearer money cut how much buyers can borrow, which is why the most expensive homes fell first. With prices already stretched against incomes and confidence sliding, the May budget's changes to negative gearing and capital gains tax then pulled investors out of the market.",
+    "amplifier_note": "That tax change is often blamed for the turn, but the timing tells against it: prices had already begun falling before the budget, and the measures do not take effect until 1 July 2027 \u2014 it sharpened the fall rather than caused it.",
+    "source": "Reserve Bank of Australia and Cotality",
+    "period": "to July 2026"
+  },
+  "history_comment": "Monthly Cotality Home Value Index month-on-month % change by capital. Append one SOURCE-VERIFIED entry per release (oldest first is fine; the updater sorts); NEVER a placeholder. A city value of null means not-yet-entered. With one month the headline renders the sourced-safe line; add >=2 southern-falling months plus a Brisbane positive->negative flip and the fuller 'falling for N months, Brisbane just turned' headline lights up automatically. To do that, drop in the real Cotality MONTHLY city figures for the prior months (Apr/May/Jun 2026) from the Cotality monthly chart pack. (Provisional placeholders removed 2026-08-24: the exact prior-month city figures could not be source-verified, so per the factual-accuracy rule they were not shipped.)",
+  "history": [
+    {
+      "month": "2026-07",
+      "period": "July 2026",
+      "source": "Cotality",
+      "provisional": false,
+      "five_city": -0.7,
+      "quarter": null,
+      "cities": {
+        "sydney": -1.4,
+        "melbourne": -1.2,
+        "brisbane": -0.6,
+        "adelaide": -0.2,
+        "perth": null
+      }
+    }
+  ],
+  "derived": {
+    "_comment": "COMPUTED by update_macro_context.py from history. Do not hand-edit.",
+    "computed_at": "2026-08-24T04:10:06+00:00",
+    "history_months": 1,
+    "southern_cities": [
+      "sydney",
+      "melbourne"
+    ],
+    "southern_falling_streak_months": 1,
+    "southern_streak_from_month": "2026-07",
+    "brisbane_latest_pct": -0.6,
+    "brisbane_latest_month": "2026-07",
+    "brisbane_latest_month_name": "July",
+    "brisbane_just_turned": false,
+    "brisbane_prev_positive_month": null,
+    "uses_provisional": false
   }
 }

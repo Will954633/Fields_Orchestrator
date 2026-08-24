@@ -1,0 +1,168 @@
+{
+  "address": "5 Chantilly Place, Robina QLD 4226",
+  "suburb": "Robina",
+  "cards": [
+    {
+      "type": "hook",
+      "headline": "The headlines say one thing. Your street says another.",
+      "sub": "The 8 most recent sales near 5 Chantilly Place, each adjusted to this home, set against the national numbers."
+    },
+    {
+      "type": "national-stat",
+      "headline": "Nationally, values are falling",
+      "stat": -1.4,
+      "fmt": "pct",
+      "source": "Cotality Home Value Index, July 2026"
+    },
+    {
+      "type": "local-median",
+      "headline": "Robina's median is up 5.8% this year",
+      "stat": 1490000,
+      "fmt": "money",
+      "yoy_pct": 5.8,
+      "series": [
+        {
+          "period": "Q1 2020",
+          "value": 710000
+        },
+        {
+          "period": "Q3 2020",
+          "value": 675000
+        },
+        {
+          "period": "Q4 2020",
+          "value": 675000
+        },
+        {
+          "period": "Q1 2021",
+          "value": 767500
+        },
+        {
+          "period": "Q2 2021",
+          "value": 850000
+        },
+        {
+          "period": "Q4 2021",
+          "value": 990000
+        },
+        {
+          "period": "Q2 2023",
+          "value": 1070000
+        },
+        {
+          "period": "Q1 2024",
+          "value": 1175000
+        },
+        {
+          "period": "Q2 2024",
+          "value": 1200000
+        },
+        {
+          "period": "Q4 2024",
+          "value": 1265000
+        },
+        {
+          "period": "Q1 2025",
+          "value": 1365000
+        },
+        {
+          "period": "Q2 2025",
+          "value": 1408500
+        },
+        {
+          "period": "Q3 2025",
+          "value": 1420000
+        },
+        {
+          "period": "Q4 2025",
+          "value": 1455885
+        },
+        {
+          "period": "Q1 2026",
+          "value": 1515000
+        },
+        {
+          "period": "Q2 2026",
+          "value": 1490000
+        }
+      ],
+      "source": "Fields, from Domain and onthehouse.com.au records"
+    },
+    {
+      "type": "days-on-market",
+      "headline": "Homes here take 34 days to sell",
+      "stat": 34,
+      "fmt": "days",
+      "yoy_days": 9.5,
+      "series": [
+        {
+          "period": "2023-Q3",
+          "value": 28
+        },
+        {
+          "period": "2023-Q4",
+          "value": 25
+        },
+        {
+          "period": "2024-Q1",
+          "value": 14.0
+        },
+        {
+          "period": "2024-Q2",
+          "value": 49
+        },
+        {
+          "period": "2024-Q3",
+          "value": 21
+        },
+        {
+          "period": "2024-Q4",
+          "value": 27.5
+        },
+        {
+          "period": "2025-Q1",
+          "value": 17.0
+        },
+        {
+          "period": "2025-Q2",
+          "value": 24.5
+        },
+        {
+          "period": "2025-Q3",
+          "value": 20
+        },
+        {
+          "period": "2025-Q4",
+          "value": 25.0
+        },
+        {
+          "period": "2026-Q1",
+          "value": 26.0
+        },
+        {
+          "period": "2026-Q2",
+          "value": 34
+        }
+      ],
+      "source": "Fields Market Intelligence"
+    },
+    {
+      "type": "nearby-range",
+      "headline": "What those sales say about your home",
+      "stat": [
+        1580729,
+        1759737
+      ],
+      "fmt": "range",
+      "source": "8 sales, 0.18\u20131.92 km away"
+    },
+    {
+      "type": "contradiction",
+      "headline": "National down. Robina up.",
+      "stat": 5.8,
+      "fmt": "pct",
+      "sub": "The national aggregate and this suburb's own record point in different directions.",
+      "source": "national aggregate vs suburb rolling median"
+    }
+  ]
+}

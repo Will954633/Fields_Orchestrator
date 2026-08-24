@@ -1,0 +1,47 @@
+{
+  "_comment": "Human-maintained fundamentals facts for the article's Q3 (why the Gold Coast is holding up). Migration + affordability are hand-curated from primary sources (each carries its own source + period); jobs come from labour_context.json (ABS API) and the arbitrage from arbitrage_context.json (onthehouse + our data). Refresh migration after each ABS/QGSO release. Every figure below was read from the cited source; do not add a figure without one.",
+  "as_at": "2026-08-24",
+  "max_age_days": 120,
+  "migration": [
+    {
+      "text": "Queensland recorded a net interstate migration gain of 21,595 people in 2024–25 — the largest of any state — with the biggest inflows from New South Wales (+13,020) and Victoria (+6,920); New South Wales alone accounted for 60.3% of that net gain",
+      "source": "Queensland Government Statistician's Office, from ABS",
+      "period": "2024–25"
+    },
+    {
+      "text": "Queensland has recorded a net interstate migration gain in every quarter since June 1981 — the only state to do so",
+      "source": "Queensland Government Statistician's Office, from ABS",
+      "period": "to 2025"
+    },
+    {
+      "text": "the Gold Coast was among Australia's fastest-growing regions, expanding 2.3% in 2023–24",
+      "source": "Centre for Population, from ABS",
+      "period": "2023–24"
+    }
+  ],
+  "affordability": {
+    "text": "a median-income Sydney household needs about 16.7 years to save a 20% deposit, against 12.9 years in Brisbane",
+    "source": "Cotality",
+    "period": "September 2025"
+  },
+  "drivers_research": {
+    "_comment": "Fields' own published lead/lag analysis (articles what-drives-gold-coast-house-prices and leading-vs-lagging-indicators). Figures verified from those articles 2026-08-24. Used in Section 4 to show which indicators lead vs lag GC prices, so current readings can be interpreted.",
+    "scope": "our analysis of 27 economic series across eight Gold Coast suburbs, 2015–2025",
+    "source": "Fields",
+    "lagging": [
+      "interest rates follow Gold Coast prices by about a year (they lag, at r = 0.79) — the Reserve Bank moves in response to the economy, not ahead of any one suburb",
+      "bank lending lags prices too, by around three to four months"
+    ],
+    "leading": [
+      "household spending is the single strongest gauge of market strength here (r = 0.91)",
+      "Queensland wage growth has run about three to four months ahead of house prices",
+      "retail spending, a proxy for confidence, has led by four to five months"
+    ],
+    "income": "a 1% rise in real household income has, over the period, moved Gold Coast prices about 1.7%",
+    "caveat": "these are relationships measured in past data, not forecasts — a lead observed before may not hold again"
+  },
+  "caveats": {
+    "gc_overseas_led": "In 2023–24 the Gold Coast's own growth leaned more on overseas than interstate migration; the interstate flow is unambiguous at the Queensland level.",
+    "moderating": "The interstate inflow is strongly positive but has moderated from its 2020–21 pandemic peak."
+  }
+}
