@@ -76,8 +76,17 @@ log "Uploading to GCS..."
 gcloud storage cp "$ARCHIVE" "$GCS_BUCKET/$(basename $ARCHIVE)" --quiet 2>&1
 log "Uploaded to $GCS_BUCKET/$(basename $ARCHIVE)"
 
-# Step 5: Remove local archives older than 7 days
-find "$BACKUP_DIR" -name "fields_mongodb_*.tar.gz" -mtime +$LOCAL_KEEP_DAYS -delete 2>/dev/null
+# Step 5: Remove local archives older than LOCAL_KEEP_DAYS.
+#
+# Uses -mmin, NOT -mtime. `-mtime +N` truncates age to whole 24h units, so it
+# means "age >= N+1 days". Because this script runs from cron at the same clock
+# time every day, each archive turns exactly LOCAL_KEEP_DAYS old within seconds
+# of the find running — landing on the wrong side of that truncation about half
+# the time. Observed 2026-08-24: 5 archives on disk (7.4 GB) where the policy
+# intends 4, with the log cheerfully reporting "keeping last 3 days".
+# The 60-minute shave makes the boundary unambiguous regardless of cron jitter.
+find "$BACKUP_DIR" -name "fields_mongodb_*.tar.gz" \
+    -mmin +$(( LOCAL_KEEP_DAYS * 1440 - 60 )) -delete 2>/dev/null
 LOCAL_COUNT=$(ls -1 "$BACKUP_DIR"/fields_mongodb_*.tar.gz 2>/dev/null | wc -l)
 log "Local backups: $LOCAL_COUNT (keeping last $LOCAL_KEEP_DAYS days)"
 

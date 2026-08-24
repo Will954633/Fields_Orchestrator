@@ -24,6 +24,13 @@ rather than wedging the box. This guard adds, on a fast cadence:
   2. Orphan reap   — kill PROVABLY-orphaned Claude/MCP/Chrome processes (PPID==1),
                      the leaked leftovers of torn-down sessions. Never touches a
                      live session (its parent is a live extension host, not init).
+  2b. Slice-hog reap — kill ANY single process in the Claude cgroup over an RSS
+                     ceiling, whatever it is (reap_slice_hog). The orphan reaper
+                     needs PPID==1 and the search reaper needs a search argv[0];
+                     a runaway with a live parent that is not a search fell
+                     through both and wedged the workbench for 70 min on
+                     2026-08-24. Scoped to the cgroup, so it cannot reach sshd,
+                     mongod or the orchestrator.
   3. Early warning — Telegram Will when memory or disk TREND toward the cliff,
                      WHILE the box is still reachable. This is the core ask:
                      capture the risk before the VM becomes unresponsive.
@@ -163,6 +170,47 @@ RUNAWAY_RSS_GB = float(os.environ.get("GUARD_RUNAWAY_RSS_GB", 2.0))      # no sa
 RUNAWAY_MIN_AGE_S = float(os.environ.get("GUARD_RUNAWAY_MIN_AGE_S", 60))  # don't race a just-started legitimate search
 RUNAWAY_MAX_AGE_S = float(os.environ.get("GUARD_RUNAWAY_MAX_AGE_S", 900))  # 15 min ...
 RUNAWAY_MAX_CPU_S = float(os.environ.get("GUARD_RUNAWAY_MAX_CPU_S", 300))  # ... AND burning CPU => spinning, not blocked on I/O
+
+# --------------------------------------------------------------------------- #
+# Generic slice-hog ceiling  (added 2026-08-24 after [SLICE-THRASH-MONGO-LIST])
+# --------------------------------------------------------------------------- #
+# reap_runaway_search() above matches on argv[0] against RUNAWAY_ARGV0, because
+# it was written for the Aug 1 / Aug 6 ugrep lockups. On 2026-08-24 the SAME
+# failure mode (page cache -> 0, whole slice in D-state on
+# mem_cgroup_handle_over_hi, workbench dead for 70 min) was produced by a
+# process that is not a search at all: an ad-hoc
+#     python3 - <<PY ... list(col.find({...}, {... "valuation_data": 1 ...})) ... PY
+# from an agent session, which materialised a full Mongo cursor to 9.24 GB RSS.
+# It had a live parent (claude -> bash -> python3) so reap_orphans() skipped it,
+# and argv[0] was "python3" so reap_runaway_search() skipped it. The guard
+# detected the thrash and Telegrammed for ~70 minutes with no action available.
+#
+# This reaper is deliberately process-AGNOSTIC: any single process in the shared
+# Claude slice above the ceiling is killed, whatever it is. The next runaway will
+# be `node` or `duckdb` or something we have not thought of, and an argv[0]
+# allowlist can only ever chase the last incident.
+#
+# SAFETY — why this cannot kill anything important. Membership is read from the
+# code-server.service cgroup, which contains ONLY Claude Code sessions and what
+# they spawn. Verified on this box 2026-08-24: sshd sessions live in
+# user.slice/user-<uid>.slice/session-N.scope, and mongod / fields-orchestrator
+# in their own system.slice units — none can appear in cgroup.procs here. The
+# slice is flat (no nested cgroups), so a single read of cgroup.procs is total.
+SLICE_CGROUP = Path("/sys/fs/cgroup/system.slice/code-server.service")
+# Steady-state peak in this slice is ~650 MB (the extensionHost), measured
+# 2026-08-24 across 42 procs, and the worst legitimate `claude` on record is
+# 3.8 GB (2026-07-27). 6 GB is far above both and still well under the 9 GB
+# MemoryHigh, so a hog is killed BEFORE it can push the slice into the
+# throttle band where it starves its siblings.
+SLICE_HOG_RSS_GB = float(os.environ.get("GUARD_SLICE_HOG_RSS_GB", 6.0))
+# Once the slice is confirmed thrashing, the damage is already happening and a
+# lower ceiling is justified — still comfortably above any normal session.
+SLICE_HOG_THRASH_RSS_GB = float(os.environ.get("GUARD_SLICE_HOG_THRASH_RSS_GB", 4.0))
+SLICE_HOG_MIN_AGE_S = float(os.environ.get("GUARD_SLICE_HOG_MIN_AGE_S", 60))
+# Structural processes: killing one of these does not free a session, it takes
+# down the workbench (and every other session) with it. A hog here is a genuine
+# leak in code-server itself and needs a human, so we alert instead of killing.
+SLICE_STRUCTURAL = ("out/node/entry", "--type=extensionHost", "--type=ptyHost")
 
 # Services whose main process we keep protected from the OOM killer each pass.
 PROTECT = {"mongod": -800, "fields-orchestrator": -500}
@@ -409,6 +457,75 @@ def reap_runaway_search(dry: bool) -> list:
             actions.append(
                 f"reap_runaway_search[{reason}] pid={p.info['pid']} "
                 f"rss={rss_gb:.2f}GB age={int(age_s)}s cpu={int(cpu_s)}s :: {snippet}"
+            )
+        except Exception:
+            continue
+    return actions
+
+
+def slice_pids() -> list:
+    """PIDs in the shared Claude cgroup. Empty list if the cgroup is absent."""
+    try:
+        raw = (SLICE_CGROUP / "cgroup.procs").read_text().split()
+    except Exception:
+        return []
+    out = []
+    for tok in raw:
+        try:
+            out.append(int(tok))
+        except ValueError:
+            continue
+    return out
+
+
+def reap_slice_hog(dry: bool, thrashing: bool = False) -> list:
+    """Kill any single process in the Claude slice above the RSS ceiling.
+
+    Process-agnostic by design — see the SLICE_* block above for why an argv[0]
+    allowlist (reap_runaway_search) structurally cannot catch the general case.
+
+    Scoped to SLICE_CGROUP membership, which is what makes it safe: sshd, mongod
+    and fields-orchestrator are in different cgroups and can never be candidates.
+
+    Structural code-server processes are reported, never killed — taking those
+    down would destroy every session to save one.
+    """
+    import psutil
+    actions = []
+    ceiling = SLICE_HOG_THRASH_RSS_GB if thrashing else SLICE_HOG_RSS_GB
+    for pid in slice_pids():
+        try:
+            p = psutil.Process(pid)
+            rss_gb = p.memory_info().rss / 1e9
+            if rss_gb <= ceiling:
+                continue
+            age_s = time.time() - p.create_time()
+            if age_s <= SLICE_HOG_MIN_AGE_S:
+                continue
+
+            cmdline = " ".join(p.cmdline() or [])
+            snippet = cmdline[:160] or p.name()
+
+            if any(tok in cmdline for tok in SLICE_STRUCTURAL):
+                actions.append(
+                    f"slice_hog_structural[NOT killed] pid={pid} "
+                    f"rss={rss_gb:.2f}GB age={int(age_s)}s :: {snippet}"
+                )
+                continue
+
+            if not dry:
+                # A process this large is usually deep in an allocation and slow
+                # to service SIGTERM — give it a moment, then SIGKILL.
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                    time.sleep(1.0)
+                    if psutil.pid_exists(pid):
+                        os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            actions.append(
+                f"reap_slice_hog[{'thrash' if thrashing else 'rss'}] pid={pid} "
+                f"rss={rss_gb:.2f}GB age={int(age_s)}s ceiling={ceiling}GB :: {snippet}"
             )
         except Exception:
             continue
@@ -679,6 +796,15 @@ def main():
     # --- always: keep critical services protected ---
     actions += reassert_oom_protection(dry)
 
+    # --- always: per-cgroup pressure on the shared Claude slice ---
+    # Read BEFORE the reapers (moved 2026-08-24): reap_slice_hog drops to a lower
+    # ceiling once the slice is confirmed thrashing, so it needs this first.
+    cg = cgroup_pressure()
+    if cg:
+        m["cgroup_code_server"] = cg  # carried into the audit record
+        vlog(f"code-server cgroup: {cg}")
+    thrashing = bool(cg.get("thrashing")) if cg else False
+
     # --- always: runaway search-process ceiling (NOT gated on mem_pct) ---
     # This must run every pass regardless of system memory, because a cgroup-
     # confined runaway never moves the system-wide number. See the Aug 2026
@@ -699,28 +825,57 @@ def main():
                 dry)
             mark_alerted(state, "runaway", dry)
 
-    # --- always: per-cgroup pressure on the shared Claude slice ---
-    cg = cgroup_pressure()
-    if cg:
-        m["cgroup_code_server"] = cg  # carried into the audit record
-        vlog(f"code-server cgroup: {cg}")
-        if cg.get("thrashing"):
-            level = "critical" if level == "ok" else level
-            actions.append(
-                f"cgroup_thrashing code-server anon={cg['anon_gb']}GB "
-                f"file={cg['file_gb']}GB refaults={cg['refault_file']}"
-            )
-            if alert_allowed(state, "cgroup"):
+    # --- always: generic slice-hog ceiling (NOT gated on mem_pct, NOT on argv[0]) ---
+    # The catch-all the argv[0] reaper above cannot be. See [SLICE-THRASH-MONGO-LIST]
+    # 2026-08-24 — a 9.24GB `python3 -` Mongo list() wedged the workbench for 70 min
+    # while both existing reapers skipped it.
+    hogs = reap_slice_hog(dry, thrashing)
+    if hogs:
+        killed = [a for a in hogs if a.startswith("reap_slice_hog")]
+        level = "critical"
+        actions += hogs
+        m_h = get_metrics()
+        if alert_allowed(state, "slice_hog"):
+            if killed:
                 send_telegram(
-                    f"\U0001F534 *code-server cgroup thrashing*\n"
-                    f"anon {cg['anon_gb']}GB, page cache {cg['file_gb']}GB "
-                    f"(collapsed), refaults {cg['refault_file']}, "
-                    f"current {cg['current_gb']}/{cg['max_gb']}GB.\n"
-                    f"System memory looks fine but the Claude slice has evicted "
-                    f"all page cache — every read now hits disk. The workbench "
-                    f"will stop loading shortly. Check for a runaway process.",
+                    "\U0001F6D1 *Runaway process killed in Claude slice*\n"
+                    + "\n".join(f"  {a}" for a in killed[:4])
+                    + f"\n\nmem {m_h['mem_pct']:.0f}%, load {m_h['load_1m']}. "
+                      "Killed before it could throttle the slice and take the "
+                      "workbench down with it. Usual cause is an unbounded "
+                      "materialisation — `list(col.find(...))` over a big "
+                      "projection. Iterate the cursor or project fewer fields.",
                     dry)
-                mark_alerted(state, "cgroup", dry)
+            else:
+                send_telegram(
+                    "\U0001F534 *code-server structural process is the hog*\n"
+                    + "\n".join(f"  {a}" for a in hogs[:4])
+                    + "\n\nNOT killed — that would take down every session. "
+                      "This looks like a leak in code-server itself; needs a "
+                      "human call on restarting the service.",
+                    dry)
+            mark_alerted(state, "slice_hog", dry)
+
+    # --- cgroup thrashing (evaluated after the reapers, so the alert can say
+    #     whether we already acted on it this pass) ---
+    if cg and cg.get("thrashing"):
+        level = "critical" if level == "ok" else level
+        actions.append(
+            f"cgroup_thrashing code-server anon={cg['anon_gb']}GB "
+            f"file={cg['file_gb']}GB refaults={cg['refault_file']}"
+        )
+        if alert_allowed(state, "cgroup"):
+            acted = " A runaway was killed this pass — expect recovery within ~2 min." if hogs else ""
+            send_telegram(
+                f"\U0001F534 *code-server cgroup thrashing*\n"
+                f"anon {cg['anon_gb']}GB, page cache {cg['file_gb']}GB "
+                f"(collapsed), refaults {cg['refault_file']}, "
+                f"current {cg['current_gb']}/{cg['max_gb']}GB.\n"
+                f"System memory looks fine but the Claude slice has evicted "
+                f"all page cache — every read now hits disk. The workbench "
+                f"will stop loading shortly. Check for a runaway process.{acted}",
+                dry)
+            mark_alerted(state, "cgroup", dry)
 
     # --- always: is the workbench actually usable? ---
     wb = workbench_healthy()
