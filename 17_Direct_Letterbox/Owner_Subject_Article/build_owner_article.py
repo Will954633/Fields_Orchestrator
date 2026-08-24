@@ -660,33 +660,93 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
             P.append("{{CHART:dom}}")
             P.append(f"*{cap}*\n")
 
-            # Early interpretation: read the price vs time-on-market signals the reader
-            # has now seen, grounded in the leading-indicator research, and hand off to
-            # the demand fundamentals in the sections that follow. Strictly no forecast.
-            P.append(
-                f"Here an analyst pauses. Both price figures above point up — the "
-                f"{b['suburb_display']} median over the year, your own home over the last "
-                f"eighteen months — but a price is a lagging number: it confirms what "
-                f"buyers have already done, not what they are about to do. The more "
-                f"forward-looking signal is liquidity — how quickly homes are selling — "
-                f"and it has begun to move: {b['suburb_display']}'s median time on market "
-                f"has stretched to {latest} days last quarter, from around half that a "
-                f"year ago. The evidence bears this out: US Federal Reserve "
-                f"work published in 2025 found the supply of homes for sale leads price "
-                f"growth by roughly a year, and housing-search studies find that as "
-                f"demand eases, homes take longer to sell before the median itself gives "
-                f"way.\n")
-            _days = [p.get("median_days_on_market") for p in dom["timeline"]
+            # Early interpretation of the price vs time-on-market signals the reader has
+            # now seen, grounded in the leading-indicator research. Every claim here is
+            # DERIVED from the same timeline the chart draws -- the year-ago figure and
+            # the DIRECTION of the move are read off the 2025-QN point, never asserted --
+            # so the prose cannot contradict the picture beside it. It once did: a
+            # hardcoded "from around half that a year ago" claimed DOM had doubled, when
+            # Burleigh Waters' had in fact SHORTENED (37 -> 29 days). Sign-aware on both
+            # price and liquidity; strictly no forecast.
+            sd = b["suburb_display"]
+            tl = dom["timeline"]
+            _days = [p.get("median_days_on_market") for p in tl
                      if p.get("median_days_on_market")]
             dlo = fb.num("dom_range_lo", int(min(_days)))
             dhi = fb.num("dom_range_hi", int(max(_days)))
+            # the SAME-quarter point one year earlier, straight off the chart's timeline
+            year_ago = None
+            lp = (tl[-1].get("period") or "") if tl else ""
+            if "-Q" in lp:
+                _y, _q = lp.split("-Q")
+                for p in tl:
+                    if p.get("period") == f"{int(_y) - 1}-Q{_q}" \
+                            and p.get("median_days_on_market"):
+                        year_ago = p["median_days_on_market"]
+                        break
+            if sm is not None:
+                med_up = sm["yoy_pct"] >= 0
+                moved = "risen" if med_up else "eased"
+                price_word = "still rising" if med_up else "easing"
+            else:
+                moved, price_word = "moved", "moving"
+
             P.append(
-                f"So a market where prices are still rising while time on market lengthens "
-                f"is one whose early momentum may be easing — a signal to watch, not a "
-                f"fall. And {latest} days is still quick by {b['suburb_display']}'s own "
-                f"recent record, which has run between {dlo} and {dhi} days over the past "
-                f"two years; the honest reading is heat coming out of a fast market, not a "
-                f"market in retreat.\n")
+                f"Here an analyst pauses. The {sd} median has {moved} over the past year, "
+                f"but a price is a lagging number: it confirms what buyers have already "
+                f"done, not what they are about to do. The more forward-looking signal is "
+                f"liquidity — how quickly homes are selling.\n")
+
+            fed = ("US Federal Reserve work published in 2025 found the supply of homes "
+                   "for sale leads price growth by roughly a year")
+            if year_ago is not None:
+                ya = fb.num("dom_year_ago", int(round(year_ago)))
+                delta = dom["latest"] - year_ago
+                if delta >= 3:            # lengthening -- the leading signal is moving
+                    P.append(
+                        f"And in {sd} it has begun to move: the median time on market "
+                        f"lengthened to {latest} days last quarter, from {ya} days a year "
+                        f"earlier. {fed}, and housing-search studies find that as demand "
+                        f"eases homes take longer to sell before the median itself gives "
+                        f"way.\n")
+                    P.append(
+                        f"So a market where prices are {price_word} while time on market "
+                        f"lengthens is one whose early momentum may be easing — a signal "
+                        f"to watch, not a fall. And {latest} days is still quick by {sd}'s "
+                        f"own recent record, which has run between {dlo} and {dhi} days "
+                        f"over the past two years; the honest reading is heat coming out of "
+                        f"a fast market, not a market in retreat.\n")
+                elif delta <= -3:         # shortening -- the leading signal has NOT turned
+                    P.append(
+                        f"In {sd} that signal has not turned: the median time on market was "
+                        f"{latest} days last quarter, shorter than the {ya} days of a year "
+                        f"earlier — homes are being absorbed at least as quickly as before. "
+                        f"{fed}; here that leading measure has yet to move.\n")
+                    P.append(
+                        f"So the forward-looking signal and the backward-looking one point "
+                        f"the same way for now: prices {price_word}, homes selling briskly. "
+                        f"{latest} days sits toward the quick end of {sd}'s own recent "
+                        f"record, which has run between {dlo} and {dhi} days over the past "
+                        f"two years — not a market in retreat, but the number to watch, "
+                        f"because liquidity tends to turn before price does.\n")
+                else:                     # roughly flat -- steady
+                    P.append(
+                        f"In {sd} it has barely moved: the median time on market was "
+                        f"{latest} days last quarter, close to the {ya} days of a year "
+                        f"earlier. {fed} — so this is the signal to watch, and for now it "
+                        f"is holding steady.\n")
+                    P.append(
+                        f"{latest} days sits within {sd}'s own recent record of {dlo} to "
+                        f"{dhi} days over the past two years; prices are {price_word} and "
+                        f"homes are selling at much the same pace as a year ago.\n")
+            else:
+                # No clean year-ago point on the chart: describe the level against the
+                # two-year range only, and make no year-on-year direction claim.
+                P.append(
+                    f"In {sd} the median time on market was {latest} days last quarter, "
+                    f"the number to watch. {fed}. {latest} days sits within {sd}'s own "
+                    f"recent record of {dlo} to {dhi} days over the past two years.\n")
+
             P.append(
                 f"**Price figures alone cannot tell you where things go next — they arrive "
                 f"too late.**\n")
