@@ -625,16 +625,27 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
     # Corroboration between the median chart and the days-on-market chart: does your
     # home's own 18-month trajectory agree with the suburb? (The old split-the-comps
     # "-2.7%" line was cut: that small-sample short-window signal is noise -- WS5.)
+    # We state the suburb as DIRECTION only here, not a second percentage: the headline
+    # above already owns the suburb-growth number (its 12-month YoY figure). Quoting the
+    # trajectory's 18-month suburb % here read as the same "suburb median" disagreeing
+    # with itself (6.9% vs 5.8%) a paragraph apart -- so we keep the subject's own
+    # 18-month move (the trajectory's unique contribution) and give the suburb a word.
     if tj and sm:
-        med_move = fb.pct("traj_med", tj["median_full_pct"])
         same = tj.get("same_direction")
-        verdict = ("the same direction" if same else "different directions")
-        P.append(
-            f"**And the trajectory of your own home agrees with the suburb: over the same "
-            f"{fb.num('traj_span2', tj['span_months'])} months your home's estimate moved "
-            f"{fb.pct('traj_subj2', tj['subject_full_pct'])} and the suburb median "
-            f"{med_move} — {verdict}.**\n")
-        P.append(f"**Your home has been moving with its suburb, not against it.**\n")
+        sub_up = tj["median_full_pct"] >= 0
+        sub_dir, sub_opp = ("up", "down") if sub_up else ("down", "up")
+        span = fb.num("traj_span2", tj["span_months"])
+        subj = fb.pct("traj_subj2", tj["subject_full_pct"])
+        if same:
+            P.append(
+                f"**And your home's own trajectory agrees with the suburb. Over the "
+                f"{span} months we tracked, your estimate moved {subj} — and the suburb's "
+                f"median moved the same way, {sub_dir} rather than {sub_opp}.**\n")
+            P.append(f"**Your home has been moving with its suburb, not against it.**\n")
+        else:
+            P.append(
+                f"**Over the {span} months we tracked, your estimate moved {subj}, while "
+                f"the suburb's median moved the other way — the two have diverged.**\n")
 
     if dom and dom.get("timeline"):
         svg, cap = charts_mod.dom_chart(dom["timeline"], b["suburb_display"], fb)
