@@ -1,0 +1,7 @@
+[Unit]
+Description=Re-deliver rotated .env secrets to running Fields services if .env changed (REC-ops-004)
+Documentation=file:/home/fields/Fields_Orchestrator/scripts/restart_env_dependent_services.sh
+
+[Service]
+Type=oneshot
+ExecStart=/home/fields/Fields_Orchestrator/scripts/restart_env_dependent_services.sh --if-changed
