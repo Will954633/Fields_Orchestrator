@@ -382,7 +382,19 @@ def fetch_overpass_pois(center, radius_m=5000):
     for cat, filt in POI_QUERIES.items():
         parts.append(f'{filt}(around:{radius_m},{center["lat"]},{center["lon"]});')
     q = f"[out:json][timeout:25];({''.join(parts)});out center;"
-    data = json.loads(_http_get(f"{OVERPASS_URL}?data={urllib.parse.quote(q)}"))
+    # Overpass public API returns transient 429/504 under load; retry with backoff
+    # rather than dropping POIs (the drive/walk-time layer) to a gap. Self-host or
+    # add a mirror before real volume (PLAN §3).
+    url = f"{OVERPASS_URL}?data={urllib.parse.quote(q)}"
+    data = None
+    for attempt in range(4):
+        try:
+            data = json.loads(_http_get(url, timeout=45))
+            break
+        except Exception:                                   # noqa: BLE001
+            if attempt == 3:
+                raise
+            time.sleep(3 * (attempt + 1))
     # Bucket by category, keep straight-line nearest of each.
     best = {}
     for el in data.get("elements", []):
@@ -418,16 +430,18 @@ def osrm_drive_table(center, points):
         return {}
     coords = f"{center['lon']},{center['lat']};" + ";".join(
         f"{p['lon']},{p['lat']}" for p in points)
-    dest_idx = ",".join(str(i + 1) for i in range(len(points)))
-    url = (f"{OSRM_BASE}/table/v1/driving/{coords}"
-           f"?sources=0&destinations={dest_idx}&annotations=duration,distance")
+    # NOTE: a `destinations=` param makes the OSRM public demo 400 ("Query string
+    # malformed"); omit it. With only sources=0 the row is [self, p1, p2, …], so
+    # point i is at index i+1. Params are urlencoded (raw commas also 400).
+    url = (f"{OSRM_BASE}/table/v1/driving/{coords}?"
+           + urllib.parse.urlencode({"sources": 0, "annotations": "duration,distance"}))
     data = json.loads(_http_get(url))
     durs = (data.get("durations") or [[]])[0]
     dists = (data.get("distances") or [[]])[0]
     out = {}
     for i, p in enumerate(points):
-        d = durs[i] if i < len(durs) else None
-        km = dists[i] if i < len(dists) else None
+        d = durs[i + 1] if i + 1 < len(durs) else None
+        km = dists[i + 1] if i + 1 < len(dists) else None
         out[(p["lat"], p["lon"])] = {
             "drive_min": round(d / 60.0) if d is not None else None,
             "drive_km": round(km / 1000.0, 1) if km is not None else None,
