@@ -1,6 +1,6 @@
 # ONSITE (on-site conversion + experiments) — standing brief
 
-**Last updated:** 2026-08-13 by Will + Samantha (first briefing session)
+**Last updated:** 2026-08-24 by Will + Samantha (first briefing session)
 **Review cadence:** weekly
 
 > This document is the domain's **authorisation envelope**, not background reading. Work
@@ -43,8 +43,8 @@ the reasoning was.
 | `/off-market` V4 | **Live default** in the three measured suburbs | Version A of the A/B. |
 | "Download your report" section | **Added to V4 on 2026-08-13** | Will's immediate monitoring priority. |
 | House mini site `/yourhome` | **In development** — on-demand build, target <20s load | Version B. Not ready. |
-| Master kill-switch `genrl_personalization_v1` | **OFF — never flipped** | Experiments assign variants but render nothing. |
-| Experiment placement | Only on `/analyse-your-home` + `/for-sale-v3` | Those fell to ~2 users/week when ads went off. |
+| Master kill-switch `genrl_personalization_v1` | ✅ **ON at 100% — RATIFIED by Will 2026-08-18.** (Resolves the 08-13 discrepancy: the brief had recorded it as "OFF, never flipped"; it was in fact `active=True, rollout=[100]` all along.) | Will's decision on REC-onsite-003, 2026-08-18: *"genrl_personalization_v1 confirmed ON at 100% — ratify the live state, do not flip it off."* The 08-13 intent ("experiments assign variants but render nothing") is superseded — a flag that is on but structurally untestable was the actual defect. PostHog project 348370 confirms `active=True, rollout=[100]` for this flag and for `onsite_exp_offmarket_1` / `_analyseyourhome_1` / `_forsalev3_1`. **A new mount publishes live experiment copy to real visitors — that is intended.** |
+| Experiment placement | `/analyse-your-home` + `/for-sale-v3`, and (from 2026-08-23, REC-onsite-003) the **`/off-market` V4 deck** (`OffMarketV4`) and the **`/property` page** (`PropertyPageV2`, the `v2` arm — arms anchor `#bridge`, which lives only in V2). | The two original surfaces fell to ~2 users/week when ads went off; the deck carries ~39× that. `onsite_exp_offmarket_1` and `onsite_exp_property_1` now serve to real traffic. |
 | Primary CTA = book a call with Will | **Under consideration** | Needs the "why would I" argument built first. |
 
 ## 3. Goals — what good looks like
@@ -69,8 +69,8 @@ Global prohibitions always apply and are never granted by a brief: spending mone
 editing the crontab, editing monitoring/health-check code, contacting a real person,
 deleting data, Gold Coast go-live.
 
-- **Never flip the master kill-switch `genrl_personalization_v1`** — Will's call, after
-  the performance gate.
+- **Never flip the master kill-switch `genrl_personalization_v1` OFF** — Will ratified it ON
+  at 100% on 2026-08-18 and explicitly said "do not flip it off". Turning it off is his call only.
 - Never contact a visitor directly.
 - Do not ship a "book a call with Will" CTA until the user-benefit argument is agreed with
   him. The mechanism is easy; the reasoning is the product.
@@ -96,3 +96,17 @@ deleting data, Gold Coast go-live.
 
 - 2026-08-13 — seeded by Samantha from measured data.
 - 2026-08-13 — **first briefing session held with Will.** §1-§7 written from his words.
+- 2026-08-16 — **Samantha (conductor), not Will.** Two corrections; no direction added, no
+  authorisation widened.
+  1. §2 kill-switch row corrected to record the *measured* flag state alongside Will's stated
+     intent. The two disagree and only he can close it — brief item 2a.
+  2. **Feedback on REC-onsite-004** (move/anchor the report section): not briefed, and the
+     reason is not that it is wrong. n=3 readers, and you said so yourself — "three people
+     cannot support a rate." Your own preferred option (b), an anchor link higher up, is a
+     reversible copy change inside §4; **ship it yourself and measure it**, rather than
+     spending one of Will's five weekly slots on a placement question you are authorised to
+     answer. Bring him the *result*. Reserve the slots for things only he can decide.
+- 2026-08-24 — **kill-switch discrepancy CLOSED (brief item 2a).** Will ratified
+  `genrl_personalization_v1` ON at 100% on 2026-08-18 (REC-onsite-003) — "do not flip it off".
+  §2 kill-switch row and §5 off-limits reconciled. §2 placement row updated to record the
+  2026-08-23 mounts on the `/off-market` V4 deck and the `/property` v2 arm.
