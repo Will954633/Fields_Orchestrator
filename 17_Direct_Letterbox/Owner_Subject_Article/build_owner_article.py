@@ -345,6 +345,53 @@ def check_surface_consistency(client, suburb_key: str, dom: dict | None) -> list
     return problems
 
 
+def check_dom_prose_consistency(md: str, dom: dict | None) -> list[str]:
+    """The days-on-market prose must not claim a direction the chart's own year-ago
+    delta contradicts. The passage is now DERIVED from that delta, so this cannot fire
+    on the current code -- it is a belt-and-braces guard against a future edit
+    reintroducing a hardcoded trend verb, which is exactly how the passage once shipped
+    saying Burleigh Waters' time on market had 'stretched to N days, from around half
+    that a year ago' while the chart showed it had SHORTENED (37 -> 29). See
+    logs/fix-history/2026-08-24.md [OWNER-ARTICLE-DOM-HARDCODED-INVERTED].
+    """
+    problems: list[str] = []
+    if not dom or not dom.get("timeline"):
+        return problems
+    tl = dom["timeline"]
+    lp = (tl[-1].get("period") or "") if tl else ""
+    year_ago = None
+    if "-Q" in lp:
+        y, qn = lp.split("-Q")
+        for p in tl:
+            if p.get("period") == f"{int(y) - 1}-Q{qn}" \
+                    and p.get("median_days_on_market"):
+                year_ago = p["median_days_on_market"]
+                break
+    if year_ago is None:
+        return problems
+    delta = dom["latest"] - year_ago
+    # Scope to the one sentence that states the year-ago comparison, so we test the
+    # DERIVED trend verb and not, say, the "Our reading" recap's "has not lengthened".
+    sents = [s.lower() for s in re.split(r"(?<=[.!?])\s+", md)
+             if "time on market" in s.lower() and "year earlier" in s.lower()]
+    if not sents:                              # DOM year-ago claim not rendered
+        return problems
+    blob = " ".join(sents)
+    said_longer = "lengthened" in blob or "stretched" in blob
+    said_shorter = "shorter than" in blob or "shortened" in blob
+    if delta <= -1 and said_longer:
+        problems.append(
+            f"DOM prose says time on market lengthened, but the chart's year-ago delta "
+            f"is {delta:+.0f} days (it shortened, {lp}) — a hardcoded trend verb has "
+            f"drifted from the data")
+    if delta >= 1 and said_shorter:
+        problems.append(
+            f"DOM prose says time on market shortened, but the chart's year-ago delta "
+            f"is {delta:+.0f} days (it lengthened, {lp}) — a hardcoded trend verb has "
+            f"drifted from the data")
+    return problems
+
+
 def comp_movement(comps: list[dict]) -> dict | None:
     """Split the comps in half by SALE DATE and compare mean adjusted price.
 
@@ -762,15 +809,32 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
     # no-forecast rule -- the reader draws the inference.
     fund, lab, arb = b.get("fundamentals"), b.get("labour"), b.get("arbitrage")
     if sm and (fund or lab or arb):
-        P.append(f"## 3. Why is {b['suburb_display']} holding up differently?\n")
-        P.append(
-            f"So two records point different ways at once: nationally, values are falling — "
-            f"for the reasons set out at the start, rising rates and inflation and stretched "
-            f"affordability — yet {b['suburb_display']}'s median has risen {yoy} over the "
-            f"year. Those national forces reach every market; the question is what has "
-            f"offset them here. The answer is not in the price figures at all, but in who is "
-            f"moving, where the work is, and what the same money buys. Read what follows as "
-            f"context, not a promise about what comes next.\n")
+        # Sign-aware: the whole "holding up differently" thesis rests on the suburb median
+        # being UP while the nation falls. Do not hardcode that -- read it from sm and
+        # open the other way if the suburb has itself begun to ease.
+        loc_up = sm["yoy_pct"] >= 0
+        loc_word = "risen" if loc_up else "eased"
+        if loc_up:
+            P.append(f"## 3. Why is {b['suburb_display']} holding up differently?\n")
+            P.append(
+                f"So two records point different ways at once: nationally, values are "
+                f"falling — for the reasons set out at the start, rising rates and inflation "
+                f"and stretched affordability — yet {b['suburb_display']}'s median has risen "
+                f"{yoy} over the year. Those national forces reach every market; the "
+                f"question is what has offset them here. The answer is not in the price "
+                f"figures at all, but in who is moving, where the work is, and what the same "
+                f"money buys. Read what follows as context, not a promise about what comes "
+                f"next.\n")
+        else:
+            P.append(f"## 3. What sits underneath {b['suburb_display']}'s market?\n")
+            P.append(
+                f"The national weakness set out at the start — rising rates, inflation, "
+                f"stretched affordability — has reached here too: {b['suburb_display']}'s "
+                f"median has eased {yoy} over the year. But a price is only the surface. "
+                f"What a national average cannot see is the demand underneath a market — who "
+                f"is moving, where the work is, and what the same money buys — and that is "
+                f"what decides how far a market has to fall. Read what follows as context, "
+                f"not a promise about what comes next.\n")
 
         # -- who is moving (migration) --
         if fund and fund.get("migration"):
@@ -794,21 +858,44 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
             q, n, v = st.get("qld", {}), st.get("nsw", {}), st.get("vic", {})
             P.append(f"### Where the work is\n")
             if all(x.get("vacancies_per_1000_employed") for x in (q, n, v)):
-                P.append(fb.allow_literal(
-                    f"Labour demand is strongest here on a per-person basis. For every "
-                    f"1,000 people employed, Queensland has about "
-                    f"{q['vacancies_per_1000_employed']:.0f} job vacancies open, against "
-                    f"{n['vacancies_per_1000_employed']:.0f} in New South Wales and "
-                    f"{v['vacancies_per_1000_employed']:.0f} in Victoria "
-                    f"({lab['source']['vacancies']}, {lbl.get('vacancies_period','')}). ")
-                    + fb.allow_literal(
-                    f"Melbourne's unemployment, around {v.get('unemp_3mo_avg')}% over the "
-                    f"three months to {lbl.get('unemp_period','')}, sits about a point "
-                    f"above Queensland's ({q.get('unemp_3mo_avg')}%) and Sydney's "
-                    f"({n.get('unemp_3mo_avg')}%) ({lab['source']['unemployment']}). ")
-                    + fb.allow_literal(
-                    f"Queensland added about {round(q.get('jobs_added_yoy',0)/1000)*1000:,} "
-                    f"jobs over the year to {lbl.get('employed_period','')}.") + "\n")
+                # All three comparisons are DERIVED from the values, not asserted: the
+                # "strongest here" claim only fires if QLD actually leads on vacancies,
+                # and QLD's unemployment standing is read from the ranking rather than a
+                # hardcoded "about a point above". Otherwise a data shift would leave the
+                # adjectives contradicting the numbers printed beside them.
+                qv = q["vacancies_per_1000_employed"]
+                nv = n["vacancies_per_1000_employed"]
+                vv = v["vacancies_per_1000_employed"]
+                qld_vac_top = qv >= nv and qv >= vv
+                lead = ("Labour demand is strongest here on a per-person basis. "
+                        if qld_vac_top else
+                        "Labour demand, measured per person, runs close across the three "
+                        "states. ")
+                vac_sent = fb.allow_literal(
+                    lead + f"For every 1,000 people employed, Queensland has about "
+                    f"{qv:.0f} job vacancies open, against {nv:.0f} in New South Wales and "
+                    f"{vv:.0f} in Victoria ({lab['source']['vacancies']}, "
+                    f"{lbl.get('vacancies_period','')}). ")
+
+                qu, nu, vu = (q.get("unemp_3mo_avg"), n.get("unemp_3mo_avg"),
+                              v.get("unemp_3mo_avg"))
+                unemp_sent = ""
+                if None not in (qu, nu, vu):
+                    qld_low = qu <= nu and qu <= vu
+                    stem = (f"Queensland's unemployment, around {qu}% over the three months "
+                            f"to {lbl.get('unemp_period','')}, ")
+                    tail = (f"is the lowest of the three, below New South Wales ({nu}%) and "
+                            f"Victoria ({vu}%)" if qld_low else
+                            f"ran alongside New South Wales ({nu}%) and Victoria ({vu}%)")
+                    unemp_sent = fb.allow_literal(
+                        stem + tail + f" ({lab['source']['unemployment']}). ")
+
+                jy = q.get("jobs_added_yoy", 0) or 0
+                jverb = "added" if jy >= 0 else "shed"
+                jobs_sent = fb.allow_literal(
+                    f"Queensland {jverb} about {round(abs(jy)/1000)*1000:,} jobs over the "
+                    f"year to {lbl.get('employed_period','')}.")
+                P.append(vac_sent + unemp_sent + jobs_sent + "\n")
 
         # -- what the same money buys (arbitrage) --
         if arb and arb.get("headline_comparison"):
@@ -886,41 +973,81 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
             f"leading indicators are doing now. Two of them we can read straight from the "
             f"Bureau of Statistics for Queensland, and both are below — each as the change "
             f"on a year earlier.\n")
+        # Directions DERIVED from each series (as with the DOM fix): a hardcoded "eased /
+        # from the high fours / held up" inverts silently if the data moves. We read the
+        # two-year move and the last-year slope off the series itself.
+        def _clean(series):
+            return [p["value"] for p in series if p.get("value") is not None]
+
+        wage_eased = None
         if wpi_i and wpi_i.get("series"):
             svg, cap = charts_mod.indicator_chart(
                 wpi_i["title"], wpi_i["subtitle"], wpi_i["series"], wpi_i["source"], fb, "wpi")
             if svg:
                 charts["wpi"] = svg
-                wp = fb.allow_literal(f"{wpi_i['latest']:.1f}%")
+                wv = _clean(wpi_i["series"])
+                last_v, start_v = wpi_i["latest"], wv[0]
+                wage_eased = last_v < start_v
+                long_word = "eased" if wage_eased else "risen"
+                back = wv[-5] if len(wv) >= 5 else wv[0]          # ~4 quarters ago
+                recent, pos = last_v - back, last_v > 0
+                if not pos:
+                    trend = "It has now turned negative"
+                elif abs(recent) < 0.3:
+                    trend = ("It is still positive but no longer accelerating — over the "
+                             "past year broadly flat")
+                elif recent < 0:
+                    trend = "It is still positive but has kept easing over the past year"
+                else:
+                    trend = "It is positive and has picked up a little over the past year"
+                wp = fb.allow_literal(f"{last_v:.1f}%")
+                sv = fb.allow_literal(f"{start_v:.1f}%")
                 P.append(
                     f"Wage growth — the indicator with the longest lead in our analysis — "
-                    f"has eased over the last two years, from the high fours to about {wp} "
-                    f"a year ({wpi_i['source']}, {wpi_i['period']}). It is still positive, "
-                    f"but no longer accelerating. In our data, accelerating wages preceded "
-                    f"price growth three to four months on, and fading wages preceded "
-                    f"softer conditions; this is neither — it is flat.\n")
+                    f"has {long_word} over the past two years, from about {sv} to about "
+                    f"{wp} a year ({wpi_i['source']}, {wpi_i['period']}). {trend}. In our "
+                    f"data, accelerating wages preceded price growth three to four months "
+                    f"on, and fading wages preceded softer conditions.\n")
                 P.append("{{CHART:wpi}}")
                 P.append(f"*{cap}*\n")
+
+        spend_word = None
         if hs_i and hs_i.get("series"):
             svg, cap = charts_mod.indicator_chart(
                 hs_i["title"], hs_i["subtitle"], hs_i["series"], hs_i["source"], fb, "hs")
             if svg:
                 charts["hs"] = svg
-                hp = fb.allow_literal(f"{hs_i['latest']:.1f}%")
+                hv = _clean(hs_i["series"])
+                h_last = hs_i["latest"]
+                h_back = hv[-13] if len(hv) >= 13 else hv[0]      # ~12 months ago
+                h_delta = h_last - h_back
+                spend_word = ("picked up" if h_delta >= 0.5
+                              else "softened" if h_delta <= -0.5 else "held broadly steady")
+                hp = fb.allow_literal(f"{h_last:.1f}%")
+                contrast = ""                                     # only if data diverges
+                if wage_eased and spend_word != "softened":
+                    contrast = " Where pay growth has eased, the till has not."
+                elif wage_eased is False and spend_word == "softened":
+                    contrast = " Where pay growth has firmed, spending has not followed."
                 P.append(
                     f"Household spending — the strongest gauge of market strength in our "
                     f"analysis, and a proxy for the confidence that precedes a purchase — "
-                    f"has held up, running about {hp} a year ({hs_i['source']}, "
-                    f"{hs_i['period']}). Where pay growth has eased, the till has not.\n")
+                    f"has {spend_word}, running about {hp} a year ({hs_i['source']}, "
+                    f"{hs_i['period']}).{contrast}\n")
                 P.append("{{CHART:hs}}")
                 P.append(f"*{cap}*\n")
+
         q = ((lab or {}).get("states") or {}).get("qld") or {}
         vac = q.get("vacancies_per_1000_employed")
         vac_clause = (f"the roughly {fb.allow_literal(f'{vac:.0f}')} job vacancies per "
                       f"thousand workers and the migration north from the last section"
                       if vac else "the migration and jobs from the last section")
+        pay_phrase = ("pay growth easing" if wage_eased
+                      else "pay growth firming" if wage_eased is False else "pay growth")
+        spend_phrase = {"picked up": "spending rising", "softened": "spending softening",
+                        "held broadly steady": "spending holding"}.get(spend_word, "spending")
         P.append(
-            f"Set the two against each other — pay growth easing, spending holding — and "
+            f"Set the two against each other — {pay_phrase}, {spend_phrase} — and "
             f"beside {vac_clause}, and you are looking at the forward part of the picture "
             f"in one place.\n")
 
@@ -1400,6 +1527,11 @@ def build(address, suburb=None, out_dir=None, want_html=True,
     }
 
     md, fb, charts = compose(bundle, variant)
+
+    dom_prose = check_dom_prose_consistency(md, dom)
+    if dom_prose:
+        return {"ok": False, "stage": "consistency", "address": full_addr,
+                "errors": dom_prose, "markdown": md}
 
     unminted = fb.verify(md)
     findings = guardrails.lint(md)
