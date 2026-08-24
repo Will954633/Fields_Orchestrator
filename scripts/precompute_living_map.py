@@ -723,6 +723,19 @@ def run(args):
     for suburb in suburbs:
         if args.address:
             docs = [d for d in [gc[suburb].find_one({"address": args.address})] if d]
+        elif args.offmarket:
+            # Off-market stock = has cadastre (LOT/PLAN), not sold/for-sale. Mirrors
+            # batch_render_aerials' off-market query. These docs carry the same
+            # valuation_data (~72% of them), so comps/subject_value populate as-is;
+            # the rest degrade gracefully.
+            q = {"listing_status": {"$nin": ["sold", "for_sale"]},
+                 "LOT": {"$nin": [None, ""]}, "PLAN": {"$nin": [None, ""]}}
+            if not args.force:
+                q["living_map"] = {"$exists": False}
+            cur = gc[suburb].find(q)
+            if args.limit:
+                cur = cur.limit(args.limit)
+            docs = list(cur)
         else:
             q = {"listing_status": "for_sale"}
             if not args.force:
@@ -764,6 +777,8 @@ def main():
     ap.add_argument("--suburb", choices=list(SUBURBS))
     ap.add_argument("--address")
     ap.add_argument("--limit", type=int)
+    ap.add_argument("--offmarket", action="store_true",
+                    help="build for off-market stock (cadastre LOT/PLAN, not sold/for-sale) — for /offmarket pages")
     ap.add_argument("--force", action="store_true",
                     help="rebuild even if a living_map already exists")
     ap.add_argument("--self-test", action="store_true",
