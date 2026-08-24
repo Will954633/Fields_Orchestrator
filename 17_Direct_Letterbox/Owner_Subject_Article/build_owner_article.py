@@ -561,6 +561,28 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
     mv, sm, dom, tj = b["movement"], b["suburb"], b["dom"], b["trajectory"]
 
     P = []
+    # ---- figure numbering + citation registry (Will, 2026-08-25) -----------------
+    _figw = ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+             "Ten"]
+    _figc = {"n": 0}
+
+    def _fig(cap):
+        """Prefix a chart caption with its running figure number: 'Figure One — ...'."""
+        _figc["n"] += 1
+        w = _figw[_figc["n"] - 1] if _figc["n"] <= len(_figw) else str(_figc["n"])
+        return f"Figure {w} — {cap}"
+
+    _sups = "⁰¹²³⁴⁵⁶⁷⁸⁹"
+    _refs: list[str] = []
+
+    def _cite(entry):
+        """Register a reference, return its superscript mark. Deduped by text, so one
+        source cited twice shares a number. Unicode superscripts survive the
+        markdown->HTML escaper and are not ASCII digits, so FactBook.verify ignores them."""
+        if entry not in _refs:
+            _refs.append(entry)
+        return "".join(_sups[int(d)] for d in str(_refs.index(entry) + 1))
+
     for _sn in (1, 2, 3, 4):          # section numbers are furniture, not figures
         fb.num(f"sec_{_sn}", _sn)
     # ---- H1 + hero, then the NATIONAL PICTURE FIRST ----------------------------
@@ -597,7 +619,12 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
         # SITUATION, completed: why did the national market fall? (cited research)
         wt = b["macro"].get("why_turned")
         if wt:
-            P.append(fb.allow_literal(wt["text"]) + " "
+            _wtt = wt["text"]
+            _q = "So why are they falling?"
+            if _wtt.startswith(_q):                     # onto its own line, spaced
+                P.append(fb.allow_literal(_q))
+                _wtt = _wtt[len(_q):].strip()
+            P.append(fb.allow_literal(_wtt) + " "
                      + fb.allow_literal(wt["amplifier_note"])
                      + f" ({fb.allow_literal(wt['source'])}; the fuller picture is in "
                      f"{_link('about_to_fall')}).\n")
@@ -618,8 +645,7 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
         f"you as the owner. Let us work through it the way an analyst would, in four steps "
         f"from your home outward: whether its own estimate is falling now, what "
         f"{b['suburb_display']} as a whole is doing, why the two can move differently, and "
-        f"which forces could shape its value from here. It does not tell you what to do; "
-        f"none of it is a forecast; and where the data runs out, it says so.\n")
+        f"which forces could shape its value from here.\n")
 
     # ==== 1. Is the value of your home declining right now? =====================
     P.append("## 1. Is the value of your home declining right now?\n")
@@ -632,25 +658,40 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
             subj_move = fb.pct("traj_subj", tj["subject_full_pct"])
             subj_dir = "risen" if tj["subject_full_pct"] >= 0 else "eased"
             P.append(
-                f"Take the direct question first. Valuing your home from nearby sales at "
-                f"four dates across the last {span} months — each time using only the "
-                f"sales known by then — traces how its estimate has moved.\n")
+                f"Let's start by taking a look at the valuation trajectory of your home "
+                f"right now. Figure One below shows the valuation of your home, calculated "
+                f"by nearby comparable sales at four different points in time over {span} "
+                f"months.\n")
             P.append(f"**On this evidence it has {subj_dir} {subj_move}.**\n")
             P.append("{{CHART:trajectory}}")
-            P.append(f"*{cap}*\n")
-            P.append(
-                f"That is the first answer, with the caveat the chart already carries: "
-                f"each point is a range, not a single figure, and the reliable reading is "
-                f"the direction across the whole {span} months, not any single step. Each "
-                f"point is built from the {n_comps} nearest sales in the twelve months "
-                f"ending at that date — real transactions, not estimates.\n")
+            P.append(f"*{_fig(cap)}*\n")
+            # The follow-on acknowledges what the chart actually shows -- flat/up read as
+            # 'holding'; a genuine decline gets its own honest framing. Thresholded on the
+            # subject's 18-month move so the sentence can never contradict the line above.
+            subj_pct = tj["subject_full_pct"]
+            if subj_pct <= -3:
+                P.append(
+                    f"Now we have our first data point, the price trajectory of your own "
+                    f"home, and we can see it is showing some downward movement. We "
+                    f"recognise that this is just one data point and, taken by itself, could "
+                    f"be misleading — there are a number of reasons single valuations can be "
+                    f"variable. We need more market context to confirm whether that "
+                    f"direction is reflected in the broader market.\n")
+            else:
+                hold = ("holding — if anything, edging up —" if subj_pct >= 3
+                        else "holding broadly steady")
+                P.append(
+                    f"Now we have our first data point, the price trajectory of your own "
+                    f"home, and some comfort that the valuation is {hold} for now. What we "
+                    f"need next is some greater context beyond just this one sample. The "
+                    f"next ring out is to look at what's happening at the suburb level.\n")
 
     # ==== 2. What is your suburb doing? ========================================
     P.append(f"## 2. What is {b['suburb_display']} doing?\n")
     P.append(
         f"Your home is one data point. The suburb around it is the next ring out, and it "
-        f"is measured two ways that our own audits found hold up on a partial sample: the "
-        f"rolling median price, and how long homes take to sell.\n")
+        f"is measured two ways: the rolling median price, and how long homes take to "
+        f"sell.\n")
 
     # Median price first, then days on market.
     yoy = None
@@ -667,7 +708,7 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
             if svg:
                 charts["median"] = svg
                 P.append("{{CHART:median}}")
-                P.append(f"*{cap}*\n")
+                P.append(f"*{_fig(cap)}*\n")
 
     # Corroboration between the median chart and the days-on-market chart: does your
     # home's own 18-month trajectory agree with the suburb? (The old split-the-comps
@@ -700,12 +741,12 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
             charts["dom"] = svg
             latest = fb.num("dom_latest", dom["latest"])
             P.append(
-                f"On time, half the houses that sold in {b['suburb_display']} last quarter "
-                f"were under offer within {latest} days of listing, and half took longer. "
-                f"The chart shows that figure each quarter, with the number of sales it is "
-                f"measured from underneath.\n")
+                f"Next, we need to take a close look at how the number of days homes are "
+                f"taking to sell is changing. This is a key buyer demand signal, with low "
+                f"numbers representing high buyer demand (homes selling quickly) and high "
+                f"numbers indicating low buyer demand (homes taking longer to sell).\n")
             P.append("{{CHART:dom}}")
-            P.append(f"*{cap}*\n")
+            P.append(f"*{_fig(cap)}*\n")
 
             # Early interpretation of the price vs time-on-market signals the reader has
             # now seen, grounded in the leading-indicator research. Every claim here is
@@ -739,13 +780,20 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
                 moved, price_word = "moved", "moving"
 
             P.append(
-                f"Here an analyst pauses. The {sd} median has {moved} over the past year, "
-                f"but a price is a lagging number: it confirms what buyers have already "
-                f"done, not what they are about to do. The more forward-looking signal is "
-                f"liquidity — how quickly homes are selling.\n")
+                f"We need to consider these two data points together. The {sd} median has "
+                f"{moved} over the past year, but a price is a lagging number: it confirms "
+                f"what buyers have already done, not what they are about to do. The more "
+                f"forward-looking signal is buyer demand — how quickly homes are selling.\n")
 
-            fed = ("US Federal Reserve work published in 2025 found the supply of homes "
-                   "for sale leads price growth by roughly a year")
+            # A single cited research statement, superscript-referenced (item 10): the US
+            # Federal Reserve sentence was cut; the mechanism now rests on Fields' own
+            # measured lead/lag finding, listed in References at the end.
+            research = ("Housing-market research finds that as demand eases, homes take "
+                        "longer to sell before the median itself gives way"
+                        + _cite("Fields, “Leading vs Lagging Indicators of Gold Coast House "
+                                "Prices” and “What Drives Gold Coast House Prices” — Fields’ "
+                                "analysis of 27 economic series across eight Gold Coast "
+                                "suburbs, 2015–2025."))
             if year_ago is not None:
                 ya = fb.num("dom_year_ago", int(round(year_ago)))
                 delta = dom["latest"] - year_ago
@@ -753,9 +801,7 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
                     P.append(
                         f"And in {sd} it has begun to move: the median time on market "
                         f"lengthened to {latest} days last quarter, from {ya} days a year "
-                        f"earlier. {fed}, and housing-search studies find that as demand "
-                        f"eases homes take longer to sell before the median itself gives "
-                        f"way.\n")
+                        f"earlier. {research}.\n")
                     P.append(
                         f"So a market where prices are {price_word} while time on market "
                         f"lengthens is one whose early momentum may be easing — a signal "
@@ -768,20 +814,20 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
                         f"In {sd} that signal has not turned: the median time on market was "
                         f"{latest} days last quarter, shorter than the {ya} days of a year "
                         f"earlier — homes are being absorbed at least as quickly as before. "
-                        f"{fed}; here that leading measure has yet to move.\n")
+                        f"{research} — and here that leading signal has yet to turn.\n")
                     P.append(
                         f"So the forward-looking signal and the backward-looking one point "
                         f"the same way for now: prices {price_word}, homes selling briskly. "
                         f"{latest} days sits toward the quick end of {sd}'s own recent "
                         f"record, which has run between {dlo} and {dhi} days over the past "
                         f"two years — not a market in retreat, but the number to watch, "
-                        f"because liquidity tends to turn before price does.\n")
+                        f"because buyer demand tends to turn before price does.\n")
                 else:                     # roughly flat -- steady
                     P.append(
                         f"In {sd} it has barely moved: the median time on market was "
                         f"{latest} days last quarter, close to the {ya} days of a year "
-                        f"earlier. {fed} — so this is the signal to watch, and for now it "
-                        f"is holding steady.\n")
+                        f"earlier. {research} — so this is the signal to watch, and for now "
+                        f"it is holding steady.\n")
                     P.append(
                         f"{latest} days sits within {sd}'s own recent record of {dlo} to "
                         f"{dhi} days over the past two years; prices are {price_word} and "
@@ -791,7 +837,7 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
                 # two-year range only, and make no year-on-year direction claim.
                 P.append(
                     f"In {sd} the median time on market was {latest} days last quarter, "
-                    f"the number to watch. {fed}. {latest} days sits within {sd}'s own "
+                    f"the number to watch. {research}. {latest} days sits within {sd}'s own "
                     f"recent record of {dlo} to {dhi} days over the past two years.\n")
 
             P.append(
@@ -836,21 +882,45 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
                 f"what decides how far a market has to fall. Read what follows as context, "
                 f"not a promise about what comes next.\n")
 
-        # -- who is moving (migration) --
+        # -- who is moving (migration), with the land-value comparison folded in
+        #    (Will 2026-08-25): trimmed to the headline interstate-gain fact, and the
+        #    "what the same money buys" material moved up under this heading.
         if fund and fund.get("migration"):
             P.append(f"### Who is moving\n")
-            bits = [fb.allow_literal(f"{s['text']} ({s['source']}, {s['period']})")
-                    for s in fund["migration"]]
-            P.append(". ".join(_upper1(b) for b in bits) + ".")
-            cav = (fund.get("caveats") or {})
-            tail = ""
-            if cav.get("gc_overseas_led"):
-                tail += fb.allow_literal(cav["gc_overseas_led"]) + " "
-            if cav.get("moderating"):
-                tail += fb.allow_literal(cav["moderating"]) + " "
-            P.append(tail + "Population is the demand side of housing; these are the "
-                     "flows behind it. A place people are moving to, and the places they "
-                     "are leaving, are not under the same pressure.\n")
+            mig0 = fund["migration"][0]
+            mtext = mig0["text"].split("; New South Wales alone")[0].rstrip(" ;,")
+            P.append(_upper1(fb.allow_literal(
+                f"{mtext} ({mig0['source']}, {mig0['period']}).")))
+
+        if arb and arb.get("headline_comparison"):
+            r, h = arb["robina"], arb["headline_comparison"]
+            rob = (f"{b['suburb_display']}'s median house, about "
+                   f"{fb.money('arb_rob_price', r['median_price'])}, sits on a "
+                   f"{fb.num('arb_rob_land', r['median_land'])} m² block; this home on "
+                   f"{fb.num('arb_subj_land', r['subject_land'])} m², "
+                   f"{fb.num('arb_beach', r['beach_km'], dp=1)} km from the beach "
+                   f"(Fields records). ")
+            syd = fb.allow_literal(
+                f"The same money in Sydney is below the city's median house price. Where "
+                f"it buys a house at all, it is an outer estate: in {h['suburb']}, about "
+                f"{h['dist_cbd_km']:.0f} km from the CBD, the median sold house is around "
+                f"${h['median_price']:,} on about {h['median_land']} m² (public sold "
+                f"records, {h['n_priced']} sales). ")
+            P.append(rob + syd + "The blocks are the fact; the beach and the commute are "
+                     "the context.\n")
+            cmp_ex = b.get("comparison")
+            if cmp_ex:
+                cards = comparison_cards(cmp_ex, fb)
+                if cards:
+                    charts["comparison"] = cards
+                    P.append("{{CHART:comparison}}")
+            if fund and fund.get("affordability"):
+                a = fund["affordability"]
+                P.append(fb.allow_literal(
+                    f"The affordability gap sits underneath it: {a['text']} ({a['source']}, "
+                    f"{a['period']}). ")
+                    + "For a buyer moving north, the equity that reaches an outer-fringe "
+                    "block in Sydney reaches more land, closer to the water, here.\n")
 
         # -- where the work is (jobs) --
         if lab and lab.get("states"):
@@ -896,38 +966,6 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
                     f"Queensland {jverb} about {round(abs(jy)/1000)*1000:,} jobs over the "
                     f"year to {lbl.get('employed_period','')}.")
                 P.append(vac_sent + unemp_sent + jobs_sent + "\n")
-
-        # -- what the same money buys (arbitrage) --
-        if arb and arb.get("headline_comparison"):
-            r, h = arb["robina"], arb["headline_comparison"]
-            P.append(f"### What the same money buys\n")
-            rob = (f"{b['suburb_display']}'s median house, about "
-                   f"{fb.money('arb_rob_price', r['median_price'])}, sits on a "
-                   f"{fb.num('arb_rob_land', r['median_land'])} m² block; this home on "
-                   f"{fb.num('arb_subj_land', r['subject_land'])} m², "
-                   f"{fb.num('arb_beach', r['beach_km'], dp=1)} km from the beach "
-                   f"(Fields records). ")
-            syd = fb.allow_literal(
-                f"The same money in Sydney is below the city's median house price. Where "
-                f"it buys a house at all, it is an outer estate: in {h['suburb']}, about "
-                f"{h['dist_cbd_km']:.0f} km from the CBD, the median sold house is around "
-                f"${h['median_price']:,} on about {h['median_land']} m² (public sold "
-                f"records, {h['n_priced']} sales). ")
-            P.append(rob + syd + "The blocks are the fact; the beach and the commute are "
-                     "the context.\n")
-            cmp_ex = b.get("comparison")
-            if cmp_ex:
-                cards = comparison_cards(cmp_ex, fb)
-                if cards:
-                    charts["comparison"] = cards
-                    P.append("{{CHART:comparison}}")
-            if fund and fund.get("affordability"):
-                a = fund["affordability"]
-                P.append(fb.allow_literal(
-                    f"The affordability gap sits underneath it: {a['text']} ({a['source']}, "
-                    f"{a['period']}). ")
-                    + "For a buyer moving north, the equity that reaches an outer-fringe "
-                    "block in Sydney reaches more land, closer to the water, here.\n")
 
         # -- close: no forecast + links --
         P.append(
@@ -1009,7 +1047,7 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
                     f"data, accelerating wages preceded price growth three to four months "
                     f"on, and fading wages preceded softer conditions.\n")
                 P.append("{{CHART:wpi}}")
-                P.append(f"*{cap}*\n")
+                P.append(f"*{_fig(cap)}*\n")
 
         spend_word = None
         if hs_i and hs_i.get("series"):
@@ -1035,7 +1073,7 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
                     f"has {spend_word}, running about {hp} a year ({hs_i['source']}, "
                     f"{hs_i['period']}).{contrast}\n")
                 P.append("{{CHART:hs}}")
-                P.append(f"*{cap}*\n")
+                P.append(f"*{_fig(cap)}*\n")
 
         q = ((lab or {}).get("states") or {}).get("qld") or {}
         vac = q.get("vacancies_per_1000_employed")
@@ -1172,6 +1210,13 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
             f"*Fewer than {fb.word_count('min_comps', MIN_COMPS)} comparable sales fell "
             f"inside the standard {fb.num('std_radius', RADIUS_KM, dp=1)} km, so the search "
             f"was widened to {radius} km for this home.*\n")
+
+    # ---- References: the empirical research cited above, superscript-numbered --------
+    if _refs:
+        P.append("## References\n")
+        for _i, _entry in enumerate(_refs, 1):
+            _mark = "".join(_sups[int(_d)] for _d in str(_i))
+            P.append(fb.allow_literal(f"{_mark} {_entry}"))
 
     return "\n".join(P), fb, charts
 
