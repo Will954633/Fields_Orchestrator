@@ -498,22 +498,34 @@ python3 build_owner_mailer.py --address "20 Heidelberg Circuit, Robina" --teaser
   *"Prices are falling. / Could {street} be next?"*, a **full-bleed aerial** with the
   cadastral boundary (reuses `build_hero`), the "Sydney/Melbourne turned, {suburb} hasn't"
   lede, and *"Turn over for what we found →"*.
-- **Back**: serif headline, **three figures** (this home's 18-month move · the suburb's yoy
-  · days-on-market now/was), body copy, Will's portrait + quote, and a green response panel
-  with the large off-market QR + printed URL.
+- **Back**: serif headline, **three figures** (this home's SIX-MONTH move · the suburb median
+  over the same six months · days-on-market now/was), the kept portrait + quote strip, then a
+  **question-teaser** block (the three questions the article answers), and a green response
+  panel with the large off-market QR + printed URL.
 
-**Single source of truth.** The three figures come from the SAME helpers the article uses
-(`TrajectoryEngine`, `suburb_median_series`, `suburb_dom`), so a teaser and the
-article/website can never show one owner two different numbers.
+**The three figures (Feb reading → today).** Figures 1 & 2 are the **six-month** move read
+from the trajectory anchors (`points[months_ago=6]` vs `points[0]`): the home's own estimate,
+and the suburb's rolling-12m median at those two dates. Figure 1's caption is movement-aware
+(`_move_word`: eased back / held steady / edged higher) and names the real anchor month.
+Figure 3 is DOM (its own year-on-year comparison), unchanged. All come from the SAME helpers
+the article/website use, so a teaser and the site can never show one owner two different
+numbers.
 
 **⚠ It is written for ONE story** — home holding, suburb holding, selling slowing — and
-`teaser_facts` **rejects** anything the fixed copy would misdescribe: a falling or *surging*
-home (band 0–12%; +22% is rejected — "still holding" undersells a surge, and a large bare
-18-month magnitude is the trajectory backtest's noisy regime), a falling suburb, or DOM that
-is **shortening** (Burleigh 3 Fimiston is correctly rejected — its DOM fell 8 days, so "homes
-are taking longer to sell" would be untrue). An easing/surging variant would need its own
-copy. **`verify_teaser_pdf`** re-reads the PDF (`.page` is `overflow:hidden` → silent crops)
-and asserts 2 pages + every load-bearing line present, else `<slug>.teaser.REJECTED.pdf`.
+`teaser_facts` **rejects** anything the fixed copy would misdescribe: a clearly falling or
+*surging* home (6-month band −2..+8%; a surge is rejected — "still holding" would undersell
+it, and large bare short-window magnitudes are the trajectory backtest's noisy regime), a
+falling suburb, or DOM that is **shortening** (Burleigh 3 Fimiston correctly rejected — its
+DOM fell 8 days, so "homes are taking longer to sell" would be untrue). An easing/surging
+variant would need its own copy. **`verify_teaser_pdf`** re-reads the PDF (`.page` is
+`overflow:hidden` → silent crops) and asserts 2 pages + every load-bearing line present
+(incl. the question headings), else `<slug>.teaser.REJECTED.pdf`.
+
+**The question teasers** map to the article's real content — the national "why it turned"
+(inflation, rates, confidence), the "why the Gold Coast is holding" fundamentals (migration,
+jobs, arbitrage), and the leading indicators. ⚠ They must only promise what the off-market
+landing page delivers (the mailer_v2 readiness-gate lesson) — e.g. the copy says inflation /
+interest rates, **not CGT**, because the current article does not analyse CGT.
 
 **Not done:** batch mode / smoke gate for the mailer (use the batch pattern in §9 around
 it), and aerial compression (§11.3) — the PDF inherits the ~1.6MB aerial (~1.2MB PDF).
