@@ -861,8 +861,8 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
                         f"to watch, not a fall. And {latest} days is still relatively "
                         f"quick by {sd}'s "
                         f"own recent record, which has run between {dlo} and {dhi} days "
-                        f"over the past two years; the honest reading is heat coming out of "
-                        f"a fast market, not a market in retreat.\n")
+                        f"over the past two years; the most reliable conclusion is heat "
+                        f"coming out of a fast market, not that the market is in retreat.\n")
                 elif delta <= -3:         # shortening -- the leading signal has NOT turned
                     P.append(
                         f"In {sd} that signal has not turned: the median time on market was "
@@ -895,12 +895,12 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
                     f"recent record of {dlo} to {dhi} days over the past two years.\n")
 
             P.append(
-                f"**Price figures alone cannot tell you where things go next — they arrive "
-                f"too late.**\n")
+                f"**Price figures alone cannot tell you where things go next — they only "
+                f"tell us what has happened, not what will happen.**\n")
             P.append(
                 f"For that you have to look underneath them, at the demand that drives a "
                 f"market: who is moving here, whether there is work, and what people can "
-                f"afford. That is where this piece turns next.\n")
+                f"afford.\n")
 
     # ==== 3. Why is the suburb holding up differently? =========================
     # Rebuilt as real, cited fundamentals: who is moving, where the work is, and
@@ -1024,7 +1024,8 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
                 if None not in (qu, nu, vu):
                     bsvg, _ = charts_mod.state_bar_chart(
                         [("Queensland", qu), ("New South Wales", nu), ("Victoria", vu)],
-                        fb, key="unemp", focal="Queensland")
+                        fb, key="unemp", focal="Queensland",
+                        title="Unemployment rate by state")
                     if bsvg:
                         charts["unemp"] = bsvg
                         P.append("{{CHART:unemp}}")
@@ -1185,14 +1186,6 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
             f"Closer in, your own house is what a buyer here weighs directly: {joined} — "
             f"the features the comparable sales show buyers paying up for.\n")
 
-    caveat = fb.allow_literal(dr["caveat"]) if dr and dr.get("caveat") else \
-        "a relationship measured in the past may not hold in the future"
-    P.append(
-        f"We have set this out the way we would want it ourselves: the indicators that "
-        f"actually lead this market, where they sit today, and the plain caveat that "
-        f"{caveat}. We will not turn any of that into a single number for your home, nor "
-        f"a prediction of next year's price. But nor will we hand it all back unread. "
-        f"Here is our reading of it.\n")
     # A calibrated assessment: what the evidence says NOW, not a forecast. SIGN-AWARE --
     # it branches on the actual direction of the home estimate, the suburb median and
     # days-on-market, so it reads correctly on a home/suburb that is easing, not only on

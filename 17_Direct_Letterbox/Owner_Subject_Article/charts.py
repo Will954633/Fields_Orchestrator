@@ -168,7 +168,7 @@ CSS = """
 """
 
 
-def state_bar_chart(rows, fb, key="unemp", focal=None, dp=1):
+def state_bar_chart(rows, fb, key="unemp", focal=None, dp=1, title=None):
     """Horizontal bars for one measure across a few categories (unemployment by state).
 
     One hue: the focal category (e.g. the lowest) is drawn in the accent, the rest
@@ -180,13 +180,16 @@ def state_bar_chart(rows, fb, key="unemp", focal=None, dp=1):
     rows = [(str(lbl), float(v)) for lbl, v in rows if v is not None]
     if len(rows) < 2:
         return None, None
-    row_h, gap, top = 30, 16, 18
+    row_h, gap = 30, 16
+    top = 44 if title else 18                  # clear the title if present
     height = top + len(rows) * (row_h + gap)
     x0, x1 = 150, W - 62                       # label gutter left, value label right
     vmax = max(v for _, v in rows) * 1.16
     svg = [f'<svg class="fig" viewBox="0 0 {W} {height}" width="100%" role="img" '
-           f'aria-label="unemployment rate by state" '
+           f'aria-label="{_esc(title or "unemployment rate by state")}" '
            f'xmlns="http://www.w3.org/2000/svg">']
+    if title:
+        svg.append(f'<text x="0" y="14" class="fig-title">{_esc(title)}</text>')
     for i, (lbl, v) in enumerate(rows):
         y = top + i * (row_h + gap)
         bw = (x1 - x0) * (v / vmax)
