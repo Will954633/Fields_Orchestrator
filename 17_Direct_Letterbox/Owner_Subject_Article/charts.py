@@ -275,15 +275,14 @@ def median_price_chart(series, suburb_display, fb):
     svg.append(f'<text class="fig-n" x="0" y="{g["y1"]+30:.1f}">sales</text>')
     svg.append("</svg>")
 
-    caption = (f"Each point is the median of the previous twelve months of house sales, "
-               f"so neighbouring points share most of their sales and the line is smooth "
-               f"by design — it is not a quarter-by-quarter movement. The number under "
-               f"each point is how many sales it rests on. Source: Fields, compiled from "
-               f"public sale records.")
-    if dropped:
-        caption += (" Earlier quarters exist but are not continuous with these, so "
-                    "the chart shows only the most recent unbroken run rather than "
-                    "joining across a quarter we do not hold.")
+    # Option A (Will 2026-08-25): tight -- keep the 'smoothed trend, not QoQ' warning and
+    # the sample-size note; drop the data-gap explanation (an internal decision the reader
+    # does not need). The gap is still honoured visually: the line breaks rather than
+    # joining across a missing quarter.
+    caption = ("Because each point covers a full year of sales, the line is a smoothed "
+               "trend, not a quarter-by-quarter movement; read the direction over time, "
+               "not the step between two points. The number under each point is how many "
+               "sales it's based on. Source: Fields, compiled from public sale records.")
     return "\n".join(svg), caption
 
 
