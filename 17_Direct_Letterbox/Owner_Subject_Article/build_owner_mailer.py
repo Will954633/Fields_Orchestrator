@@ -666,9 +666,9 @@ def teaser_html(f: dict, url: str) -> str:
   </div>
   <div class="quotebox" style="margin-left:20mm;margin-right:20mm">
     {portrait_img}
-    <div class="quote">&ldquo;This home is still holding its value &mdash; for now. But wage
-      growth has slowed and homes are taking longer to sell. Those are the signals I&rsquo;ll
-      be watching next.&rdquo;
+    <div class="quote">&ldquo;The Gold Coast is underpinned by a strong economy that has served
+      us well up until now. However, some key leading indicators of price change are starting
+      to show early signs of moving. Those are the signals I&rsquo;ll be watching next.&rdquo;
       <div class="sig"><b>{BYLINE_NAME}</b><br>Fields Real Estate</div></div>
   </div>
   <div class="pad questions">
