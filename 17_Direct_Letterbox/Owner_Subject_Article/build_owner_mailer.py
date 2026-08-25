@@ -411,6 +411,28 @@ def _fmt_pct(v: float) -> str:
     return f"{v:+.1f}%"
 
 
+_MONTHS = {"Jan": "January", "Feb": "February", "Mar": "March", "Apr": "April",
+           "May": "May", "Jun": "June", "Jul": "July", "Aug": "August",
+           "Sep": "September", "Oct": "October", "Nov": "November", "Dec": "December"}
+
+
+def _full_month(date_label: str | None) -> str:
+    """'Feb 2026' -> 'February'. Falls back to the label as given."""
+    if not date_label:
+        return ""
+    return _MONTHS.get(date_label.split()[0], date_label.split()[0])
+
+
+def _move_word(pct: float) -> str:
+    """A factual, non-predictive verb for a six-month move, so the caption speaks to
+    the movement without asserting a trend."""
+    if pct <= -0.75:
+        return "eased back"
+    if pct < 0.75:
+        return "held steady"
+    return "edged higher"
+
+
 def teaser_facts(client, address, suburb=None, skip_market_check=False,
                  out_dir=".") -> dict:
     """Resolve the subject and compute the teaser's three figures + aerial.
@@ -444,31 +466,43 @@ def teaser_facts(client, address, suburb=None, skip_market_check=False,
         return {"ok": False, "stage": "data", "address": full_addr,
                 "errors": [f"teaser needs {', '.join(missing)} and it is unavailable"]}
 
-    home_pct = traj.get("subject_full_pct")
-    yoy = median.get("yoy_pct")
+    # Figures 1 & 2 are the SIX-MONTH move -- Feb reading to today (Will, 2026-08-26),
+    # read from the trajectory anchors (6-months-ago vs now): the home's own estimate
+    # and the suburb's rolling-12m median at each of those two dates. Figure 3 is DOM,
+    # unchanged (its own year-on-year comparison).
+    pts = {p["months_ago"]: p for p in (traj.get("points") or [])}
+    p6, p0 = pts.get(6), pts.get(0)
     latest = dom.get("latest")
     yoy_days = dom.get("yoy_days")
-    if home_pct is None or yoy is None or latest is None or yoy_days is None:
+    if not p6 or not p0 or latest is None or yoy_days is None:
         return {"ok": False, "stage": "data", "address": full_addr,
                 "errors": ["a required teaser figure is missing from its source"]}
 
-    # The copy's premise is a specific one: this home is HOLDING (a modest positive,
-    # roughly tracking its suburb), the suburb is holding, and selling has slowed.
-    # Reject anything the fixed wording would misdescribe:
-    #  * a falling home/suburb -> "still holding its value" is false;
-    #  * a home up double digits -> "still holding" undersells a surge, AND the
-    #    trajectory backtest says only 18-month DIRECTION is reliable, so a large
-    #    bare magnitude is exactly the noisy regime the article never prints raw;
-    #  * DOM shortening -> "homes are taking longer to sell" is false.
-    # Each is an honest rejection, not a defect -- an easing/surging variant would
-    # need its own copy. HOME_HOLD_MAX bounds the believable "holding" band.
-    HOME_HOLD_MAX, SUBURB_MAX = 12.0, 15.0
+    def _pct(a, b):
+        return ((b - a) / a * 100.0) if a else None
+    home_6m = _pct(p6.get("mid"), p0.get("mid"))
+    suburb_6m = _pct(p6.get("median"), p0.get("median"))
+    if home_6m is None or suburb_6m is None:
+        return {"ok": False, "stage": "data", "address": full_addr,
+                "errors": ["could not compute the six-month move from the trajectory"]}
+
+    month_from = _full_month(p6.get("date_label"))   # e.g. "February"
+    month_to = _full_month(p0.get("date_label"))     # e.g. "August"
+
+    # The copy's premise: this home is HOLDING (roughly flat to modestly up over the
+    # six months), the suburb is holding, and selling has slowed. Reject anything the
+    # fixed wording would misdescribe -- a clearly falling or surging home ("still
+    # holding its value" would be untrue either way), a falling suburb, or DOM that is
+    # shortening ("homes are taking longer to sell" untrue). Honest rejection, not a
+    # defect: an easing/surging variant would need its own copy.
+    HOME_BAND, SUBURB_BAND = (-2.0, 8.0), (-2.0, 15.0)
     bad = []
-    if not (0 <= home_pct <= HOME_HOLD_MAX):
-        bad.append(f"home 18-month move {home_pct:+.1f}% is outside the modest-holding "
-                   f"band 0..{HOME_HOLD_MAX:.0f}% this copy describes")
-    if not (0 <= yoy <= SUBURB_MAX):
-        bad.append(f"suburb yoy {yoy:+.1f}% is outside 0..{SUBURB_MAX:.0f}%")
+    if not (HOME_BAND[0] <= home_6m <= HOME_BAND[1]):
+        bad.append(f"home 6-month move {home_6m:+.1f}% is outside the holding band "
+                   f"{HOME_BAND[0]:+.0f}..{HOME_BAND[1]:+.0f}% this copy describes")
+    if not (SUBURB_BAND[0] <= suburb_6m <= SUBURB_BAND[1]):
+        bad.append(f"suburb 6-month move {suburb_6m:+.1f}% is outside "
+                   f"{SUBURB_BAND[0]:+.0f}..{SUBURB_BAND[1]:+.0f}%")
     if yoy_days <= 0:
         bad.append(f"days-on-market changed {yoy_days:+g}d (not lengthening), so "
                    f"'homes are taking longer to sell' would be untrue")
@@ -483,7 +517,9 @@ def teaser_facts(client, address, suburb=None, skip_market_check=False,
         "ok": True, "address": full_addr, "url_slug": slug, "suburb_key": suburb_key,
         "address_short": full_addr.split(",")[0].strip(),
         "suburb_display": suburb_key.replace("_", " ").title(),
-        "home_pct": home_pct, "suburb_yoy": yoy,
+        "home_6m": home_6m, "suburb_6m": suburb_6m,
+        "home_move_word": _move_word(home_6m),
+        "month_from": month_from, "month_to": month_to,
         "dom_now": int(round(latest)), "dom_prev": int(round(latest - yoy_days)),
         "aerial_uri": aerial_uri, "aerial_cap": (hero or {}).get("caption", ""),
     }
@@ -539,6 +575,15 @@ html,body{font-family:'Liberation Sans',-apple-system,Segoe UI,Roboto,sans-serif
 .figs .l{font-size:9.5pt;line-height:1.4;color:#4a453d;margin-top:2.5mm}
 .back .body{font-size:11.5pt;line-height:1.58;color:#3f3a32;margin:0 0 4mm;max-width:158mm}
 .back .body b{color:var(--green-deep)}
+/* --- question teasers: what the article answers --- */
+.questions{margin-top:8mm}
+.qkicker{color:var(--terra-dark);font-size:9.5pt;letter-spacing:2.2pt;font-weight:700;
+ text-transform:uppercase;margin-bottom:5mm}
+.qitem{padding:4mm 0;border-top:1px solid var(--line)}
+.qitem:first-of-type{border-top:none;padding-top:0}
+.qitem h3{font:400 14.5pt/1.2 Georgia,'Liberation Serif',serif;color:var(--green-deep);
+ margin-bottom:1.6mm}
+.qitem p{font-size:10.5pt;line-height:1.45;color:#4a453d;max-width:150mm}
 .quotebox{display:flex;gap:7mm;align-items:center;margin:8mm 0;padding:6mm 7mm;
  background:var(--cream);border-radius:2.5mm}
 .quotebox .portrait{width:30mm;height:30mm;border-radius:50%;object-fit:cover;
@@ -610,21 +655,14 @@ def teaser_html(f: dict, url: str) -> str:
       <b>But the market underneath it is beginning to change.</b></h2>
   </div>
   <div class="figs">
-    <div class="fig"><div class="n serif">{_fmt_pct(f['home_pct'])}</div>
-      <div class="l">This home&rsquo;s estimated movement over 18 months</div></div>
-    <div class="fig"><div class="n serif">{_fmt_pct(f['suburb_yoy'])}</div>
-      <div class="l">{suburb}&rsquo;s median house-price movement over one year</div></div>
+    <div class="fig"><div class="n serif">{_fmt_pct(f['home_6m'])}</div>
+      <div class="l">This home&rsquo;s estimated value has {f['home_move_word']}
+        since {f['month_from']}</div></div>
+    <div class="fig"><div class="n serif">{_fmt_pct(f['suburb_6m'])}</div>
+      <div class="l">The {suburb} median over the same six months,
+        {f['month_from']} to {f['month_to']}</div></div>
     <div class="fig"><div class="n serif">{f['dom_now']} <span>days</span></div>
       <div class="l">Typical time to sell, up from {f['dom_prev']} days</div></div>
-  </div>
-  <div class="pad">
-    <p class="body">We traced the estimated value of {addr} across the past 18 months,
-      compared it with {suburb}&rsquo;s wider market, and examined the economic indicators
-      that have historically moved before Gold Coast prices.</p>
-    <p class="body"><b>The evidence is reassuring &mdash; but not entirely comfortable.</b></p>
-    <p class="body">Prices are still holding. Yet homes are taking longer to sell, wage
-      growth has slowed, and the pressures now affecting other Australian markets have
-      not disappeared.</p>
   </div>
   <div class="quotebox" style="margin-left:20mm;margin-right:20mm">
     {portrait_img}
@@ -633,11 +671,20 @@ def teaser_html(f: dict, url: str) -> str:
       be watching next.&rdquo;
       <div class="sig"><b>{BYLINE_NAME}</b><br>Fields Real Estate</div></div>
   </div>
+  <div class="pad questions">
+    <div class="qkicker">The questions the full analysis answers</div>
+    <div class="qitem"><h3 class="serif">Why did the wider market turn down?</h3>
+      <p>We set out the forces behind the national fall &mdash; inflation, interest rates
+        and buyer confidence &mdash; with the figures behind each.</p></div>
+    <div class="qitem"><h3 class="serif">Why is the Gold Coast holding while others fall?</h3>
+      <p>We examine the fundamentals underneath it &mdash; interstate migration, local jobs
+        and what the same money buys &mdash; for the structural differences.</p></div>
+    <div class="qitem"><h3 class="serif">Will the Gold Coast turn down too?</h3>
+      <p>We look closely at the indicators shown to move before prices do. Four key metrics
+        are beginning to show early signals worth watching.</p></div>
+  </div>
   <div class="respond">
     <div class="respond-l">
-      <h3 class="serif">What would tell us that the market is about to turn?</h3>
-      <p>We identified four indicators worth watching &mdash; and one particular combination
-        that has historically preceded softer Gold Coast prices by several months.</p>
       <p class="scan">Scan to read the complete analysis prepared for {addr}.</p>
       <div class="readlink">Read your property analysis &rarr;<span>{urltext}</span></div>
     </div>
@@ -667,9 +714,10 @@ def verify_teaser_pdf(pdf_path: str, f: dict) -> list[str]:
     except Exception as e:                                       # noqa: BLE001
         return [f"could not read back the PDF for verification: {e}"]
     folded = re.sub(r"\s+", " ", txt).lower()
-    must = [f["address_short"].lower(), _fmt_pct(f["home_pct"]).lower(),
-            _fmt_pct(f["suburb_yoy"]).lower(), f"{f['dom_now']} days",
+    must = [f["address_short"].lower(), _fmt_pct(f["home_6m"]).lower(),
+            _fmt_pct(f["suburb_6m"]).lower(), f"{f['dom_now']} days",
             f"up from {f['dom_prev']} days", "turn over for what we found",
+            "why did the wider market turn down", "will the gold coast turn down too",
             "read your property analysis", "will simpson"]
     for m in must:
         if re.sub(r"\s+", " ", m) not in folded:
@@ -711,8 +759,9 @@ def build_teaser(address, suburb=None, out_dir=None, skip_market_check=False,
 
     return {"ok": True, "address": f["address"], "offmarket_url": url,
             "url_slug": f["url_slug"], "teaser_html": html_path, "pdf": pdf_path,
-            "figures": {"home_18mo": _fmt_pct(f["home_pct"]),
-                        "suburb_yoy": _fmt_pct(f["suburb_yoy"]),
+            "figures": {"home_6m": f"{_fmt_pct(f['home_6m'])} ({f['home_move_word']} "
+                        f"since {f['month_from']})",
+                        "suburb_6m": _fmt_pct(f["suburb_6m"]),
                         "dom": f"{f['dom_now']} days (was {f['dom_prev']})"}}
 
 
@@ -799,8 +848,8 @@ def main():
         print(f"OK  {r['address']}  (teaser)")
         print(f"    off-market  {r['offmarket_url']}")
         print(f"    pdf         {r['pdf']}")
-        print(f"    figures     home {r['figures']['home_18mo']} · "
-              f"suburb {r['figures']['suburb_yoy']} · DOM {r['figures']['dom']}")
+        print(f"    figures     home {r['figures']['home_6m']} · "
+              f"suburb {r['figures']['suburb_6m']} · DOM {r['figures']['dom']}")
         return
 
     r = build_mailer(a.address, a.suburb, a.out_dir, a.variant,
