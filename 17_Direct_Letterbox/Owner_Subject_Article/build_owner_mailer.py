@@ -60,6 +60,19 @@ import build_owner_article as boa  # noqa: E402  (sets up shared/ path, SITE, et
 SITE = boa.SITE
 OFFMARKET_URL = SITE + "/off-market/{slug}"
 
+# Deep-link marker the off-market page (OffMarketV5) reads: on arrival it lands
+# on the hero, then smooth-scrolls down to the "Your market update" section this
+# teaser previews (id="v5-market-update"). Only the SCANNED/CLICKED target
+# carries it; the printed fallback URL a reader types by hand stays clean (they
+# just land at the top of the page, which is fine). See OffMarketV5.tsx.
+OFFMARKET_QR_QUERY = "?from=mailer"
+
+
+def _qr_target(url: str) -> str:
+    """The URL to ENCODE IN A QR / put behind an <a> — the clean page URL plus the
+    mailer deep-link marker. Kept separate from the human-typed fallback text."""
+    return url + OFFMARKET_QR_QUERY
+
 # Will's WSJ-style hedcut, the same portrait the website byline uses.
 PORTRAIT_PATH = ("/home/fields/Feilds_Website/01_Website/src/assets/fields/"
                  "will-simpson-hedcut.webp")
@@ -160,14 +173,15 @@ def byline_frontqr_html(url: str) -> str:
     portrait = _portrait_datauri()
     avatar = (f'<img class="byline-avatar" src="{portrait}" alt="{BYLINE_NAME}">'
               if portrait else "")
+    target = _qr_target(url)
     return f"""
 <div class="underhero">
   <div class="byline">{avatar}
     <span class="byline-txt"><span class="byline-name">{BYLINE_NAME}</span>
       <span class="byline-role">Fields Real Estate</span></span></div>
-  <a class="front-qr" href="{url}" aria-label="Scan for the full data on this address">
+  <a class="front-qr" href="{target}" aria-label="Scan for the full data on this address">
     <span class="front-qr-cap">Scan for<br>your full data</span>
-    <img src="{qr_png_datauri(url)}" alt="QR to this home's off-market page">
+    <img src="{qr_png_datauri(target)}" alt="QR to this home's off-market page">
   </a>
 </div>
 """
@@ -177,7 +191,7 @@ def qr_panel_html(url: str, address_short: str) -> str:
     """The closing call-out, styled as the mailer_v2 CTA band: full-bleed green,
     the QR in a warm-paper tile, cream copy. Data-framed, no CTA verb."""
     img = (f'<img class="qr-img" alt="Scan for {address_short}" '
-           f'src="{qr_png_datauri(url)}">')
+           f'src="{qr_png_datauri(_qr_target(url))}">')
     return f"""
 <section class="qr-panel" aria-label="Off-market page for this address">
   <div class="qr-code">{img}</div>
@@ -622,7 +636,10 @@ def teaser_html(f: dict, url: str) -> str:
                     if portrait else "")
     aerial = (f'<img src="{f["aerial_uri"]}" alt="Aerial of {addr} with its boundary">'
               if f.get("aerial_uri") else "")
-    qr = qr_png_datauri(url, scale=16, error="q")
+    # The SCANNED QR carries ?from=mailer so the off-market page smooth-scrolls to
+    # the "Your market update" section this teaser previews; the printed link text
+    # a reader types by hand stays clean (they land at the top, which is fine).
+    qr = qr_png_datauri(_qr_target(url), scale=16, error="q")
     urltext = url.replace("https://", "")
 
     front = f"""
