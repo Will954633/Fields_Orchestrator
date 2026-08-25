@@ -39,10 +39,59 @@ OWNER_GEN = REPO / "17_Direct_Letterbox" / "Owner_Subject_Article" / "build_owne
 VAL_GEN = REPO / "16_Valuation" / "report_page" / "build_report_page.py"
 COVER_RENDER = REPO / "scripts" / "render_html_cover.cjs"
 BLOB_BASE = "https://blobs.fieldsestate.com.au"
+BLOB_ROOT = Path("/data/blobs")  # nginx serves this as blobs.fieldsestate.com.au
 SUBURBS = ["robina", "burleigh_waters", "varsity_lakes", "merrimac"]
 GEN_TIMEOUT = 300
 
 sys.path.insert(0, str(REPO))
+
+
+def _gen_sources(kind: str) -> list[Path]:
+    """The files the artifact is COMPOSED from — its staleness inputs.
+
+    ⚠ For market-update this is an EXPLICIT list, not a dir glob: the article
+    generator shares its directory with unrelated sibling scripts (the mailer,
+    the builders, tests, backtests), and an earlier dir-glob made editing
+    build_owner_mailer.py falsely invalidate every article and trigger a mass
+    rebuild. So list exactly what build_owner_article.py imports + the context
+    JSONs it reads. **If it gains a new local import or context file, ADD IT
+    HERE** — otherwise a change to that input will not be seen as staleness
+    (the original 2026-08-25 stale-content bug). report_page/ holds only its
+    generator, so it is globbed (auto-includes any helper added there)."""
+    if kind == "market-update":
+        d = OWNER_GEN.parent
+        return [d / n for n in (
+            "build_owner_article.py", "charts.py", "factbook.py", "guardrails.py",
+            "variants.py", "subject_trajectory.py",
+            "macro_context.json", "labour_context.json", "fundamentals_context.json",
+            "arbitrage_context.json", "comparison_examples.json",
+        )]
+    if kind == "valuation-report":
+        d = VAL_GEN.parent
+        return sorted(d.glob("*.py")) + sorted(d.glob("*.json"))
+    return []
+
+
+def source_mtime(kind: str) -> float:
+    """Newest mtime among this kind's composed source files. Deliberately NOT
+    cached: the on-demand poller is a long-lived daemon and must notice a
+    generator change WITHOUT a restart. Statting ~11 files is microseconds."""
+    mtimes = [p.stat().st_mtime for p in _gen_sources(kind) if p.is_file()]
+    return max(mtimes) if mtimes else 0.0
+
+
+def blob_path(slug: str, kind: str) -> Path:
+    sub = "market-update" if kind == "market-update" else "valuation-report"
+    return BLOB_ROOT / sub / f"{slug}.html"
+
+
+def artifact_fresh(slug: str, kind: str) -> bool:
+    """True iff the blob exists AND is at least as new as the generator sources.
+    A missing or stale (pre-change) blob returns False so it is (re)built."""
+    try:
+        return blob_path(slug, kind).stat().st_mtime >= source_mtime(kind)
+    except FileNotFoundError:
+        return False
 
 
 def _load_env() -> None:

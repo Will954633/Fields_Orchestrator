@@ -30,7 +30,7 @@ load_dotenv(REPO / ".env")
 from pymongo import MongoClient  # noqa: E402
 
 from scripts.job_status import job_run  # noqa: E402
-from scripts.publish_offmarket_artifacts import publish  # noqa: E402
+from scripts.publish_offmarket_artifacts import publish, artifact_fresh  # noqa: E402
 
 POLL_INTERVAL = 15
 STALE_CLAIM_SECONDS = 900
@@ -64,8 +64,25 @@ def poll_once(client: MongoClient) -> dict:
 
     slug = req.get("slug")
     kind = req.get("kind", "both")
+    # Rebuild-on-stale: the website enqueues on every page load (it can't tell a
+    # stale blob from a fresh one), so decide here. Rebuild only the kinds whose
+    # blob is missing or older than the generator — a request for an already-fresh
+    # artifact costs one stat() and no build, which is what makes always-enqueue
+    # cheap enough to guarantee a viewed page self-heals within ~10s of a copy change.
+    requested = ["market-update", "valuation-report"] if kind == "both" else [kind]
+    stale = [k for k in requested if not artifact_fresh(slug, k)]
+    if not stale:
+        q.update_one(
+            {"_id": req["_id"]},
+            {"$set": {
+                "status": "completed", "fresh": True,
+                "finished_at": datetime.now(timezone.utc), "error": None,
+            }},
+        )
+        return {"claimed": 1, "succeeded": 1, "failed": 0, "fresh": 1}
+    rebuild_kind = "both" if len(stale) == 2 else stale[0]
     try:
-        results = publish(slug, kind, verbose=False)
+        results = publish(slug, rebuild_kind, verbose=False)
         ok = bool(results) and all(r.get("ok") for r in results)
         declined = any(r.get("declined") for r in results)
         q.update_one(
