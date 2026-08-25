@@ -41,32 +41,33 @@ BASE = "https://api.justcall.io/v2.1"
 # comparable-sales figure is compliant (rule 5). SMS-safe punctuation (GSM-7) only.
 TEMPLATES = {
     "3039075966262793": (  # Value Gap - 2 Leafy Close
-        "Hi {first}, it's Will from Fields - here's the breakdown you asked for. 2 Leafy "
-        "Close, Burleigh Waters is asking $1,389,000; our read of eight recent comparable "
-        "sales points to about $1,600,000, so the asking sits roughly $210,000 below where "
-        "the comps land. It's a comparable-sales estimate with a range, not a formal "
-        "valuation. Full side-by-side of the eight sales: "
-        "fieldsestate.com.au/property/2-leafy-close-burleigh-waters-f62b. Which suburbs are "
-        "you focused on? Reply STOP to opt out."),
+        "Hi {first}, it's Will from Fields - thanks for reaching out about that Burleigh "
+        "Waters home. Quick version: 2 Leafy Close is asking $1,389,000, but the eight most "
+        "recent comparable sales I pulled sit closer to $1,600,000 - so there's roughly a "
+        "$210,000 gap. Full side-by-side here so you can see how I got there: "
+        "fieldsestate.com.au/property/2-leafy-close-burleigh-waters-f62b (it's my read off the "
+        "comps, not a formal valuation). What are you hoping to find, and which suburbs are "
+        "you looking in?"),
     "1580988970376517": (  # Price Reduction - 4 Yerrecoin Pl
-        "Hi {first}, it's Will from Fields - here's the detail you asked for. 4 Yerrecoin "
-        "Place, Burleigh Waters has come down $164,000 since March (from $1,749,000 to "
-        "$1,585,000) across six price moves. Full price history and how it compares: "
-        "fieldsestate.com.au/property/4-yerrecoin-place-burleigh-waters. What are you looking "
-        "for? Reply STOP to opt out."),
+        "Hi {first}, it's Will from Fields - thanks for reaching out. That one's interesting: "
+        "4 Yerrecoin Place, Burleigh Waters has quietly come down $164,000 since March (from "
+        "$1,749,000 to $1,585,000), across six separate cuts. Full price history here: "
+        "fieldsestate.com.au/property/4-yerrecoin-place-burleigh-waters. What are you after, "
+        "and roughly what's your budget?"),
     "1010229908733472": (  # Scarcity - 12 Sittella Cr
-        "Hi {first}, it's Will from Fields - you're after land, a pool and a walkable school. "
-        "Right now only nine homes for sale across the southern Gold Coast have all three. One "
-        "is 12 Sittella Crescent, Burleigh Waters (660sqm, pool, primary school about 200m "
-        "away), asking $2,575,000: "
-        "fieldsestate.com.au/property/12-sittella-crescent-burleigh-waters. Want the other "
-        "eight that fit? Reply STOP to opt out."),
+        "Hi {first}, it's Will from Fields - thanks for reaching out. If you're after land, a "
+        "pool and a school you can walk to, there are only nine homes for sale right now that "
+        "tick all three. 12 Sittella Crescent, Burleigh Waters is one (660sqm, pool, a primary "
+        "school about 200m away), asking $2,575,000: "
+        "fieldsestate.com.au/property/12-sittella-crescent-burleigh-waters. Want me to send "
+        "the other eight so you can compare?"),
     "942432315543625": (  # Nearby Sold - 11 Belmore Cl
-        "Hi {first}, it's Will from Fields - here's the comparison you asked for. 11 Belmore "
-        "Close, Robina is asking $1,275,000. A smaller home on a near-identical block 1.5km "
-        "away sold for $1,585,000 earlier this year, about $310,000 more. Full side-by-side: "
+        "Hi {first}, it's Will from Fields - thanks for reaching out. Here's the one that "
+        "caught my eye: 11 Belmore Close, Robina is asking $1,275,000, but a smaller home on a "
+        "near-identical block 1.5km away sold for $1,585,000 earlier this year - about "
+        "$310,000 more. Full side-by-side here: "
         "fieldsestate.com.au/property/11-belmore-close-robina. Which suburbs are you focused "
-        "on? Reply STOP to opt out."),
+        "on?"),
 }
 
 
