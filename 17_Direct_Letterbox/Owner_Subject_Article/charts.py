@@ -161,8 +161,45 @@ CSS = """
 .fig-dot-ref{fill:var(--muted)}
 .fig-caption{font:400 12.5px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;
  color:var(--muted);margin:.1rem 0 1.6rem}
+.fig-bar{fill:var(--accent)}
+.fig-bar-mut{fill:var(--muted);opacity:.32}
+.fig-barlabel{font:400 12px -apple-system,Segoe UI,Roboto,sans-serif;fill:var(--ink)}
 @media print{.fig{page-break-inside:avoid}}
 """
+
+
+def state_bar_chart(rows, fb, key="unemp", focal=None, dp=1):
+    """Horizontal bars for one measure across a few categories (unemployment by state).
+
+    One hue: the focal category (e.g. the lowest) is drawn in the accent, the rest
+    muted, so colour only repeats the ranking that bar length and position already
+    carry -- greyscale-safe, per the design constraints. Every value is minted through
+    the FactBook so the chart cannot drift from the prose beside it. Returns (svg, None);
+    the caller supplies the numbered caption.
+    """
+    rows = [(str(lbl), float(v)) for lbl, v in rows if v is not None]
+    if len(rows) < 2:
+        return None, None
+    row_h, gap, top = 30, 16, 18
+    height = top + len(rows) * (row_h + gap)
+    x0, x1 = 150, W - 62                       # label gutter left, value label right
+    vmax = max(v for _, v in rows) * 1.16
+    svg = [f'<svg class="fig" viewBox="0 0 {W} {height}" width="100%" role="img" '
+           f'aria-label="unemployment rate by state" '
+           f'xmlns="http://www.w3.org/2000/svg">']
+    for i, (lbl, v) in enumerate(rows):
+        y = top + i * (row_h + gap)
+        bw = (x1 - x0) * (v / vmax)
+        cls = "fig-bar" if (focal and lbl == focal) else "fig-bar-mut"
+        svg.append(f'<text class="fig-barlabel" x="{x0 - 10}" y="{y + row_h / 2 + 4:.1f}" '
+                   f'text-anchor="end">{_esc(lbl)}</text>')
+        svg.append(f'<rect class="{cls}" x="{x0}" y="{y}" width="{max(bw, 1):.1f}" '
+                   f'height="{row_h}" rx="3"/>')
+        val = fb.pct(f"{key}_bar_{i}", v, signed=False, dp=dp)
+        svg.append(f'<text class="fig-val" x="{x0 + bw + 8:.1f}" '
+                   f'y="{y + row_h / 2 + 4:.1f}">{val}</text>')
+    svg.append("</svg>")
+    return "\n".join(svg), None
 
 
 def median_price_chart(series, suburb_display, fb):

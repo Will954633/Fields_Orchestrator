@@ -819,7 +819,8 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
                     P.append(
                         f"So a market where prices are {price_word} while time on market "
                         f"lengthens is one whose early momentum may be easing — a signal "
-                        f"to watch, not a fall. And {latest} days is still quick by {sd}'s "
+                        f"to watch, not a fall. And {latest} days is still relatively "
+                        f"quick by {sd}'s "
                         f"own recent record, which has run between {dlo} and {dhi} days "
                         f"over the past two years; the honest reading is heat coming out of "
                         f"a fast market, not a market in retreat.\n")
@@ -903,6 +904,7 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
             mtext = mig0["text"].split("; New South Wales alone")[0].rstrip(" ;,")
             P.append(_upper1(fb.allow_literal(
                 f"{mtext} ({mig0['source']}, {mig0['period']}).")))
+            P.append("So why are people moving from Sydney to the Gold Coast?")
 
         if arb and arb.get("headline_comparison"):
             r, h = arb["robina"], arb["headline_comparison"]
@@ -979,12 +981,38 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
                     f"year to {lbl.get('employed_period','')}.")
                 P.append(vac_sent + unemp_sent + jobs_sent + "\n")
 
-        # -- close: no forecast + links --
-        P.append(
-            f"None of this forecasts a price. It sets out the demand side — people, work, "
-            f"value — that a national average cannot see, and leaves the reading to you. "
-            f"We go deeper on whether the local market is turning in {_link('about_to_fall')}, "
-            f"and on which indicators actually lead prices here in {_link('what_drives')}.\n")
+                # Bar chart of the three states' unemployment, QLD (the lowest) highlighted.
+                if None not in (qu, nu, vu):
+                    bsvg, _ = charts_mod.state_bar_chart(
+                        [("Queensland", qu), ("New South Wales", nu), ("Victoria", vu)],
+                        fb, key="unemp", focal="Queensland")
+                    if bsvg:
+                        charts["unemp"] = bsvg
+                        P.append("{{CHART:unemp}}")
+                        P.append(fb.allow_literal("*" + _fig(
+                            f"Unemployment rate by state, three-month average to "
+                            f"{lbl.get('unemp_period','')}. A lower rate points to tighter "
+                            f"labour demand — more competition for workers, fewer people "
+                            f"out of work. Source: {lab['source']['unemployment']}.") + "*\n"))
+
+        # -- close: a summarising conclusion drawn from the demand evidence (Will
+        #    2026-08-25), sign-aware so it never asserts 'holding up' on an easing suburb.
+        if loc_up:
+            P.append(
+                f"So we can see strong underlying demand factors are holding up the "
+                f"{b['suburb_display']} market and making it more resilient in the face of "
+                f"the declines in major cities such as Sydney and Melbourne. What we need "
+                f"to do next is look for stronger leading indicators of price moves — "
+                f"specific economic metrics we can follow that often signal a market turn "
+                f"in advance.\n")
+        else:
+            P.append(
+                f"So these are the underlying demand factors — people, work, value — that "
+                f"decide how far a market moves, and they are what sits beneath "
+                f"{b['suburb_display']}'s softening even as the national declines reach "
+                f"here. What we need to do next is look for stronger leading indicators of "
+                f"price moves — specific economic metrics we can follow that often signal a "
+                f"market turn in advance.\n")
 
     # ==== 4. What will happen in the future? ===================================
     # The payoff section: deploy Fields' own lead/lag research + the current live
@@ -994,11 +1022,11 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
     P.append("## 4. Is the Gold Coast market about to fall, and the value of your "
              "property with it?\n")
     P.append(
-        f"No one can tell you what your home will be worth next year, and anyone who names "
-        f"a figure is selling you a guess. But unknowable is not the same as unreadable. A "
-        f"market leaves a trail before it moves, and the honest way to read where it is "
-        f"heading is to watch the signals that turn first — not the price, which you have "
-        f"already seen arrives late.\n")
+        f"No one can tell you for a fact what your home will be worth next year, and "
+        f"anyone who names a figure is selling you a guess. But unknowable is not the same "
+        f"as unreadable. A market leaves a trail before it moves, and one of the best ways "
+        f"to read where it is heading is to watch the signals that turn first — not the "
+        f"price, which you have already seen arrives late.\n")
 
     if dr:
         # our empirical lead/lag finding — the evidence, cited to our own analysis
@@ -1193,11 +1221,11 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
     P.append(fb.allow_literal(
         "Our own concern: wage growth has already slowed, while the inflation pressure "
         "behind the rate rises has not fully resolved."))
-    P.append(fb.allow_literal(
+    P.append("**" + fb.allow_literal(
         "If wage growth keeps falling and household spending turns down with it, that is "
         "the combination that has — in our data — preceded softer prices 3 to 4 months "
         "on. A days-on-market figure that keeps climbing would be the earliest "
-        "confirmation."))
+        "confirmation.") + "**")
     P.append("None of that has happened yet. These are simply the dials worth watching.\n")
     P.append(
         f"To go further: {_link('fundamentals')} on what the Gold Coast market rests on, "
