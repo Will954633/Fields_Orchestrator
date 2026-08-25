@@ -567,7 +567,7 @@ html,body{font-family:'Liberation Sans',-apple-system,Segoe UI,Roboto,sans-serif
 .back h2{font-size:22pt;line-height:1.14;color:var(--green-deep);font-weight:400;
  letter-spacing:-.2pt}
 .back h2 b{color:var(--terra);font-weight:400}
-.figs{display:flex;gap:8mm;margin:11mm 0 9mm;padding:0 20mm}
+.figs{display:flex;gap:8mm;margin:9mm 0 6mm;padding:0 20mm}
 .figs .fig{flex:1;text-align:left;border-top:2.5pt solid var(--green)}
 .figs .n{font-family:Georgia,'Liberation Serif',serif;font-size:34pt;line-height:1.05;
  color:var(--terra);margin-top:3mm}
@@ -576,15 +576,15 @@ html,body{font-family:'Liberation Sans',-apple-system,Segoe UI,Roboto,sans-serif
 .back .body{font-size:11.5pt;line-height:1.58;color:#3f3a32;margin:0 0 4mm;max-width:158mm}
 .back .body b{color:var(--green-deep)}
 /* --- question teasers: what the article answers --- */
-.questions{margin-top:8mm}
+.questions{margin-top:5mm}
 .qkicker{color:var(--terra-dark);font-size:9.5pt;letter-spacing:2.2pt;font-weight:700;
  text-transform:uppercase;margin-bottom:5mm}
-.qitem{padding:4mm 0;border-top:1px solid var(--line)}
+.qitem{padding:3.2mm 0;border-top:1px solid var(--line)}
 .qitem:first-of-type{border-top:none;padding-top:0}
 .qitem h3{font:400 14.5pt/1.2 Georgia,'Liberation Serif',serif;color:var(--green-deep);
  margin-bottom:1.6mm}
 .qitem p{font-size:10.5pt;line-height:1.45;color:#4a453d;max-width:150mm}
-.quotebox{display:flex;gap:7mm;align-items:center;margin:8mm 0;padding:6mm 7mm;
+.quotebox{display:flex;gap:7mm;align-items:center;margin:6mm 0;padding:6mm 7mm;
  background:var(--cream);border-radius:2.5mm}
 .quotebox .portrait{width:30mm;height:30mm;border-radius:50%;object-fit:cover;
  border:2.5pt solid var(--terra);flex:0 0 auto}
@@ -593,7 +593,7 @@ html,body{font-family:'Liberation Sans',-apple-system,Segoe UI,Roboto,sans-serif
 .quotebox .sig{margin-top:3mm;font-family:'Liberation Sans',sans-serif;font-style:normal;
  font-size:10pt;color:var(--ink);line-height:1.35}
 .quotebox .sig b{color:var(--green-deep)}
-.respond{margin:0 20mm;background:var(--green);color:var(--paper);border-radius:2.5mm;
+.respond{margin:0 20mm 15mm;background:var(--green);color:var(--paper);border-radius:2.5mm;
  display:flex;gap:9mm;align-items:center;padding:8mm 9mm}
 .respond h3{font:400 16.5pt/1.2 Georgia,'Liberation Serif',serif;color:var(--paper);
  margin-bottom:3mm}
