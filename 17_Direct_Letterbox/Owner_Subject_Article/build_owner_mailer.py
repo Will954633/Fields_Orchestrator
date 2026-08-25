@@ -361,9 +361,10 @@ def build_mail_html(html: str, url: str, address_short: str) -> tuple[str, int]:
 
 
 # ------------------------------------------------------------------ PDF render
-def html_to_pdf(html_path: str, pdf_path: str):
+def html_to_pdf(html_path: str, pdf_path: str, margin: str = "13mm"):
     """Render the mailer HTML to A4 print PDF via headless Chrome (faithful to the
-    article's own print stylesheet). file:// so local data-URI/relative assets load."""
+    article's own print stylesheet). file:// so local data-URI/relative assets load.
+    margin='0' for the fixed-box teaser (full-bleed); '13mm' for the flowed article."""
     from playwright.sync_api import sync_playwright
 
     exe = next((p for p in ("/usr/bin/google-chrome",
@@ -390,9 +391,329 @@ def html_to_pdf(html_path: str, pdf_path: str):
         # Uniform page margins keep body copy off the sheet edge on every one of the
         # ~9 flowed pages; the brandbar and CTA are inset blocks (not full-bleed),
         # which a long multi-page document handles far more predictably than bleed.
+        # The teaser passes margin='0' — it is a fixed 210x297 box that bleeds.
         page.pdf(path=pdf_path, format="A4", print_background=True,
-                 margin={"top": "13mm", "bottom": "13mm", "left": "13mm", "right": "13mm"})
+                 margin={"top": margin, "bottom": margin, "left": margin, "right": margin})
         browser.close()
+
+
+# ================================================================== TEASER
+# A separate deliverable from the full article: a fixed two-page A4 sheet that
+# invites the recipient to scan the QR and read the complete analysis on their
+# off-market page. Designed to be posted FLAT in a C4 envelope (Will, 2026-08-26):
+# feels like a private property briefing, not a flyer. Low density on purpose.
+#
+# Its three headline figures are read from the SAME helpers the full article uses
+# (subject_trajectory, precomputed_indexed_prices, precomputed_market_charts), so a
+# teaser and the article/website can never show one owner two different numbers.
+
+def _fmt_pct(v: float) -> str:
+    return f"{v:+.1f}%"
+
+
+def teaser_facts(client, address, suburb=None, skip_market_check=False,
+                 out_dir=".") -> dict:
+    """Resolve the subject and compute the teaser's three figures + aerial.
+    Returns {ok:True, ...} or {ok:False, stage, errors}. Guards for the specific
+    'holding, but signals worth watching' story the copy tells: a home that is
+    FALLING, or a suburb that is EASING, would make the templated lines untrue, so
+    those are rejected rather than silently inverted (the article is sign-aware;
+    this teaser variant is written for one sign)."""
+    doc, suburb_key = boa.resolve_subject(client, address, suburb)
+    if not doc:
+        return {"ok": False, "stage": "resolve", "errors": [f"no subject for {address!r}"]}
+    full_addr = doc.get("address") or doc.get("complete_address")
+    slug = doc.get("url_slug")
+    if not slug:
+        return {"ok": False, "stage": "slug", "address": full_addr,
+                "errors": [f"{full_addr} has no url_slug"]}
+
+    reasons = boa.guard_subject(client, doc, suburb_key, skip_market_check)
+    if reasons:
+        return {"ok": False, "stage": "guard", "address": full_addr, "errors": reasons}
+
+    median = boa.suburb_median_series(client, suburb_key)
+    dom = boa.suburb_dom(client, suburb_key)
+    try:
+        traj = boa.traj_mod.TrajectoryEngine(client, suburb_key).compute(doc)
+    except Exception as e:                                       # noqa: BLE001
+        traj = None
+    missing = [n for n, v in (("trajectory", traj), ("suburb median", median),
+                              ("days-on-market", dom)) if not v]
+    if missing:
+        return {"ok": False, "stage": "data", "address": full_addr,
+                "errors": [f"teaser needs {', '.join(missing)} and it is unavailable"]}
+
+    home_pct = traj.get("subject_full_pct")
+    yoy = median.get("yoy_pct")
+    latest = dom.get("latest")
+    yoy_days = dom.get("yoy_days")
+    if home_pct is None or yoy is None or latest is None or yoy_days is None:
+        return {"ok": False, "stage": "data", "address": full_addr,
+                "errors": ["a required teaser figure is missing from its source"]}
+
+    # The copy's premise is a specific one: this home is HOLDING (a modest positive,
+    # roughly tracking its suburb), the suburb is holding, and selling has slowed.
+    # Reject anything the fixed wording would misdescribe:
+    #  * a falling home/suburb -> "still holding its value" is false;
+    #  * a home up double digits -> "still holding" undersells a surge, AND the
+    #    trajectory backtest says only 18-month DIRECTION is reliable, so a large
+    #    bare magnitude is exactly the noisy regime the article never prints raw;
+    #  * DOM shortening -> "homes are taking longer to sell" is false.
+    # Each is an honest rejection, not a defect -- an easing/surging variant would
+    # need its own copy. HOME_HOLD_MAX bounds the believable "holding" band.
+    HOME_HOLD_MAX, SUBURB_MAX = 12.0, 15.0
+    bad = []
+    if not (0 <= home_pct <= HOME_HOLD_MAX):
+        bad.append(f"home 18-month move {home_pct:+.1f}% is outside the modest-holding "
+                   f"band 0..{HOME_HOLD_MAX:.0f}% this copy describes")
+    if not (0 <= yoy <= SUBURB_MAX):
+        bad.append(f"suburb yoy {yoy:+.1f}% is outside 0..{SUBURB_MAX:.0f}%")
+    if yoy_days <= 0:
+        bad.append(f"days-on-market changed {yoy_days:+g}d (not lengthening), so "
+                   f"'homes are taking longer to sell' would be untrue")
+    if bad:
+        return {"ok": False, "stage": "narrative", "address": full_addr,
+                "errors": bad + ["an easing/surging teaser variant would be needed here"]}
+
+    hero = boa.build_hero(client, doc, suburb_key, slug, out_dir)
+    aerial_uri = _img_datauri(os.path.join(out_dir, hero["file"])) if hero else None
+
+    return {
+        "ok": True, "address": full_addr, "url_slug": slug, "suburb_key": suburb_key,
+        "address_short": full_addr.split(",")[0].strip(),
+        "suburb_display": suburb_key.replace("_", " ").title(),
+        "home_pct": home_pct, "suburb_yoy": yoy,
+        "dom_now": int(round(latest)), "dom_prev": int(round(latest - yoy_days)),
+        "aerial_uri": aerial_uri, "aerial_cap": (hero or {}).get("caption", ""),
+    }
+
+
+TEASER_CSS = """
+@page{size:A4;margin:0}
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--green:#22382c;--green-deep:#1b2d24;--terra:#b76749;--terra-dark:#8d4d33;
+ --sand:#c9b9a0;--paper:#fdf3ec;--cream:#efe8de;--sage:#7a8a80;--ink:#2a2a24;
+ --line:#d8cfc1}
+html,body{font-family:'Liberation Sans',-apple-system,Segoe UI,Roboto,sans-serif;
+ color:var(--ink);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.serif{font-family:Georgia,'Liberation Serif',serif}
+.page{width:210mm;height:297mm;position:relative;overflow:hidden;
+ background:var(--paper);page-break-after:always}
+.page:last-child{page-break-after:auto}
+.pad{padding:0 20mm}
+.brandbar{background:var(--green);color:var(--paper);display:flex;align-items:center;
+ justify-content:space-between;padding:6mm 20mm}
+.brandbar img{height:8mm;width:auto;display:block}
+.brandbar .tag{font:400 13pt/1 Georgia,serif;color:var(--sand);letter-spacing:-.01em}
+.brandbar .tag b{color:#c98a52}
+.kicker{color:var(--terra-dark);font-size:10.5pt;letter-spacing:2.6pt;font-weight:700;
+ text-transform:uppercase}
+
+/* ---- FRONT ---- */
+.front .top{padding:10mm 20mm 7mm}
+.front h1{font-size:31pt;line-height:1.08;color:var(--green-deep);font-weight:400;
+ letter-spacing:-.3pt;margin-top:4mm}
+.front h1 b{color:var(--terra);font-weight:400}
+.aerialband{width:210mm;height:150mm;position:relative;background:var(--cream)}
+.aerialband img{width:100%;height:100%;object-fit:cover;display:block}
+.aerialcap{position:absolute;left:0;right:0;bottom:0;background:rgba(27,45,36,.72);
+ color:var(--paper);font-size:8.5pt;letter-spacing:.2pt;padding:2.6mm 20mm}
+.front .lede{font-size:15pt;line-height:1.5;color:#3f3a32;margin-top:9mm;max-width:150mm}
+.front .lede b{color:var(--green-deep)}
+.front .foot{position:absolute;left:0;right:0;bottom:0;padding:0 20mm 16mm}
+.front .inside{font-size:11.5pt;line-height:1.55;color:#4a453d;
+ border-left:2.5pt solid var(--terra);padding-left:6mm;max-width:150mm}
+.front .turn{margin-top:7mm;font:700 13pt/1 Georgia,serif;color:var(--terra-dark)}
+
+/* ---- BACK ---- */
+.back .top{padding:11mm 20mm 0}
+.back h2{font-size:22pt;line-height:1.14;color:var(--green-deep);font-weight:400;
+ letter-spacing:-.2pt}
+.back h2 b{color:var(--terra);font-weight:400}
+.figs{display:flex;gap:8mm;margin:11mm 0 9mm;padding:0 20mm}
+.figs .fig{flex:1;text-align:left;border-top:2.5pt solid var(--green)}
+.figs .n{font-family:Georgia,'Liberation Serif',serif;font-size:34pt;line-height:1.05;
+ color:var(--terra);margin-top:3mm}
+.figs .n span{font-size:15pt;color:var(--sage)}
+.figs .l{font-size:9.5pt;line-height:1.4;color:#4a453d;margin-top:2.5mm}
+.back .body{font-size:11.5pt;line-height:1.58;color:#3f3a32;margin:0 0 4mm;max-width:158mm}
+.back .body b{color:var(--green-deep)}
+.quotebox{display:flex;gap:7mm;align-items:center;margin:8mm 0;padding:6mm 7mm;
+ background:var(--cream);border-radius:2.5mm}
+.quotebox .portrait{width:30mm;height:30mm;border-radius:50%;object-fit:cover;
+ border:2.5pt solid var(--terra);flex:0 0 auto}
+.quotebox .quote{font:400 12.5pt/1.5 Georgia,'Liberation Serif',serif;color:var(--green-deep);
+ font-style:italic}
+.quotebox .sig{margin-top:3mm;font-family:'Liberation Sans',sans-serif;font-style:normal;
+ font-size:10pt;color:var(--ink);line-height:1.35}
+.quotebox .sig b{color:var(--green-deep)}
+.respond{margin:0 20mm;background:var(--green);color:var(--paper);border-radius:2.5mm;
+ display:flex;gap:9mm;align-items:center;padding:8mm 9mm}
+.respond h3{font:400 16.5pt/1.2 Georgia,'Liberation Serif',serif;color:var(--paper);
+ margin-bottom:3mm}
+.respond p{font-size:10.5pt;line-height:1.5;color:#dcd3c4;margin-bottom:3mm}
+.respond .scan{color:var(--sand);font-weight:700}
+.respond-l{flex:1}
+.respond .readlink{margin-top:4mm;font:700 11.5pt/1.4 'Liberation Sans',sans-serif;
+ color:var(--paper)}
+.respond .readlink span{display:block;color:var(--sand);font-weight:700;
+ font-size:10.5pt;margin-top:1mm;letter-spacing:.2pt}
+.respond-qr{flex:0 0 auto;background:var(--paper);border-radius:2.5mm;padding:4mm}
+.respond-qr img{display:block;width:40mm;height:40mm}
+"""
+
+
+def teaser_html(f: dict, url: str) -> str:
+    logo = _logo_datauri()
+    mark = (f'<img src="{logo}" alt="Fields">' if logo
+            else '<span class="serif" style="color:#fdf3ec;font-size:20pt">FIELDS</span>')
+    brand = (f'<div class="brandbar">{mark}'
+             f'<span class="tag">{TAGLINE}<b>.</b></span></div>')
+    addr = f["address_short"]
+    suburb = f["suburb_display"]
+    portrait = _portrait_datauri()
+    portrait_img = (f'<img class="portrait" src="{portrait}" alt="{BYLINE_NAME}">'
+                    if portrait else "")
+    aerial = (f'<img src="{f["aerial_uri"]}" alt="Aerial of {addr} with its boundary">'
+              if f.get("aerial_uri") else "")
+    qr = qr_png_datauri(url, scale=16, error="q")
+    urltext = url.replace("https://", "")
+
+    front = f"""
+<div class="page front">
+  {brand}
+  <div class="top">
+    <div class="kicker">Prepared for this address</div>
+    <h1 class="serif">Prices are falling.<br><b>Could {addr} be next?</b></h1>
+  </div>
+  <div class="aerialband">{aerial}<div class="aerialcap">{f['aerial_cap']}</div></div>
+  <div class="pad">
+    <p class="lede">Sydney and Melbourne have turned. Brisbane has slipped.<br>
+      But {suburb} &mdash; and this home &mdash; have not followed them.
+      <b>We investigated why.</b></p>
+  </div>
+  <div class="foot">
+    <p class="inside">Inside the analysis: how this home&rsquo;s estimated value has moved,
+      why {suburb} has resisted the national decline, and the signals that could warn of
+      a change.</p>
+    <div class="turn">Turn over for what we found &rarr;</div>
+  </div>
+</div>
+"""
+
+    back = f"""
+<div class="page back">
+  {brand}
+  <div class="top">
+    <h2 class="serif">This home is still holding its value.<br>
+      <b>But the market underneath it is beginning to change.</b></h2>
+  </div>
+  <div class="figs">
+    <div class="fig"><div class="n serif">{_fmt_pct(f['home_pct'])}</div>
+      <div class="l">This home&rsquo;s estimated movement over 18 months</div></div>
+    <div class="fig"><div class="n serif">{_fmt_pct(f['suburb_yoy'])}</div>
+      <div class="l">{suburb}&rsquo;s median house-price movement over one year</div></div>
+    <div class="fig"><div class="n serif">{f['dom_now']} <span>days</span></div>
+      <div class="l">Typical time to sell, up from {f['dom_prev']} days</div></div>
+  </div>
+  <div class="pad">
+    <p class="body">We traced the estimated value of {addr} across the past 18 months,
+      compared it with {suburb}&rsquo;s wider market, and examined the economic indicators
+      that have historically moved before Gold Coast prices.</p>
+    <p class="body"><b>The evidence is reassuring &mdash; but not entirely comfortable.</b></p>
+    <p class="body">Prices are still holding. Yet homes are taking longer to sell, wage
+      growth has slowed, and the pressures now affecting other Australian markets have
+      not disappeared.</p>
+  </div>
+  <div class="quotebox" style="margin-left:20mm;margin-right:20mm">
+    {portrait_img}
+    <div class="quote">&ldquo;This home is still holding its value &mdash; for now. But wage
+      growth has slowed and homes are taking longer to sell. Those are the signals I&rsquo;ll
+      be watching next.&rdquo;
+      <div class="sig"><b>{BYLINE_NAME}</b><br>Fields Real Estate</div></div>
+  </div>
+  <div class="respond">
+    <div class="respond-l">
+      <h3 class="serif">What would tell us that the market is about to turn?</h3>
+      <p>We identified four indicators worth watching &mdash; and one particular combination
+        that has historically preceded softer Gold Coast prices by several months.</p>
+      <p class="scan">Scan to read the complete analysis prepared for {addr}.</p>
+      <div class="readlink">Read your property analysis &rarr;<span>{urltext}</span></div>
+    </div>
+    <div class="respond-qr"><img src="{qr}" alt="Scan for the full analysis of {addr}"></div>
+  </div>
+</div>
+"""
+    return (f'<!doctype html><html lang="en"><head><meta charset="utf-8">\n'
+            f'<meta name="robots" content="noindex">\n<style>{TEASER_CSS}</style>'
+            f'</head><body>{front}{back}</body></html>\n')
+
+
+def verify_teaser_pdf(pdf_path: str, f: dict) -> list[str]:
+    """mailer_v2 lesson: `.page` is overflow:hidden, so overlong copy is SILENTLY
+    cropped and the PDF still looks plausible. Assert 2 pages and that every
+    load-bearing string is actually present in the extracted text."""
+    import subprocess
+    errs = []
+    try:
+        info = subprocess.run(["pdfinfo", pdf_path], capture_output=True, text=True)
+        pages = next((int(l.split(":")[1]) for l in info.stdout.splitlines()
+                      if l.startswith("Pages:")), None)
+        if pages != 2:
+            errs.append(f"expected 2 pages, got {pages}")
+        txt = subprocess.run(["pdftotext", "-nopgbrk", pdf_path, "-"],
+                             capture_output=True, text=True).stdout
+    except Exception as e:                                       # noqa: BLE001
+        return [f"could not read back the PDF for verification: {e}"]
+    folded = re.sub(r"\s+", " ", txt).lower()
+    must = [f["address_short"].lower(), _fmt_pct(f["home_pct"]).lower(),
+            _fmt_pct(f["suburb_yoy"]).lower(), f"{f['dom_now']} days",
+            f"up from {f['dom_prev']} days", "turn over for what we found",
+            "read your property analysis", "will simpson"]
+    for m in must:
+        if re.sub(r"\s+", " ", m) not in folded:
+            errs.append(f"load-bearing line missing from artwork: {m!r}")
+    return errs
+
+
+def build_teaser(address, suburb=None, out_dir=None, skip_market_check=False,
+                 skip_url_check=False, verbose=True) -> dict:
+    client = boa.get_db()
+    out_dir = out_dir or os.path.join(HERE, "output_teaser")
+    os.makedirs(out_dir, exist_ok=True)
+
+    f = teaser_facts(client, address, suburb, skip_market_check, out_dir)
+    if not f.get("ok"):
+        return f
+
+    url = OFFMARKET_URL.format(slug=f["url_slug"])
+    if not skip_url_check:
+        ok, why = url_resolves(url)
+        if not ok:
+            return {"ok": False, "stage": "url", "address": f["address"], "url": url,
+                    "errors": [f"off-market page did not resolve ({why}): {url}"]}
+
+    slug = boa.slugify(f["address"])
+    html = teaser_html(f, url)
+    html_path = os.path.join(out_dir, f"{slug}.teaser.html")
+    with open(html_path, "w", encoding="utf-8") as fh:
+        fh.write(html)
+    pdf_path = os.path.join(out_dir, f"{slug}.teaser.pdf")
+    html_to_pdf(html_path, pdf_path, margin="0")
+
+    layout = verify_teaser_pdf(pdf_path, f)
+    if layout:
+        bad = pdf_path.replace(".teaser.pdf", ".teaser.REJECTED.pdf")
+        os.replace(pdf_path, bad)
+        return {"ok": False, "stage": "artwork", "address": f["address"],
+                "errors": layout, "rejected_pdf": bad}
+
+    return {"ok": True, "address": f["address"], "offmarket_url": url,
+            "url_slug": f["url_slug"], "teaser_html": html_path, "pdf": pdf_path,
+            "figures": {"home_18mo": _fmt_pct(f["home_pct"]),
+                        "suburb_yoy": _fmt_pct(f["suburb_yoy"]),
+                        "dom": f"{f['dom_now']} days (was {f['dom_prev']})"}}
 
 
 # ------------------------------------------------------------------ orchestration
@@ -460,7 +781,27 @@ def main():
                     help="skip PropRadar mailability guard (dev only -- never for print)")
     ap.add_argument("--skip-url-check", action="store_true",
                     help="skip the live off-market-page resolve check (dev only)")
+    ap.add_argument("--teaser", action="store_true",
+                    help="build the 2-page A4 teaser cover (invites the scan) instead "
+                         "of the full article PDF")
     a = ap.parse_args()
+
+    if a.teaser:
+        r = build_teaser(a.address, a.suburb, a.out_dir,
+                         skip_market_check=a.skip_market_check,
+                         skip_url_check=a.skip_url_check)
+        if not r.get("ok"):
+            print(f"REJECTED at {r['stage']}: {r.get('address') or a.address}", file=sys.stderr)
+            for e in r.get("errors", []):
+                print(f"  - {e}", file=sys.stderr)
+            sys.exit({"resolve": 2, "slug": 2, "guard": 2, "data": 2, "narrative": 2,
+                      "url": 4, "artwork": 3}.get(r["stage"], 2))
+        print(f"OK  {r['address']}  (teaser)")
+        print(f"    off-market  {r['offmarket_url']}")
+        print(f"    pdf         {r['pdf']}")
+        print(f"    figures     home {r['figures']['home_18mo']} · "
+              f"suburb {r['figures']['suburb_yoy']} · DOM {r['figures']['dom']}")
+        return
 
     r = build_mailer(a.address, a.suburb, a.out_dir, a.variant,
                      skip_market_check=a.skip_market_check,
