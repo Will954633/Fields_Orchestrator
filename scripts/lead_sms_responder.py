@@ -35,26 +35,38 @@ def load_env():
 BASE = "https://api.justcall.io/v2.1"
 
 # form_id -> narrative first-SMS template. {first} = lead first name.
-# Figures are FACTUAL (asking price, observed reduction, scarcity count) — the valuation
-# dollar figure stays out of the first touch and is delivered conversationally.
+# The lead already opted in on the form asking for the breakdown, so the first touch
+# DELIVERS it (details + property-page link + one qualifying question) rather than asking
+# again. The link carries the valuation methodology + confidence disclaimer, so stating the
+# comparable-sales figure is compliant (rule 5). SMS-safe punctuation (GSM-7) only.
 TEMPLATES = {
-    "3039075966262793": (  # Value Gap — 2 Leafy Close
-        "Hi {first}, it's Will from Fields — thanks for enquiring about the southern Gold "
-        "Coast home priced below comparable sales. I've pulled the full like-for-like: eight "
-        "recent sales against the $1,389,000 asking. Reply YES and I'll send it straight "
-        "through. (Reply STOP to opt out.)"),
-    "1580988970376517": (  # Price Reduction — 4 Yerrecoin Pl
-        "Hi {first}, it's Will from Fields — re the home that's come down $164,000 since March "
-        "(now $1,585,000). I can send the full price history and how it compares to nearby "
-        "sales. Want it? Reply YES. (Reply STOP to opt out.)"),
-    "1010229908733472": (  # Scarcity — 12 Sittella Cr
-        "Hi {first}, it's Will from Fields — re the homes with 600m2+ land, a pool and a "
-        "walkable school (only nine for sale right now). Tell me your must-haves and I'll send "
-        "the ones that fit. (Reply STOP to opt out.)"),
-    "942432315543625": (  # Nearby Sold — 11 Belmore Cl
-        "Hi {first}, it's Will from Fields — re the home asking $1,275,000 where a smaller "
-        "place nearby sold for $310,000 more earlier this year. I can send the side-by-side. "
-        "Reply YES. (Reply STOP to opt out.)"),
+    "3039075966262793": (  # Value Gap - 2 Leafy Close
+        "Hi {first}, it's Will from Fields - here's the breakdown you asked for. 2 Leafy "
+        "Close, Burleigh Waters is asking $1,389,000; our read of eight recent comparable "
+        "sales points to about $1,600,000, so the asking sits roughly $210,000 below where "
+        "the comps land. It's a comparable-sales estimate with a range, not a formal "
+        "valuation. Full side-by-side of the eight sales: "
+        "fieldsestate.com.au/property/2-leafy-close-burleigh-waters-f62b. Which suburbs are "
+        "you focused on? Reply STOP to opt out."),
+    "1580988970376517": (  # Price Reduction - 4 Yerrecoin Pl
+        "Hi {first}, it's Will from Fields - here's the detail you asked for. 4 Yerrecoin "
+        "Place, Burleigh Waters has come down $164,000 since March (from $1,749,000 to "
+        "$1,585,000) across six price moves. Full price history and how it compares: "
+        "fieldsestate.com.au/property/4-yerrecoin-place-burleigh-waters. What are you looking "
+        "for? Reply STOP to opt out."),
+    "1010229908733472": (  # Scarcity - 12 Sittella Cr
+        "Hi {first}, it's Will from Fields - you're after land, a pool and a walkable school. "
+        "Right now only nine homes for sale across the southern Gold Coast have all three. One "
+        "is 12 Sittella Crescent, Burleigh Waters (660sqm, pool, primary school about 200m "
+        "away), asking $2,575,000: "
+        "fieldsestate.com.au/property/12-sittella-crescent-burleigh-waters. Want the other "
+        "eight that fit? Reply STOP to opt out."),
+    "942432315543625": (  # Nearby Sold - 11 Belmore Cl
+        "Hi {first}, it's Will from Fields - here's the comparison you asked for. 11 Belmore "
+        "Close, Robina is asking $1,275,000. A smaller home on a near-identical block 1.5km "
+        "away sold for $1,585,000 earlier this year, about $310,000 more. Full side-by-side: "
+        "fieldsestate.com.au/property/11-belmore-close-robina. Which suburbs are you focused "
+        "on? Reply STOP to opt out."),
 }
 
 
