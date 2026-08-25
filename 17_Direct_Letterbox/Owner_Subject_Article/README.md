@@ -466,9 +466,21 @@ turns the article HTML into the mailed edition:
   now forces every image `eager` + awaits `decode()` before `page.pdf()`. ⚠ Keep this — it
   is the whole reason the "Who is moving" house photos appear at all.
 
+**Visual language (2026-08-26).** The mailer is reskinned to match
+`11_House_Mini_Site/_shared/mailer_v2` — warm cream paper, deep forest green blocks,
+terracotta serif accents. It is applied as a **CSS override appended after the article's
+own `<style>`**: the article's charts, tables and callouts are all driven by CSS variables
+(`--accent`/`--ink`/`--muted`/`--rule`/`--tint`), so overriding those variables recolours
+the inline-SVG charts automatically — do not edit `charts.py`. The chrome added on top:
+a green Fields **brandbar** (embedded `mailer_v2/assets/fields-logo-white.png`), serif
+green headlines with terracotta emphasis, the byline + front QR **under the hero**, and a
+closing **green CTA band** mirroring the mailer_v2 `.cta`. Page margins are a uniform 13 mm
+and the brandbar/CTA are inset blocks (not full-bleed) — a ~9-page *flowed* document does
+not behave like mailer_v2's fixed 2-page boxes, so full-bleed furniture was dropped.
+
 **Verification that matters (unchanged principle):** decode **every** QR back out of the
 *rendered PDF* (pyzbar), not just the source — front-page + each link chip + end panel.
-Confirmed for Robina and Burleigh Waters.
+Confirmed for Robina, Burleigh Waters and Varsity Lakes.
 
 **Not done:** batch mode / smoke gate for the mailer (use the batch pattern in §9 around
 it), and aerial compression (§11.3) — the PDF inherits the ~1.6MB aerial (~1.2MB PDF).
