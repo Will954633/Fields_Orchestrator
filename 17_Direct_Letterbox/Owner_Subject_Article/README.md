@@ -451,5 +451,24 @@ otherwise CTA-free piece — flagged for Will 2026-08-26.
   just the source — proves it is physically scannable at print size. Confirmed for Robina
   and Burleigh Waters, each to its own correct per-address URL.
 
+**Print-edition transforms (added 2026-08-26, from Will's review).** `build_mail_html()`
+turns the article HTML into the mailed edition:
+- **Byline.** Will's hedcut portrait + "Will Simpson" between the headline and the aerial,
+  matching the website ArticlePage byline. Portrait embedded as a PNG data-URI from
+  `01_Website/src/assets/fields/will-simpson-hedcut.webp`; fails soft to name-only if that
+  file is absent (it lives in the Website repo, not this one).
+- **Front-page QR.** The same off-market QR also sits top-right on page 1 ("Scan for your
+  full data"); the aerial is capped at `max-height:300px` to make room.
+- **Per-link QR chips.** Every **external** hyperlink gets a small inline QR beside it so a
+  print reader can reach it. In-document `#ref` citation anchors are left alone.
+- **Blank-photo fix.** `.cmp-img` carries `loading="lazy"`; in a headless print snapshot
+  those below-the-fold comparison-card photos never decode and print blank. `html_to_pdf`
+  now forces every image `eager` + awaits `decode()` before `page.pdf()`. ⚠ Keep this — it
+  is the whole reason the "Who is moving" house photos appear at all.
+
+**Verification that matters (unchanged principle):** decode **every** QR back out of the
+*rendered PDF* (pyzbar), not just the source — front-page + each link chip + end panel.
+Confirmed for Robina and Burleigh Waters.
+
 **Not done:** batch mode / smoke gate for the mailer (use the batch pattern in §9 around
 it), and aerial compression (§11.3) — the PDF inherits the ~1.6MB aerial (~1.2MB PDF).
