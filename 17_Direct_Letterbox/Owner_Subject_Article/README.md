@@ -1,7 +1,8 @@
 # Owner-Subject Article — direct-mail asset
 
 **Status:** working generator, production-quality output. **Nothing has been posted.**
-**Owner:** Will Simpson · **Established:** 2026-08-05 · **Productionised:** 2026-08-07/08
+**Owner:** Will Simpson · **Established:** 2026-08-05 · **Doc current as of:** 2026-08-25
+(question-led structure, six figures + references, per-suburb comparison — see §6, §12, §13)
 
 Preview: `https://vm.fieldsestate.com.au/concepts/owner-article/<slug>.html`
 
@@ -56,9 +57,10 @@ python3 build_owner_article.py --list-candidates --suburb robina --limit 20
 Exit codes: `0` ok · `2` rejected by a guard · `3` failed fact-check, guardrails or
 cross-surface consistency.
 
-**Files:** `build_owner_article.py` (orchestration, data, copy) · `charts.py` (the two
-visuals) · `factbook.py` (numeric gate) · `guardrails.py` (editorial gate) ·
-`macro_context.json` (**human-maintained** macro block).
+**Files:** `build_owner_article.py` (orchestration, data, copy) · `charts.py` (the six
+figures) · `factbook.py` (numeric gate) · `guardrails.py` (editorial gate) ·
+`subject_trajectory.py` (as-of valuation engine) · `refresh_article_data.py` (scheduled
+data refresh) · `test_build_smoke.py` (pre-batch gate) · five context JSONs (§12).
 
 ---
 
@@ -133,7 +135,24 @@ by true quarter ordinal, and the chart draws only the most recent *unbroken* run
 
 ---
 
-## 6. The two data visuals
+## 6. The data visuals (Figures One–Six)
+
+The article is now **question-led** (Barbara Minto S-C-Q): a national-picture opener →
+the complication (the Gold Coast has so far bucked it) → the Key Question (will this home
+fall too?) → four sections answering it from the home outward. Six figures, auto-numbered
+in document order by `_fig()` ("Figure One … Six"):
+
+1. **Subject price trajectory** — this home valued as-of 18/12/6/0 months (see §12).
+2. **Suburb median house price** — rolling 12-month median with a bootstrap 90% CI ribbon.
+3. **Days on market** — median DOM by quarter, sample size under each point.
+4. **Unemployment rate by state** — QLD/NSW/VIC horizontal bars (`charts.state_bar_chart`).
+5. **Wage growth (WPI), QLD** · 6. **Household spending, QLD** — the two live leading
+   indicators, each a %-YoY line (`charts.indicator_chart`).
+
+Empirical claims (e.g. liquidity leads price) carry **superscript citations** that
+hyperlink to a **References** section — three source-verified papers (Genesove & Han
+2012; Carrillo 2013; Khezr & Menezes 2015, Australian). Anchors use unicode superscripts
+so `factbook.verify()` ignores them. The two core charts, in detail:
 
 1. **How long homes are taking to sell** — median days on market by quarter, sample size
    under every point, quarters under 15 sales drawn hollow. Placed *before* the median
@@ -197,21 +216,12 @@ rather than copper, because copper disappears into the terracotta rooflines here
 
 ## 9. Current batch
 
-Eight articles in `output/`, generated 2026-08-08, all passing every gate:
-
-| Address | Comps | Radius |
-|---|---|---|
-| 20 Heidelberg Circuit, Robina | 6 | 2.5 km (widened) |
-| 16 Cheltenham Drive, Robina | 8 | 2.0 km |
-| 3 Springvale Street, Robina | 8 | 2.0 km |
-| 13 Chantilly Place, Robina | 7 | 2.0 km |
-| 14 Ranier Crescent, Varsity Lakes | 7 | 2.0 km |
-| 11 Placid Court, Varsity Lakes | 8 | 2.0 km |
-| 37 Manakin Avenue, Burleigh Waters | 6 | 2.0 km |
-| 8 Whitehead Drive, Burleigh Waters | 7 | 2.5 km (widened) |
-
-Chosen for spread: all three suburbs, adjusted midpoints $1.15M–$1.98M, comp counts 6–8,
-two needing a widened radius.
+A five-address review set (all three suburbs) was built to `output_review/` and reviewed
+by Will 2026-08-24/25 through the final copy/structure pass: 5 Chantilly Pl & 16
+Cheltenham Dr (Robina), 11 Placid Ct & 14 Ranier Cr (Varsity Lakes), 3 Fimiston Pl
+(Burleigh Waters). All pass every gate. **Run `test_build_smoke.py` before any real
+batch** — it builds across all three suburbs and hard-fails on any unminted figure,
+guardrail trip, or cross-surface disagreement (passing 9/9).
 
 ---
 
@@ -289,16 +299,21 @@ of these, then verified by `factbook.verify()`.
 | `macro_context.json` | national picture, "why it turned", the headline | **human** Cotality `history` + `stats`; `update_macro_context.py` recomputes `derived` (falling-streak, Brisbane flip) — no external fetch | staleness-gated in `load_macro()` |
 | `fundamentals_context.json` | Q3 migration/affordability, Q4 lead/lag figures | **human**, cited to `14_Articles/Market_Research` dossiers | staleness-gated in `load_fundamentals()` |
 | `labour_context.json` | jobs (vacancies/capita, unemployment), the WPI + household-spending charts | `update_labour_context.py` → ABS Data API (Labour Force, Job Vacancies, WPI, Monthly Household Spending Indicator) | self-monitors (Rule 7) |
-| `arbitrage_context.json` | "what the same money buys" (Robina vs Sydney) | `build_arbitrage.py` → onthehouse sold medians + our union median | `retrieved_at` |
-| `comparison_examples.json` | the two real-home Street View cards | `build_comparison_examples.py` → Google Street View (dedicated key) | `retrieved_at` |
+| `arbitrage_context.json` | "what the same money buys" anchor + Sydney price-match, **per suburb** | **human/curated**, `angle` per suburb (land vs lifestyle). Builder emits the old single-suburb shape and is SUPERSEDED | manual |
+| `comparison_examples.json` | the two real-home cards, **per suburb** (GC full-res listing photo + Sydney Street View) | **human/curated** (see §13). Builder SUPERSEDED | manual |
+
+Both `arbitrage_context.json` and `comparison_examples.json` are now **suburb-keyed**
+(`robina` / `varsity_lakes` / `burleigh_waters`) and **hand-curated**, so they are
+excluded from the auto-refresh — `build_arbitrage.py` / `build_comparison_examples.py`
+still write the old single-suburb (Robina) shape and would clobber the curation. Treat
+them like `fundamentals_context.json`: human-maintained.
 
 **Keeping it fresh — `refresh_article_data.py` is the single scheduled entry point.**
-It runs all four refreshers, then **asserts each file is fresh**, and self-reports via
-`job_status` (job `owner_article_data_refresh`). It **raises** (Rule 7b) if a required
-pull failed or a required file is older than its bound — so a dead ABS pull or an
-onthehouse block shows up on the **Fields Systems Health** sheet instead of quietly
-feeding the mail-out last month's numbers. It also carries `uses_provisional_macro`
-through to the heartbeat.
+It runs the **two live refreshers** (`update_macro_context.py` recompute + `update_labour_context.py`),
+then **asserts each file is fresh**, and self-reports via `job_status` (job
+`owner_article_data_refresh`). It **raises** (Rule 7b) if a required pull failed or a
+required file is older than its bound — so a dead ABS pull shows up on the **Fields
+Systems Health** sheet instead of quietly feeding the mail-out last month's numbers.
 
 ```bash
 python3 refresh_article_data.py --no-heartbeat   # ad-hoc, validated end-to-end
@@ -322,17 +337,68 @@ one consumer of it. (This folder is also reachable at
 `14_Articles/Owner_Subject_Article` via symlink.)
 
 ### ⚠ Known gaps before a real mail-out
-1. **Macro history is part-provisional.** `macro_context.json` Apr–Jun 2026 city figures
-   are flagged `provisional` placeholders so the "falling for N months / Brisbane
-   previously positive" headline could be reviewed. `derived.uses_provisional` is true,
-   and **every build prints a warning** until the real Cotality monthly city figures
-   replace them. July 2026 is confirmed and reconciled to the primary release.
-2. **The calibrated "Our reading" is written for the current signs** (home + median
-   rising, DOM lengthening). Before running across many suburbs/times it should branch on
-   each home's actual signs — do not mail a home whose median is falling on this copy.
-3. **Street View / listing imagery** carries Google attribution ("Street View, Google");
-   fine as used. Do not substitute portal listing photos without rights.
+1. **Macro history has one confirmed month.** `macro_context.json` holds July 2026 only
+   (`derived.uses_provisional: false`), reconciled to the primary Cotality release. The
+   headline therefore renders the sourced-safe line ("The southern capitals are falling…");
+   the punchier "falling for N months, Brisbane just turned" form lights up automatically
+   once ≥2 southern-falling months + a Brisbane flip are entered. Provisional placeholders
+   were removed 2026-08-24 (factual-accuracy rule) — never re-add unsourced figures.
+2. **Photo imagery.** Sydney comparison cards use Street View (Google attribution). Gold
+   Coast cards use **our full-res listing photos** (via the `bucket-api` rewrite, §13) —
+   these are the agents'/photographers' **copyright**; their use on a mailed piece is
+   Will's call (flagged 2026-08-25). The GC-glossy vs Sydney-Street-View look is a
+   deliberate source mismatch Will approved.
+3. **onthehouse is flaky.** The Sydney median/comp scan returned 2/20 suburbs on one run
+   and prices vary run-to-run — which is why the Sydney foils are hand-curated, not scanned.
+
+**Resolved this cycle (2026-08-24/25):** the "Our reading" and every directional/comparative
+claim are now **sign-aware** (branch on the home/suburb/DOM actual direction), so nothing
+inverts on an easing suburb; `check_dom_prose_consistency()` fails the build if a DOM trend
+verb disagrees with the chart's year-ago delta; the market-intelligence link and the
+subject-land figure are now per-article (was hardcoded Robina / 907 m²).
 
 ### Monitored jobs this asset registers
 - `owner_article_data_refresh` (this orchestrator) · `owner_article_labour_context` ·
   `owner_article_macro_context`. All on the Process Registry / Systems Health sheet.
+
+---
+
+## 13. The per-suburb comparison ("what the same money buys") — added 2026-08-25
+
+Each suburb's article shows **its own** Gold Coast home against a **price-matched Sydney**
+home, not one Robina example everywhere. Data lives in `arbitrage_context.json` (anchor +
+Sydney match + `angle`) and `comparison_examples.json` (the two card homes with embedded
+photos), both suburb-keyed. `build()` selects the current suburb's slice.
+
+**`angle` drives the framing, and it is honesty-gated:**
+- `land` (Robina, Burleigh Waters) — blocks are bigger than outer Sydney's, so the copy
+  leads on **more land + beach**.
+- `lifestyle` (Varsity Lakes) — blocks are *smaller* (~400 m² vs Seven Hills' 556), so the
+  copy does **not** claim more land; it leads on the lake/coast and lower entry price, and
+  states the smaller block plainly.
+- Wording is **price-aware**: "the same money / near the same price" only when the Sydney
+  comp is within ~10%; otherwise "even $X — less than that — reaches only … m²".
+
+**Curated homes (2026-08-25):** Robina 28 Olympus Dr ↔ The Ponds · Varsity 16 Dartmouth Ct
+$1.30M/400m² ↔ Seven Hills $1.20M/556m²/27km · Burleigh 5 Coral Sea Ct $1.87M/776m² ↔ The
+Ponds $1.53M/352m²/34km. Sydney foils hand-curated (onthehouse too flaky to scan).
+
+### ⚠ Full-res photo retrieval (the working path)
+Gold Coast card photos are our own listing photos at full resolution. **How to get them
+(this is the only reliable path):**
+- `domain_image_urls` / `domain_hero_image_url` render at **150×100** — HMAC-locked
+  thumbnails, useless for a card.
+- `property_images` point at the **decommissioned Azure host** (`…blob.core.windows.net`) —
+  they 404.
+- **Working:** take a `rimh2` thumbnail URL's **final path segment** (the Domain asset
+  token) and fetch `https://bucket-api.domain.com.au/v1/bucket/image/<segment>` → the
+  full-res original (1500–2000 px). This mirrors the website's `toFullResUrl()` (memory
+  [[photo_full_res_serving]]). The facade is **not always image[0]** — eyeball a few and
+  pick the exterior. Photos are embedded as resized (~680 px) data-URIs so the piece is
+  self-contained.
+- Sydney photos are heading-tuned Google Street View (compute camera→house bearing, else
+  you get a streetscape of bins/cars).
+
+To re-curate a pair: pick a sold home near the suburb median with a clean facade, resolve
+its `land_size_sqm`, fetch the full-res facade (above), pick/frame the Sydney foil, and
+hand-edit the two suburb-keyed JSONs. Do **not** run the SUPERSEDED builder scripts.
