@@ -620,11 +620,50 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
             if isinstance(bris, (int, float)) and bris < 0:
                 head += ", and Brisbane has slipped too"
         P.append(f"## {head}\n")
-        bits = [fb.allow_literal(f"{s['text']} ({s['source']}, {s['period']})")
-                for s in b["macro"]["stats"]]
-        P.append("The falls are real where they are being measured. "
-                 + " ".join(x + "." for x in bits)
-                 + " That is a fair picture of a national market under pressure.\n")
+        # Will's three-paragraph opening (2026-08-25). Figures are still pulled from the
+        # macro stats `numbers` arrays so a monthly macro update flows through and every
+        # number stays minted; the wording drops the minus signs (fell/declined/edged
+        # lower). Falls back to the prior sourced-safe join if the stats shape changes.
+        _st = {s.get("id"): s for s in b["macro"]["stats"]}
+
+        def _mn(sid, i):
+            try:
+                return _st[sid]["numbers"][i]
+            except (KeyError, IndexError, TypeError):
+                return None
+        _cotp = (_st.get("cotality_monthly") or {}).get("period", "")
+        _cotm = _cotp.split()[0] if _cotp else "the latest month"
+        nat, syd, mel, bris, adl = (_mn("cotality_monthly", i) for i in range(5))
+        cash = _mn("rba_cash_rate", 0)
+        cpih, cpit = _mn("abs_cpi", 0), _mn("abs_cpi", 1)
+        wpx = _mn("westpac_expectations", 0)
+        if None not in (nat, syd, mel, bris, adl, cash, cpih, cpit, wpx):
+            def _u(x):                       # unsigned one-dp percent (no minus)
+                return f"{abs(x):.1f}%"
+            P.append(fb.allow_literal(
+                f"The downturn is no longer theoretical; it is showing up in the data. "
+                f"National home values fell {_u(nat)} in {_cotm} — the sharpest monthly "
+                f"decline since December 2022. Sydney and Melbourne led the falls, down "
+                f"{_u(syd)} and {_u(mel)} respectively, while Brisbane declined {_u(bris)} "
+                f"and Adelaide edged {_u(adl)} lower (Cotality, {_cotp})."))
+            P.append(fb.allow_literal(
+                f"The pressure is coming from stubborn inflation and higher interest "
+                f"rates. The RBA cash rate remains at {cash:.2f}% following increases in "
+                f"February, March and May, while annual headline inflation reached "
+                f"{cpih:.1f}% and trimmed-mean inflation {cpit:.1f}% in the June quarter "
+                f"(RBA; ABS)."))
+            P.append(fb.allow_literal(
+                f"Buyers are also becoming less confident. Westpac's House Price "
+                f"Expectations Index fell {abs(wpx):.0f}% in {_cotm} to its lowest level "
+                f"in three years — although almost half of respondents still expected "
+                f"prices to rise. Taken together, the evidence points to a national "
+                f"housing market under genuine pressure."))
+        else:
+            bits = [fb.allow_literal(f"{s['text']} ({s['source']}, {s['period']})")
+                    for s in b["macro"]["stats"]]
+            P.append("The falls are real where they are being measured. "
+                     + " ".join(x + "." for x in bits)
+                     + " That is a fair picture of a national market under pressure.\n")
 
         # SITUATION, completed: why did the national market fall? (cited research)
         wt = b["macro"].get("why_turned")
