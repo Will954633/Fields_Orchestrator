@@ -75,14 +75,18 @@ def has_artifact(slug: str, kind: str) -> bool:
         return False
 
 
-def candidates(limit: int | None) -> list[str]:
+def candidates(limit: int | None, suburbs: list[str] | None = None) -> list[str]:
     """Off-market subjects with a real (non-directional) valuation in the
-    measured suburbs — the addresses whose reports are worth pre-warming."""
+    measured suburbs — the addresses whose reports are worth pre-warming.
+
+    `suburbs` restricts and ORDERS the sweep (default: all V5_SUBURBS). Ordering
+    matters when a run may not finish in one sitting — put the suburb you need
+    fresh first so it is rebuilt before the queue is exhausted."""
     from shared.db import get_gold_coast_db
 
     db = get_gold_coast_db()
     out: list[str] = []
-    for suburb in V5_SUBURBS:
+    for suburb in (suburbs or V5_SUBURBS):
         cur = db[suburb].find(
             {
                 "listing_status": {"$nin": ["for_sale", "sold"]},
@@ -116,11 +120,21 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=None, help="max candidates PER suburb")
     ap.add_argument("--kind", default="both", choices=["market-update", "valuation-report", "both"])
     ap.add_argument("--workers", type=int, default=3, help="concurrent addresses (each spawns generators + headless chrome)")
+    ap.add_argument("--suburbs", default=None,
+                    help="comma-separated subset/ordering of measured suburbs (default: all). "
+                         "Earlier suburbs are rebuilt first.")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
 
+    suburbs = None
+    if args.suburbs:
+        suburbs = [s.strip() for s in args.suburbs.split(",") if s.strip()]
+        bad = [s for s in suburbs if s not in V5_SUBURBS]
+        if bad:
+            ap.error(f"unknown suburb(s) {bad}; choose from {V5_SUBURBS}")
+
     with job_run("offmarket_artifact_prewarm", cadence_hours=24, title="Off-Market V5 Artifact Pre-Warm") as beat:
-        slugs = candidates(args.limit)
+        slugs = candidates(args.limit, suburbs)
         kinds = ["market-update", "valuation-report"] if args.kind == "both" else [args.kind]
         counts = {"published": 0, "skipped": 0, "failed": 0}
         done = [0]
