@@ -64,6 +64,11 @@ OFFMARKET_URL = SITE + "/off-market/{slug}"
 PORTRAIT_PATH = ("/home/fields/Feilds_Website/01_Website/src/assets/fields/"
                  "will-simpson-hedcut.webp")
 BYLINE_NAME = "Will Simpson"
+# The Fields wordmark used by the mailer_v2 direct-mail pieces -- reused here so the
+# printed article shares that established visual identity (green/cream/terracotta).
+LOGO_WHITE_PATH = ("/home/fields/Fields_Orchestrator/11_House_Mini_Site/_shared/"
+                   "mailer_v2/assets/fields-logo-white.png")
+TAGLINE = "Smarter with data"
 
 
 # ------------------------------------------------------------------ shared assets
@@ -76,19 +81,30 @@ def qr_png_datauri(url: str, scale: int = 16, error: str = "q") -> str:
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
 
-def _portrait_datauri() -> str | None:
-    """Will's byline portrait as a small embedded PNG (self-contained mail piece)."""
+def _img_datauri(path: str, box: int | None = None) -> str | None:
+    """Embed a local image as a (optionally downscaled) PNG data-URI, or None."""
     try:
         from PIL import Image
     except Exception:                                            # noqa: BLE001
         return None
-    if not os.path.exists(PORTRAIT_PATH):
+    if not os.path.exists(path):
         return None
-    im = Image.open(PORTRAIT_PATH).convert("RGB")
-    im.thumbnail((200, 200), Image.LANCZOS)
+    im = Image.open(path)
+    if im.mode not in ("RGB", "RGBA"):
+        im = im.convert("RGBA")
+    if box:
+        im.thumbnail((box, box), Image.LANCZOS)
     buf = io.BytesIO()
     im.save(buf, format="PNG", optimize=True)
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def _portrait_datauri() -> str | None:
+    return _img_datauri(PORTRAIT_PATH, box=200)
+
+
+def _logo_datauri() -> str | None:
+    return _img_datauri(LOGO_WHITE_PATH)
 
 
 # ------------------------------------------------------------------ url_slug
@@ -128,10 +144,38 @@ def url_resolves(url: str, timeout: int = 20) -> tuple[bool, str]:
     return True, "200"
 
 
-# ------------------------------------------------------------------ QR panel
+# ------------------------------------------------------------------ page furniture
+def brandbar_html() -> str:
+    """Full-bleed green letterhead: Fields wordmark + tagline, matching mailer_v2."""
+    logo = _logo_datauri()
+    mark = (f'<img src="{logo}" alt="Fields">' if logo
+            else '<span class="wordmark">FIELDS</span>')
+    return (f'<div class="brandbar">{mark}'
+            f'<span class="tag">{TAGLINE}<b>.</b></span></div>')
+
+
+def byline_frontqr_html(url: str) -> str:
+    """Sits UNDER the hero aerial (Will's request): Will's byline on the left, the
+    'front-page' QR to this home's off-market page on the right."""
+    portrait = _portrait_datauri()
+    avatar = (f'<img class="byline-avatar" src="{portrait}" alt="{BYLINE_NAME}">'
+              if portrait else "")
+    return f"""
+<div class="underhero">
+  <div class="byline">{avatar}
+    <span class="byline-txt"><span class="byline-name">{BYLINE_NAME}</span>
+      <span class="byline-role">Fields Real Estate</span></span></div>
+  <a class="front-qr" href="{url}" aria-label="Scan for the full data on this address">
+    <span class="front-qr-cap">Scan for<br>your full data</span>
+    <img src="{qr_png_datauri(url)}" alt="QR to this home's off-market page">
+  </a>
+</div>
+"""
+
+
 def qr_panel_html(url: str, address_short: str) -> str:
-    """A print-safe QR call-out. Data-framed, no CTA verbs. Its own page column
-    so it never splits across a page break in the PDF."""
+    """The closing call-out, styled as the mailer_v2 CTA band: full-bleed green,
+    the QR in a warm-paper tile, cream copy. Data-framed, no CTA verb."""
     img = (f'<img class="qr-img" alt="Scan for {address_short}" '
            f'src="{qr_png_datauri(url)}">')
     return f"""
@@ -145,24 +189,6 @@ def qr_panel_html(url: str, address_short: str) -> str:
     <div class="qr-url">{url.replace('https://', '')}</div>
   </div>
 </section>
-"""
-
-
-def byline_frontqr_html(url: str) -> str:
-    """Top-of-piece row: Will's byline on the left, a small 'front-page' QR to this
-    home's off-market page on the right. Sits between the headline and the (now
-    smaller) aerial -- requests 2 and 3."""
-    portrait = _portrait_datauri()
-    avatar = (f'<img class="byline-avatar" src="{portrait}" alt="{BYLINE_NAME}">'
-              if portrait else "")
-    return f"""
-<div class="top-row">
-  <div class="byline">{avatar}<span class="byline-name">{BYLINE_NAME}</span></div>
-  <a class="front-qr" href="{url}" aria-label="Scan for the full data on this address">
-    <img src="{qr_png_datauri(url)}" alt="QR to this home's off-market page">
-    <span class="front-qr-cap">Scan for<br>your full data</span>
-  </a>
-</div>
 """
 
 
@@ -191,64 +217,142 @@ def add_link_qrs(html: str) -> tuple[str, int]:
     return _LINK_A.sub(repl, html), n
 
 
+# The mailer's visual language, mirroring 11_House_Mini_Site/_shared/mailer_v2:
+# warm cream paper, deep forest green blocks, terracotta serif accents. Applied as
+# an OVERRIDE over the article's variable-driven CSS, so the inline-SVG charts,
+# tables and callouts recolour to the palette automatically (they read --accent,
+# --ink, --muted, --rule from these variables).
 MAIL_CSS = """
-/* --- byline + front-page QR (requests 2 & 3) --- */
-.top-row{display:flex;justify-content:space-between;align-items:center;gap:1rem;
- margin:0 0 1.4rem}
-.byline{display:flex;align-items:center;gap:.6rem}
-.byline-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;
- border:1px solid var(--rule)}
-.byline-name{font:600 15px/1.2 -apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);
- border-bottom:1px solid var(--rule);padding-bottom:2px}
-.front-qr{display:flex;align-items:center;gap:.5rem;text-decoration:none;flex:none}
-.front-qr img{width:64px;height:64px;background:#fff;border:1px solid var(--rule);
- border-radius:6px;padding:4px;box-sizing:border-box}
-.front-qr-cap{font:600 10px/1.25 -apple-system,Segoe UI,Roboto,sans-serif;
- letter-spacing:.06em;text-transform:uppercase;color:var(--accent);text-align:left}
-/* --- smaller aerial so the byline row + hero share the first page (request 2) --- */
-.hero img{max-height:300px;object-fit:cover;object-position:center}
-/* --- per-link QR chips for the print edition (request 4) --- */
+:root,:root[data-theme=light],:root[data-theme=dark]{
+ --ink:#2a2a24!important;--muted:#7a8a80!important;--rule:#d8cfc1!important;
+ --bg:#efe8de!important;--accent:#22382c!important;--tint:#fdf3ec!important;
+ --band:#f4ece2!important;
+ --terra:#b76749;--terra-dark:#8d4d33;--green:#22382c;--green-deep:#1b2d24;
+ --sand:#c9b9a0;--paper:#fdf3ec;--sage:#7a8a80}
+@media (prefers-color-scheme:dark){:root{
+ --ink:#2a2a24!important;--muted:#7a8a80!important;--rule:#d8cfc1!important;
+ --bg:#efe8de!important;--accent:#22382c!important;--tint:#fdf3ec!important;
+ --band:#f4ece2!important}}
+*{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+body{background:var(--paper)}
+.wrap{max-width:none;margin:0;padding:0}
+
+/* --- brand letterhead (inset block, rounded) --- */
+.brandbar{background:var(--green);display:flex;align-items:center;
+ justify-content:space-between;padding:5.5mm 7mm;margin:0 0 8mm!important;
+ border-radius:2.5mm}
+.brandbar img{height:8mm;width:auto;display:block}
+.brandbar .wordmark{font:700 20pt/1 Georgia,serif;color:var(--paper);letter-spacing:.02em}
+.brandbar .tag{font:400 13pt/1 Georgia,serif;color:var(--sand);letter-spacing:-.01em}
+.brandbar .tag b{color:#c98a52}
+
+/* --- eyebrow / kicker --- */
+.flag{color:var(--terra-dark)!important;font-weight:700;letter-spacing:.18em;
+ margin-bottom:1rem!important}
+
+/* --- display type: serif headlines, editorial serif body kept --- */
+h1{font-family:Georgia,'Liberation Serif',serif!important;font-weight:400!important;
+ color:var(--green-deep)!important;font-size:2.35rem!important;line-height:1.1!important;
+ letter-spacing:-.01em}
+h1 strong,h1 b{color:var(--terra)!important;font-weight:400!important}
+h2{font-family:Georgia,'Liberation Serif',serif!important;font-weight:400!important;
+ color:var(--green-deep)!important;font-size:1.55rem!important;
+ border-top:1px solid var(--rule)!important;padding-top:1.6rem!important;
+ margin-top:2.8rem!important}
+h2 strong{color:var(--terra)!important;font-weight:400}
+h3{color:var(--green-deep)!important}
+a{color:var(--terra-dark)!important}
+strong{color:var(--green-deep)}
+body>.wrap>p:first-of-type{color:#4a453d!important}
+/* consequence-style lead: the first body paragraph gets a terracotta rule */
+.hero + .underhero + p{border-left:2.5pt solid var(--terra);padding-left:5mm}
+
+/* --- hero aerial --- */
+.hero{border:1px solid var(--rule)!important;border-radius:3mm!important;
+ box-shadow:0 3mm 8mm rgba(34,56,44,.14);margin:0 0 0!important}
+.hero img{max-height:290px;object-fit:cover;object-position:center}
+.hero figcaption{background:var(--paper);color:var(--sage)!important}
+
+/* --- byline + front QR, UNDER the hero --- */
+.underhero{display:flex;justify-content:space-between;align-items:center;gap:1rem;
+ padding:4mm 0 0;margin:3.5mm 0 2rem!important;border-bottom:1px solid var(--rule)}
+.byline{display:flex;align-items:center;gap:.7rem}
+.byline-avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;
+ border:2px solid var(--terra)}
+.byline-txt{display:flex;flex-direction:column;line-height:1.2}
+.byline-name{font:700 15px/1.2 'Liberation Sans',-apple-system,Segoe UI,sans-serif;
+ color:var(--green-deep)}
+.byline-role{font:400 11px/1.3 'Liberation Sans',-apple-system,Segoe UI,sans-serif;
+ letter-spacing:.08em;text-transform:uppercase;color:var(--sage);margin-top:1px}
+.front-qr{display:flex;align-items:center;gap:.55rem;text-decoration:none;flex:none}
+.front-qr img{width:60px;height:60px;background:var(--paper);border:1px solid var(--rule);
+ border-radius:5px;padding:3px;box-sizing:border-box}
+.front-qr-cap{font:700 10px/1.25 'Liberation Sans',-apple-system,Segoe UI,sans-serif;
+ letter-spacing:.06em;text-transform:uppercase;color:var(--terra-dark);text-align:right}
+
+/* --- comparison + tables: warm accents --- */
+.cmp-tag{color:var(--terra-dark)!important}
+.cmp-land{color:var(--terra)!important}
+.cmp-price{color:var(--green-deep)!important}
+.cmp-card{background:var(--paper)!important;box-shadow:0 2mm 5mm rgba(34,56,44,.10)}
+td:nth-child(5){color:var(--green-deep)!important}
+th{border-bottom-color:var(--green)!important}
+
+/* --- per-link QR chips (print edition) --- */
 .lnkqr-wrap{white-space:normal}
-.lnkqr{width:52px;height:52px;vertical-align:middle;margin:0 3px 0 6px;
- background:#fff;border:1px solid var(--rule);border-radius:5px;padding:2px;
+.lnkqr{width:50px;height:50px;vertical-align:middle;margin:0 3px 0 6px;
+ background:var(--paper);border:1px solid var(--rule);border-radius:4px;padding:2px;
  box-sizing:border-box;image-rendering:crisp-edges}
-/* --- end-of-piece off-market QR panel --- */
-.qr-panel{display:grid;grid-template-columns:168px 1fr;gap:1.4rem;align-items:center;
- margin:2.4rem 0 0;padding:1.4rem 1.5rem;border:1px solid var(--rule);border-radius:14px;
- background:var(--tint);break-inside:avoid;page-break-inside:avoid}
-.qr-code{width:168px;height:168px;background:#fff;border:1px solid var(--rule);
- border-radius:8px;padding:6px;box-sizing:border-box}
+
+/* --- closing CTA band (inset green block, mailer_v2 language) --- */
+.qr-panel{display:grid;grid-template-columns:150px 1fr;gap:1.5rem;align-items:center;
+ margin:3rem 0 0!important;padding:8mm 8mm;background:var(--green)!important;
+ border:none!important;border-radius:2.5mm!important;color:var(--paper);
+ break-inside:avoid;page-break-inside:avoid}
+.qr-code{width:150px;height:150px;background:var(--paper);border:none;
+ border-radius:2.5mm;padding:5px;box-sizing:border-box}
 .qr-code .qr-img{width:100%;height:100%;display:block;image-rendering:crisp-edges}
-.qr-kicker{font:700 11px/1 -apple-system,Segoe UI,Roboto,sans-serif;letter-spacing:.12em;
- text-transform:uppercase;color:var(--accent);margin-bottom:.55rem}
-.qr-lede{font:400 15px/1.5 Georgia,'Times New Roman',serif;color:var(--ink);margin:0 0 .7rem}
-.qr-url{font:600 14px/1.3 ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:var(--muted);
- word-break:break-all}
-@media (max-width:30rem){.qr-panel{grid-template-columns:1fr;justify-items:center;text-align:center}
- .top-row{flex-direction:column;align-items:flex-start}}
-@media print{.qr-panel{background:#f6f8f7 !important}
- *{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.qr-kicker{font:700 10pt/1 'Liberation Sans',-apple-system,Segoe UI,sans-serif;
+ letter-spacing:.14em;text-transform:uppercase;color:var(--sand)!important;
+ margin-bottom:.6rem}
+.qr-lede{font:400 13.5pt/1.5 Georgia,'Liberation Serif',serif;color:var(--paper)!important;
+ margin:0 0 .8rem}
+.qr-url{font:700 12pt/1.3 'Liberation Sans',monospace;color:var(--sand)!important;
+ word-break:break-all;letter-spacing:.2pt}
+
+/* --- foot --- */
+.foot{color:var(--sage)!important;border-top-color:var(--rule)!important}
+
+@media print{.hero{box-shadow:none}.cmp-card{box-shadow:none}}
 """
 
 
 def build_mail_html(html: str, url: str, address_short: str) -> tuple[str, int]:
-    """Transform the article HTML into the print/mail edition:
-    byline + front QR (2, 3), smaller aerial (2), per-link QR chips (4), and the
-    end off-market QR panel. Returns (html, n_link_qrs)."""
-    # 1. CSS -- append to the last </style> so our classes win the cascade.
+    """Transform the article HTML into the print/mail edition (mailer_v2 visual
+    language): brandbar, byline + front QR UNDER the hero, per-link QR chips, and the
+    closing green CTA panel. Returns (html, n_link_qrs)."""
+    # 1. CSS -- append to the last </style> so our overrides win the cascade.
     html = html.replace("</style>", MAIL_CSS + "</style>", 1)
 
-    # 2. Byline + front QR, between the headline and the aerial figure.
+    # 2. Brandbar at the very top of the content column.
+    html = html.replace('<div class="flag">', brandbar_html() + '<div class="flag">', 1)
+    # Drop the redundant "Fields &middot; " now that the wordmark is in the brandbar.
+    html = html.replace('<div class="flag">Fields &middot; prepared for this address</div>',
+                        '<div class="flag">Prepared for this address</div>', 1)
+
+    # 3. Byline + front QR, immediately AFTER the hero aerial (Will's request).
     top = byline_frontqr_html(url)
-    if '<figure class="hero">' in html:
-        html = html.replace('<figure class="hero">', top + '<figure class="hero">', 1)
+    hero = re.search(r'<figure class="hero">.*?</figure>', html, re.DOTALL)
+    if hero:
+        html = html[:hero.end()] + top + html[hero.end():]
     else:                       # --no-hero: place it right after the <h1>
         html = re.sub(r"(</h1>)", r"\1" + top, html, count=1)
 
-    # 3. Per-link QR chips (do this BEFORE the panel, whose URL text is not an <a>).
+    # 4. Per-link QR chips (before the panel, whose URL text is not an <a>).
     html, n_links = add_link_qrs(html)
 
-    # 4. End off-market QR panel, just inside the closing .wrap div.
+    # 5. Closing CTA panel, just inside the closing .wrap div.
     marker = "</div></body></html>"
     if marker not in html:
         raise RuntimeError("could not find wrap-close marker to inject QR panel")
@@ -283,8 +387,11 @@ def html_to_pdf(html_path: str, pdf_path: str):
                 (i.complete && i.naturalWidth) ? Promise.resolve()
                     : i.decode().catch(() => {})));
         }""")
+        # Uniform page margins keep body copy off the sheet edge on every one of the
+        # ~9 flowed pages; the brandbar and CTA are inset blocks (not full-bleed),
+        # which a long multi-page document handles far more predictably than bleed.
         page.pdf(path=pdf_path, format="A4", print_background=True,
-                 margin={"top": "14mm", "bottom": "14mm", "left": "14mm", "right": "14mm"})
+                 margin={"top": "13mm", "bottom": "13mm", "left": "13mm", "right": "13mm"})
         browser.close()
 
 
