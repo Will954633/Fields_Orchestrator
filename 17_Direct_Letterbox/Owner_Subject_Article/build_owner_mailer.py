@@ -60,6 +60,36 @@ import build_owner_article as boa  # noqa: E402  (sets up shared/ path, SITE, et
 SITE = boa.SITE
 OFFMARKET_URL = SITE + "/off-market/{slug}"
 
+# Will's WSJ-style hedcut, the same portrait the website byline uses.
+PORTRAIT_PATH = ("/home/fields/Feilds_Website/01_Website/src/assets/fields/"
+                 "will-simpson-hedcut.webp")
+BYLINE_NAME = "Will Simpson"
+
+
+# ------------------------------------------------------------------ shared assets
+def qr_png_datauri(url: str, scale: int = 16, error: str = "q") -> str:
+    """A scannable QR as a base64 PNG data-URI. border=4 is the mandatory quiet zone;
+    a raster PNG (not inline SVG) scales predictably inside a fixed print box."""
+    buf = io.BytesIO()
+    segno.make(url, error=error).save(buf, kind="png", scale=scale, border=4,
+                                      dark="#15171a")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def _portrait_datauri() -> str | None:
+    """Will's byline portrait as a small embedded PNG (self-contained mail piece)."""
+    try:
+        from PIL import Image
+    except Exception:                                            # noqa: BLE001
+        return None
+    if not os.path.exists(PORTRAIT_PATH):
+        return None
+    im = Image.open(PORTRAIT_PATH).convert("RGB")
+    im.thumbnail((200, 200), Image.LANCZOS)
+    buf = io.BytesIO()
+    im.save(buf, format="PNG", optimize=True)
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
 
 # ------------------------------------------------------------------ url_slug
 def resolve_slug(client, address, suburb=None):
@@ -102,15 +132,8 @@ def url_resolves(url: str, timeout: int = 20) -> tuple[bool, str]:
 def qr_panel_html(url: str, address_short: str) -> str:
     """A print-safe QR call-out. Data-framed, no CTA verbs. Its own page column
     so it never splits across a page break in the PDF."""
-    # A high-res PNG data-URI, not inline SVG: an <img> scales predictably inside
-    # the print box where an SVG's intrinsic size fought the flex container and
-    # clipped. error='q' (25% recovery) survives a fold or a coffee ring on posted
-    # mail; border=4 is the mandatory 4-module quiet zone; scale=16 -> ~660px, which
-    # downscales to the ~40mm printed box razor-sharp.
-    buf = io.BytesIO()
-    segno.make(url, error="q").save(buf, kind="png", scale=16, border=4, dark="#15171a")
-    data = base64.b64encode(buf.getvalue()).decode("ascii")
-    img = f'<img class="qr-img" alt="Scan for {address_short}" src="data:image/png;base64,{data}">'
+    img = (f'<img class="qr-img" alt="Scan for {address_short}" '
+           f'src="{qr_png_datauri(url)}">')
     return f"""
 <section class="qr-panel" aria-label="Off-market page for this address">
   <div class="qr-code">{img}</div>
@@ -125,7 +148,71 @@ def qr_panel_html(url: str, address_short: str) -> str:
 """
 
 
-QR_CSS = """
+def byline_frontqr_html(url: str) -> str:
+    """Top-of-piece row: Will's byline on the left, a small 'front-page' QR to this
+    home's off-market page on the right. Sits between the headline and the (now
+    smaller) aerial -- requests 2 and 3."""
+    portrait = _portrait_datauri()
+    avatar = (f'<img class="byline-avatar" src="{portrait}" alt="{BYLINE_NAME}">'
+              if portrait else "")
+    return f"""
+<div class="top-row">
+  <div class="byline">{avatar}<span class="byline-name">{BYLINE_NAME}</span></div>
+  <a class="front-qr" href="{url}" aria-label="Scan for the full data on this address">
+    <img src="{qr_png_datauri(url)}" alt="QR to this home's off-market page">
+    <span class="front-qr-cap">Scan for<br>your full data</span>
+  </a>
+</div>
+"""
+
+
+# Small per-link QR for the printed edition: a reader who cannot click needs a way
+# to reach each linked page. error='m' keeps a ~55-char URL to a ~33-module code
+# that stays scannable at the ~13mm printed size.
+_LINK_A = re.compile(r'<a href="(https?://[^"]+)"([^>]*)>(.*?)</a>', re.DOTALL)
+
+
+def add_link_qrs(html: str) -> tuple[str, int]:
+    """Append a small scannable QR immediately after every external hyperlink so the
+    printed piece is self-navigable. In-document #ref anchors are left untouched."""
+    cache: dict[str, str] = {}
+    n = 0
+
+    def repl(m):
+        nonlocal n
+        href, attrs, text = m.group(1), m.group(2), m.group(3)
+        if href not in cache:
+            cache[href] = qr_png_datauri(href, scale=12, error="m")
+        n += 1
+        return (f'<span class="lnkqr-wrap"><a href="{href}"{attrs}>{text}</a>'
+                f'<img class="lnkqr" src="{cache[href]}" '
+                f'alt="QR to {href}"></span>')
+
+    return _LINK_A.sub(repl, html), n
+
+
+MAIL_CSS = """
+/* --- byline + front-page QR (requests 2 & 3) --- */
+.top-row{display:flex;justify-content:space-between;align-items:center;gap:1rem;
+ margin:0 0 1.4rem}
+.byline{display:flex;align-items:center;gap:.6rem}
+.byline-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;
+ border:1px solid var(--rule)}
+.byline-name{font:600 15px/1.2 -apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);
+ border-bottom:1px solid var(--rule);padding-bottom:2px}
+.front-qr{display:flex;align-items:center;gap:.5rem;text-decoration:none;flex:none}
+.front-qr img{width:64px;height:64px;background:#fff;border:1px solid var(--rule);
+ border-radius:6px;padding:4px;box-sizing:border-box}
+.front-qr-cap{font:600 10px/1.25 -apple-system,Segoe UI,Roboto,sans-serif;
+ letter-spacing:.06em;text-transform:uppercase;color:var(--accent);text-align:left}
+/* --- smaller aerial so the byline row + hero share the first page (request 2) --- */
+.hero img{max-height:300px;object-fit:cover;object-position:center}
+/* --- per-link QR chips for the print edition (request 4) --- */
+.lnkqr-wrap{white-space:normal}
+.lnkqr{width:52px;height:52px;vertical-align:middle;margin:0 3px 0 6px;
+ background:#fff;border:1px solid var(--rule);border-radius:5px;padding:2px;
+ box-sizing:border-box;image-rendering:crisp-edges}
+/* --- end-of-piece off-market QR panel --- */
 .qr-panel{display:grid;grid-template-columns:168px 1fr;gap:1.4rem;align-items:center;
  margin:2.4rem 0 0;padding:1.4rem 1.5rem;border:1px solid var(--rule);border-radius:14px;
  background:var(--tint);break-inside:avoid;page-break-inside:avoid}
@@ -137,22 +224,36 @@ QR_CSS = """
 .qr-lede{font:400 15px/1.5 Georgia,'Times New Roman',serif;color:var(--ink);margin:0 0 .7rem}
 .qr-url{font:600 14px/1.3 ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:var(--muted);
  word-break:break-all}
-@media (max-width:30rem){.qr-panel{grid-template-columns:1fr;justify-items:center;text-align:center}}
-@media print{.qr-panel{background:#f6f8f7 !important;-webkit-print-color-adjust:exact;
- print-color-adjust:exact}}
+@media (max-width:30rem){.qr-panel{grid-template-columns:1fr;justify-items:center;text-align:center}
+ .top-row{flex-direction:column;align-items:flex-start}}
+@media print{.qr-panel{background:#f6f8f7 !important}
+ *{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 """
 
 
-def inject_qr(html: str, url: str, address_short: str) -> str:
-    """Insert the QR panel just inside the closing .wrap div, and its CSS into <head>."""
-    panel = qr_panel_html(url, address_short)
-    # CSS: append to the last </style> so it wins the cascade for our own classes.
-    html = html.replace("</style>", QR_CSS + "</style>", 1)
-    # Panel: before the .wrap-closing </div> that precedes </body>.
+def build_mail_html(html: str, url: str, address_short: str) -> tuple[str, int]:
+    """Transform the article HTML into the print/mail edition:
+    byline + front QR (2, 3), smaller aerial (2), per-link QR chips (4), and the
+    end off-market QR panel. Returns (html, n_link_qrs)."""
+    # 1. CSS -- append to the last </style> so our classes win the cascade.
+    html = html.replace("</style>", MAIL_CSS + "</style>", 1)
+
+    # 2. Byline + front QR, between the headline and the aerial figure.
+    top = byline_frontqr_html(url)
+    if '<figure class="hero">' in html:
+        html = html.replace('<figure class="hero">', top + '<figure class="hero">', 1)
+    else:                       # --no-hero: place it right after the <h1>
+        html = re.sub(r"(</h1>)", r"\1" + top, html, count=1)
+
+    # 3. Per-link QR chips (do this BEFORE the panel, whose URL text is not an <a>).
+    html, n_links = add_link_qrs(html)
+
+    # 4. End off-market QR panel, just inside the closing .wrap div.
     marker = "</div></body></html>"
     if marker not in html:
         raise RuntimeError("could not find wrap-close marker to inject QR panel")
-    return html.replace(marker, panel + marker, 1)
+    html = html.replace(marker, qr_panel_html(url, address_short) + marker, 1)
+    return html, n_links
 
 
 # ------------------------------------------------------------------ PDF render
@@ -172,6 +273,16 @@ def html_to_pdf(html_path: str, pdf_path: str):
         # Force the light print palette regardless of the renderer's theme.
         page.emulate_media(media="print", color_scheme="light")
         page.goto(file_url, wait_until="networkidle")
+        # Force every image to load and finish decoding before printing. Without
+        # this, `loading="lazy"` images below the fold (the comparison-home cards)
+        # never enter the viewport in a headless print snapshot and render blank.
+        page.evaluate("""async () => {
+            const imgs = Array.from(document.images);
+            imgs.forEach(i => { i.loading = 'eager'; });
+            await Promise.all(imgs.map(i =>
+                (i.complete && i.naturalWidth) ? Promise.resolve()
+                    : i.decode().catch(() => {})));
+        }""")
         page.pdf(path=pdf_path, format="A4", print_background=True,
                  margin={"top": "14mm", "bottom": "14mm", "left": "14mm", "right": "14mm"})
         browser.close()
@@ -214,7 +325,7 @@ def build_mailer(address, suburb=None, out_dir=None, variant="report",
     with open(r["html"], encoding="utf-8") as fh:
         html = fh.read()
 
-    mail_html = inject_qr(html, offmarket, address_short)
+    mail_html, n_link_qrs = build_mail_html(html, offmarket, address_short)
     mail_html_path = os.path.join(out_dir, f"{article_slug}.mailer.html")
     with open(mail_html_path, "w", encoding="utf-8") as fh:
         fh.write(mail_html)
@@ -223,7 +334,7 @@ def build_mailer(address, suburb=None, out_dir=None, variant="report",
     html_to_pdf(mail_html_path, pdf_path)
 
     r.update({"mailer_html": mail_html_path, "pdf": pdf_path,
-              "offmarket_url": offmarket, "url_slug": slug})
+              "offmarket_url": offmarket, "url_slug": slug, "n_link_qrs": n_link_qrs})
     return r
 
 
