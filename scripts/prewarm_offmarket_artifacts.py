@@ -10,6 +10,7 @@ Mirrors scripts/prewarm_offmarket_covers.py. Rule-7 self-monitored.
 from __future__ import annotations
 
 import argparse
+import functools
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -31,10 +32,47 @@ BLOB_ROOT = Path("/data/blobs")
 V5_SUBURBS = ["robina", "burleigh_waters", "varsity_lakes"]
 
 
+# A blob is only "warm" if it is at least as new as the generator that produced
+# it. Comparing the blob's mtime against the newest source file in each kind's
+# generator directory means a copy edit, a data-context refresh, or a code change
+# automatically invalidates every stale artifact on the next run — without which
+# a finalised copy change stays frozen behind pre-built blobs forever (all 8,050
+# market-update artifacts sat at an Aug-21 build after the 2026-08-25 rewrite).
+_GEN_DIRS = {
+    "market-update": REPO / "17_Direct_Letterbox" / "Owner_Subject_Article",
+    "valuation-report": REPO / "16_Valuation" / "report_page",
+}
+
+
+@functools.lru_cache(maxsize=None)
+def _source_mtime(kind: str) -> float:
+    """Newest mtime among the *.py / *.json source files of this kind's
+    generator. Cached: the sources don't change during a run."""
+    gen_dir = _GEN_DIRS.get(kind)
+    if not gen_dir or not gen_dir.exists():
+        return 0.0
+    mtimes = [
+        p.stat().st_mtime
+        for pat in ("*.py", "*.json")
+        for p in gen_dir.glob(pat)
+        if p.is_file()
+    ]
+    return max(mtimes) if mtimes else 0.0
+
+
+def _blob_path(slug: str, kind: str) -> Path:
+    sub = "market-update" if kind == "market-update" else "valuation-report"
+    return BLOB_ROOT / sub / f"{slug}.html"
+
+
 def has_artifact(slug: str, kind: str) -> bool:
-    if kind == "market-update":
-        return (BLOB_ROOT / "market-update" / f"{slug}.html").exists()
-    return (BLOB_ROOT / "valuation-report" / f"{slug}.html").exists()
+    """True only if the blob exists AND is newer than the generator sources.
+    A stale (pre-copy-change) blob reports False so it is rebuilt."""
+    blob = _blob_path(slug, kind)
+    try:
+        return blob.stat().st_mtime >= _source_mtime(kind)
+    except FileNotFoundError:
+        return False
 
 
 def candidates(limit: int | None) -> list[str]:
