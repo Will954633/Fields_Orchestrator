@@ -4,12 +4,12 @@
 **You handle the conversation** in the JustCall inbox. Structure: value first, one ask at a time.
 
 ## The 3-beat arc
-1. **Deliver** — give the promised thing (auto first SMS does this).
-2. **Understand** — one question at a time across the thread: suburbs · hard budget · sell-first? · timeframe · ready to inspect.
+1. **Deliver** — the **auto first SMS now delivers the full breakdown** (property details + comparable-sales figures + property-page link + one qualifying question). No "reply YES" step — they already opted in on the form.
+2. **Understand** — from her first reply on, one question at a time: suburbs · hard budget · sell-first? · timeframe · ready to inspect.
 3. **Advance** — next concrete step: send matched homes · book an inspection · introduce to the appointed agent (conjunction).
 
 ## Snippets for common inbounds (compliance-safe — no advice, no "buyer's agent")
-- **"YES / send it"** (Value Gap — 2 Leafy Close): *"Great, {first}. 2 Leafy Close, Burleigh Waters is asking $1,389,000. Our read of eight recent comparable sales points to about $1,600,000 — so the asking sits roughly $210,000 below where the comps land. It's a comparable-sales estimate with a range, not a formal valuation — the full side-by-side of the eight sales and how we adjusted each is here: fieldsestate.com.au/property/2-leafy-close-burleigh-waters-f62b. Which suburbs are you focused on?"* (dollar figures OK here — 1:1 + the linked page shows the methodology/±range disclaimer, per rule 5)
+- **Her first reply** (she answers the suburbs question, or asks something): the breakdown + figures + link already went in the automated first SMS — you're straight into the conversation. Move to Understand → Advance.
 - **"Is it good value?"** *"The comparable sales point higher than the asking — I'll show you the like-for-like and you can judge. Want it?"* (never "yes, buy it")
 - **"What's your fee?"** *"Nothing to you as the buyer — we're paid by the selling side under a conjunction arrangement, so our read stays independent."*
 - **"Are you the agent?"** *"No — we're not the appointed selling agent. We analyse the whole market for buyers."*
