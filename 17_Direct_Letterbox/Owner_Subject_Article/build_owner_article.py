@@ -79,6 +79,13 @@ def _link(key: str) -> str:
     title, url = ARTICLE_LINKS[key]
     return f"[{title}]({url})"
 
+
+def _intel_link(suburb_display: str) -> str:
+    """Market-intelligence link for the ARTICLE's suburb, not a hardcoded one. The
+    site routes /market-intelligence/<Hyphenated-Suburb> (see suburbNormalize)."""
+    slug = suburb_display.replace(" ", "-")
+    return f"[{suburb_display} market intelligence]({SITE}/market-intelligence/{slug})"
+
 # Design envelope. Outside this band the method cannot go -- a weighted mean of
 # adjusted comparables can never exceed its priciest comparable, and the pool is
 # dominated by mid-market sales. See memory valuation_design_envelope.
@@ -1261,7 +1268,8 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
     P.append("None of that has happened yet. These are simply the dials worth watching.\n")
     P.append(
         f"To go further: {_link('fundamentals')} on what the Gold Coast market rests on, "
-        f"and {_link('robina_intel')} for how {b['suburb_display']} is trading right now.\n")
+        f"and {_intel_link(b['suburb_display'])} for how {b['suburb_display']} is trading "
+        f"right now.\n")
 
     # ==== limits ===============================================================
     P.append("## What this can't tell you\n")
