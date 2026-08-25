@@ -46,9 +46,11 @@ REFRESHERS = [
      "derived.computed_at", 40, True),
     ("update_labour_context.py", ["--no-heartbeat"], "labour_context.json",
      "retrieved_at", 45, True),
-    ("build_arbitrage.py", [], "arbitrage_context.json", "retrieved_at", 60, False),
-    ("build_comparison_examples.py", [], "comparison_examples.json", "retrieved_at",
-     120, False),
+    # arbitrage_context.json + comparison_examples.json are now SUBURB-KEYED and
+    # hand-curated (specific homes, hand-picked photos per suburb), so they are NOT
+    # auto-regenerated -- build_arbitrage.py / build_comparison_examples.py still emit the
+    # old single-suburb (Robina) shape and would clobber the curation. Treated as
+    # human-maintained, like fundamentals_context.json. Refresh them by re-curating.
 ]
 
 

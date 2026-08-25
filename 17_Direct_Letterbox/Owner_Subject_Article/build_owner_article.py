@@ -499,17 +499,19 @@ def comparison_cards(cmp: dict, fb) -> str:
         price = fb.money(f"cmp_{side}_price", home["price"])
         land = fb.num(f"cmp_{side}_land", home["land"])
         beds = fb.num(f"cmp_{side}_beds", home["beds"])
-        baths = fb.num(f"cmp_{side}_baths", home["baths"])
+        facts = f"{beds} bed"
+        if home.get("baths"):                       # Sydney cards carry no bath count
+            facts += f' &middot; {fb.num(f"cmp_{side}_baths", home["baths"])} bath'
+        facts += f' &middot; <b class="cmp-land">{land} m&sup2;</b>'
         return (
             f'<div class="cmp-card">'
             f'<div class="cmp-tag">{_esc_html(home["label"])}</div>'
             f'<img class="cmp-img" src="{home["photo_data_uri"]}" '
-            f'alt="Street view of a home in {_esc_html(home["suburb"])}" loading="lazy">'
+            f'alt="A home in {_esc_html(home["suburb"])}" loading="lazy">'
             f'<div class="cmp-body">'
             f'<div class="cmp-suburb">{_esc_html(home["suburb"])}</div>'
             f'<div class="cmp-price">{price}</div>'
-            f'<div class="cmp-facts">{beds} bed &middot; {baths} bath &middot; '
-            f'<b class="cmp-land">{land} m&sup2;</b></div>'
+            f'<div class="cmp-facts">{facts}</div>'
             f'<div class="cmp-ctx">{_esc_html(home["context"])}</div>'
             f'</div></div>')
     gc, syd = cmp.get("gc"), cmp.get("syd")
@@ -953,21 +955,38 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
             P.append("So why are people moving from Sydney to the Gold Coast?")
 
         if arb and arb.get("headline_comparison"):
-            r, h = arb["robina"], arb["headline_comparison"]
-            rob = (f"{b['suburb_display']}'s median house, about "
-                   f"{fb.money('arb_rob_price', r['median_price'])}, sits on a "
-                   f"{fb.num('arb_rob_land', r['median_land'])} m² block; this home on "
-                   f"{fb.num('arb_subj_land', r['subject_land'])} m², "
-                   f"{fb.num('arb_beach', r['beach_km'], dp=1)} km from the beach "
-                   f"(Fields records). ")
-            syd = fb.allow_literal(
-                f"The same money in Sydney is below the city's median house price. Where "
-                f"it buys a house at all, it is an outer estate: in {h['suburb']}, about "
-                f"{h['dist_cbd_km']:.0f} km from the CBD, the median sold house is around "
-                f"${h['median_price']:,} on about {h['median_land']} m² (public sold "
-                f"records, {h['n_priced']} sales). ")
-            P.append(rob + syd + "The blocks are the fact; the beach and the commute are "
-                     "the context.\n")
+            # arb is now this SUBURB's slice; angle drives the frame. subject_land is the
+            # actual subject's block (feat), not a hardcoded constant (old bug: every
+            # Robina article claimed 907 m²).
+            h = arb["headline_comparison"]
+            angle = arb.get("angle", "land")
+            subj_land = feat.get("land_size_sqm")
+            beach = fb.num("arb_beach", arb["beach_km"], dp=1)
+            med_price = fb.money("arb_gc_price", arb["median_price"])
+            med_land = fb.num("arb_gc_land", arb["median_land"])
+            syd_price = fb.money("arb_syd_price", h["median_price"])
+            syd_land = fb.num("arb_syd_land", h["median_land"])
+            syd_dist = fb.num("arb_syd_cbd", h["dist_cbd_km"], dp=0)
+            syd_line = (f"The same money in Sydney reaches only the outer fringe: in "
+                        f"{h['suburb']}, about {syd_dist} km from the CBD, a house sells for "
+                        f"around {syd_price} on about {syd_land} m² (public sold records). ")
+            if angle == "lifestyle":
+                # smaller blocks here -- do NOT claim more land; lead on lake/coast and price
+                P.append(
+                    f"At about {med_price}, a {b['suburb_display']} house costs less than "
+                    f"the Gold Coast's pricier suburbs, and it sits in a lake suburb about "
+                    f"{beach} km from the beach. " + syd_line
+                    + f"The block here is smaller — about {med_land} m² against {syd_land} "
+                    f"m² there — so this is not a land story but a lifestyle and location "
+                    f"one: the lake and the coast against a long commute.\n")
+            else:
+                this_home = (f"; this home on {fb.num('arb_subj_land', int(subj_land))} m²"
+                             if subj_land else "")
+                P.append(
+                    f"{b['suburb_display']}'s median house, about {med_price}, sits on a "
+                    f"{med_land} m² block{this_home}, {beach} km from the beach (our "
+                    f"records). " + syd_line
+                    + "The blocks are the fact; the beach and the commute are the context.\n")
             cmp_ex = b.get("comparison")
             if cmp_ex:
                 cards = comparison_cards(cmp_ex, fb)
@@ -1671,8 +1690,9 @@ def build(address, suburb=None, out_dir=None, want_html=True,
         "trajectory": trajectory,
         "fundamentals": load_fundamentals(),
         "labour": _load_json("labour_context.json"),
-        "arbitrage": _load_json("arbitrage_context.json"),
-        "comparison": _load_json("comparison_examples.json"),
+        # arbitrage + comparison are now suburb-keyed; select this suburb's slice.
+        "arbitrage": (_load_json("arbitrage_context.json") or {}).get(suburb_key),
+        "comparison": (_load_json("comparison_examples.json") or {}).get(suburb_key),
     }
 
     md, fb, charts = compose(bundle, variant)

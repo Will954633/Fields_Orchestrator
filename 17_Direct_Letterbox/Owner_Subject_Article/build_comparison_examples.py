@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# ⚠ SUPERSEDED (2026-08-25): arbitrage_context.json / comparison_examples.json are now
+#   SUBURB-KEYED and hand-curated (specific homes + hand-picked photos per suburb). This
+#   script still writes the OLD single-suburb (Robina) shape and WILL clobber the curation.
+#   Do not run it as-is; update it to emit the suburb-keyed structure first.
 """
 build_comparison_examples.py -- the two real homes for the "what the same money
 buys" side-by-side (Gold Coast left, Sydney right).
