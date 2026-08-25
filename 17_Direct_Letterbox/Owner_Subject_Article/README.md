@@ -402,3 +402,54 @@ Gold Coast card photos are our own listing photos at full resolution. **How to g
 To re-curate a pair: pick a sold home near the suburb median with a clean facade, resolve
 its `land_size_sqm`, fetch the full-res facade (above), pick/frame the Sydney foil, and
 hand-edit the two suburb-keyed JSONs. Do **not** run the SUPERSEDED builder scripts.
+
+---
+
+## 14. The printable mailer branch — `build_owner_mailer.py` (added 2026-08-26)
+
+`build_owner_mailer.py` is a **thin branch** over `build_owner_article.build()` that emits
+a **print-ready A4 PDF** carrying a **QR code to this home's `/off-market/<url_slug>`
+page** — the asset we actually post to the homeowner. It re-implements none of the data,
+copy, factbook or guardrail logic: it *calls* `build()`, so every gate in §3–§6 still runs
+and still hard-fails. It adds only what a mailed sheet needs:
+
+```bash
+python3 build_owner_mailer.py --address "20 Heidelberg Circuit, Robina"
+python3 build_owner_mailer.py --address "..." --variant anchor --out-dir ./mail_batch
+```
+
+Outputs to `./output_mail/` (override `--out-dir`): `<slug>.pdf` (the mail asset),
+`<slug>.mailer.html` (the PDF's source, article HTML + QR panel), plus everything
+`build()` already writes.
+
+**The QR target** is `https://fieldsestate.com.au/off-market/<url_slug>`, where `url_slug`
+is the **stored** field on the property doc (route `/off-market/:slug`, resolved by the
+website loader). This is the campaign entry point in §1: the reader scans, lands on our
+page for their own address, and engagement there is what classifies them as a lead.
+
+**Two guards on top of `build()`'s** (both fail the build; §8 spirit — a broken asset on
+unsolicited mail is worse than none):
+1. **No `url_slug` → no mail.** We refuse to print a QR to a page that cannot exist.
+2. **Live resolve check.** By default the off-market URL is fetched and must return 200 as
+   a genuine off-market report before the QR is printed. `--skip-url-check` = dev only.
+
+**Why the QR does not break the no-CTA rule (§3):** it points at the reader's **own data**,
+not an offer. The panel copy stays data-framed — kicker *"The full data set for this
+address"*, one neutral line, and the printed URL as a fallback. No "sell", "appraisal",
+"contact", no urgency. ⚠ It is nonetheless the **one outward-pointing element** on an
+otherwise CTA-free piece — flagged for Will 2026-08-26.
+
+**Rendering & QR technique (scars):**
+- PDF is rendered by **headless Chrome** (Playwright → `google-chrome`), forced to the
+  `print` + `light` media, so the article's own `@media print` stylesheet, inline-SVG
+  charts and data-URI photos come out exactly as designed. weasyprint mangles
+  `aspect-ratio` / CSS-vars / our SVG here — do not swap it in.
+- QR is a **PNG data-URI**, *not* inline SVG: the SVG's intrinsic `width/height` fought the
+  flex box and the code rendered **clipped**. `error='q'` (25% recovery, survives a fold),
+  `border=4` (the **mandatory 4-module quiet zone** — without it the code will not scan).
+- **Verification that matters:** decode the QR back out of the *rendered PDF* (pyzbar), not
+  just the source — proves it is physically scannable at print size. Confirmed for Robina
+  and Burleigh Waters, each to its own correct per-address URL.
+
+**Not done:** batch mode / smoke gate for the mailer (use the batch pattern in §9 around
+it), and aerial compression (§11.3) — the PDF inherits the ~1.6MB aerial (~1.2MB PDF).
