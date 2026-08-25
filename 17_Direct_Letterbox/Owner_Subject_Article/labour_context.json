@@ -120,7 +120,7 @@
     }
   },
   "_comment": "COMPUTED by update_labour_context.py from the ABS Data API. Do not hand-edit. Every figure is real ABS data; cite ABS Labour Force (6202.0) for unemployment/employment and Job Vacancies (6354.0) for vacancies, with the period shown.",
-  "retrieved_at": "2026-08-24T01:29:25+00:00",
+  "retrieved_at": "2026-08-24T07:29:02+00:00",
   "source": {
     "unemployment": "ABS Labour Force, Australia (cat. 6202.0)",
     "employment": "ABS Labour Force, Australia (cat. 6202.0)",
