@@ -518,10 +518,13 @@ def comparison_cards(cmp: dict, fb) -> str:
     if not (gc and syd and gc.get("photo_data_uri") and syd.get("photo_data_uri")):
         return ""
     attr = _esc_html(cmp.get("attribution", "Street View, Google"))
+    # only claim "near the same price" when the two are within ~10%
+    near = min(gc["price"], syd["price"]) >= max(gc["price"], syd["price"]) * 0.90
+    lead = "Two real homes, near the same price: a " if near else "Two real homes: a "
     return (
         '<figure class="cmp">'
         f'<div class="cmp-grid">{card("gc", gc)}{card("syd", syd)}</div>'
-        f'<figcaption class="cmp-cap">Two real homes, near the same price: a '
+        f'<figcaption class="cmp-cap">{lead}'
         f'{fb.num("cmp_gc_land2", gc["land"])} m&sup2; block on the Gold Coast against '
         f'a {fb.num("cmp_syd_land2", syd["land"])} m&sup2; block in Sydney. Photos: '
         f'{attr}. Sold-price facts from {_esc_html(gc["source"])} and '
@@ -967,9 +970,18 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
             syd_price = fb.money("arb_syd_price", h["median_price"])
             syd_land = fb.num("arb_syd_land", h["median_land"])
             syd_dist = fb.num("arb_syd_cbd", h["dist_cbd_km"], dp=0)
-            syd_line = (f"The same money in Sydney reaches only the outer fringe: in "
-                        f"{h['suburb']}, about {syd_dist} km from the CBD, a house sells for "
-                        f"around {syd_price} on about {syd_land} m² (public sold records). ")
+            # Price-aware: only say "the same money" when the Sydney comp is within ~10%
+            # of the local anchor. When it is materially cheaper, say so -- less money in
+            # Sydney still buys far less land, further out (a stronger contrast, kept honest).
+            if h["median_price"] >= arb["median_price"] * 0.90:
+                syd_line = (f"The same money in Sydney reaches only the outer fringe: in "
+                            f"{h['suburb']}, about {syd_dist} km from the CBD, a house sells "
+                            f"for around {syd_price} on about {syd_land} m² (public sold "
+                            f"records). ")
+            else:
+                syd_line = (f"In Sydney, even {syd_price} — less than that — reaches only "
+                            f"the outer fringe: in {h['suburb']}, about {syd_dist} km from "
+                            f"the CBD, that buys about {syd_land} m² (public sold records). ")
             if angle == "lifestyle":
                 # smaller blocks here -- do NOT claim more land; lead on lake/coast and price
                 P.append(
