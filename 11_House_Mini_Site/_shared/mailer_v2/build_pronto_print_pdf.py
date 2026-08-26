@@ -175,14 +175,16 @@ def qr_url(page):
     script cannot tell those apart, so it refuses either way.
     """
     det = cv2.QRCodeDetector()
-    cta = fitz.Rect(TRIM.x0, TRIM.y0 + TRIM_H * 0.72, TRIM.x0 + TRIM_W * 0.35, TRIM.y1)
+    # Full-width bottom band so the retry-clip catches both artwork types: the
+    # mini-site QR sits bottom-LEFT, the owner teaser's bottom-RIGHT.
+    cta = fitz.Rect(TRIM.x0, TRIM.y0 + TRIM_H * 0.72, TRIM.x1, TRIM.y1)
     for clip in (None, cta):
         for dpi in (200, 300, 400, 600):
             pix = page.get_pixmap(dpi=dpi, clip=clip)
             img = cv2.imdecode(np.frombuffer(pix.tobytes("png"), np.uint8),
                                cv2.IMREAD_COLOR)
             d, *_ = det.detectAndDecode(img)
-            if d and "/your-home/" in d:
+            if d and ("/your-home/" in d or "/off-market/" in d):
                 return d
     return None
 
@@ -251,11 +253,17 @@ def main():
         url = qr_url(doc[i])
         if not url:
             problems.append((fname, "QR did not decode in combined PDF")); continue
-        if "k=" not in url:
-            problems.append((fname, "QR carries no link key")); continue
-        k = url.split("k=")[1].split("&")[0].split("#")[0]
-        if k != report_link_key(slug):
-            problems.append((fname, f"QR key WRONG ({k})")); continue
+        if "/off-market/" in url:
+            # Owner teaser: QR is /off-market/<slug>?from=mailer -- no report-link
+            # key, so verify the slug in the URL matches this piece's slug instead.
+            if f"/off-market/{slug}" not in url:
+                problems.append((fname, f"QR slug WRONG ({url})")); continue
+        else:
+            if "k=" not in url:
+                problems.append((fname, "QR carries no link key")); continue
+            k = url.split("k=")[1].split("&")[0].split("#")[0]
+            if k != report_link_key(slug):
+                problems.append((fname, f"QR key WRONG ({k})")); continue
         checked += 1
 
     print(f"batch     : {batch}")
