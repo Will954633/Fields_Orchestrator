@@ -421,6 +421,17 @@ def html_to_pdf(html_path: str, pdf_path: str, margin: str = "13mm"):
 # (subject_trajectory, precomputed_indexed_prices, precomputed_market_charts), so a
 # teaser and the article/website can never show one owner two different numbers.
 
+# Sign-aware thresholds on the SIX-MONTH home move (Will, 2026-08-26: keep it
+# 6-month — speak to the current market as recently as we reliably can).
+#   < HOME_EASING_FLOOR  -> easing: EXCLUDED from this mailout by policy (an
+#                            unsolicited piece must never tell a cold recipient
+#                            their home fell).
+#   [floor, RISEN_MIN)   -> "holding" headline (today's copy).
+#   >= RISEN_MIN         -> "risen" headline (national down, this home up).
+HOME_EASING_FLOOR = -2.0
+RISEN_MIN = 5.0
+
+
 def _fmt_pct(v: float) -> str:
     return f"{v:+.1f}%"
 
@@ -444,7 +455,9 @@ def _move_word(pct: float) -> str:
         return "eased back"
     if pct < 0.75:
         return "held steady"
-    return "edged higher"
+    if pct < RISEN_MIN:
+        return "edged higher"
+    return "risen"
 
 
 def teaser_facts(client, address, suburb=None, skip_market_check=False,
@@ -503,26 +516,30 @@ def teaser_facts(client, address, suburb=None, skip_market_check=False,
     month_from = _full_month(p6.get("date_label"))   # e.g. "February"
     month_to = _full_month(p0.get("date_label"))     # e.g. "August"
 
-    # The copy's premise: this home is HOLDING (roughly flat to modestly up over the
-    # six months), the suburb is holding, and selling has slowed. Reject anything the
-    # fixed wording would misdescribe -- a clearly falling or surging home ("still
-    # holding its value" would be untrue either way), a falling suburb, or DOM that is
-    # shortening ("homes are taking longer to sell" untrue). Honest rejection, not a
-    # defect: an easing/surging variant would need its own copy.
-    HOME_BAND, SUBURB_BAND = (-2.0, 8.0), (-2.0, 15.0)
+    # Sign-aware variant selection on the six-month home move. A rising home is no
+    # longer rejected -- it gets the "risen" headline (national down, this home up).
+    # An easing home is EXCLUDED by policy (see thresholds above). A falling SUBURB
+    # or DOM that is shortening still hard-reject: the fixed national/"selling has
+    # slowed" copy would be untrue and no variant is written for those yet.
+    SUBURB_BAND = (-2.0, 15.0)
     bad = []
-    if not (HOME_BAND[0] <= home_6m <= HOME_BAND[1]):
-        bad.append(f"home 6-month move {home_6m:+.1f}% is outside the holding band "
-                   f"{HOME_BAND[0]:+.0f}..{HOME_BAND[1]:+.0f}% this copy describes")
+    if home_6m < HOME_EASING_FLOOR:
+        bad.append(f"home 6-month move {home_6m:+.1f}% is easing (< {HOME_EASING_FLOOR:+.0f}%) "
+                   f"-- easing homes are excluded from this mailout by policy")
     if not (SUBURB_BAND[0] <= suburb_6m <= SUBURB_BAND[1]):
         bad.append(f"suburb 6-month move {suburb_6m:+.1f}% is outside "
-                   f"{SUBURB_BAND[0]:+.0f}..{SUBURB_BAND[1]:+.0f}%")
-    if yoy_days <= 0:
-        bad.append(f"days-on-market changed {yoy_days:+g}d (not lengthening), so "
-                   f"'homes are taking longer to sell' would be untrue")
+                   f"{SUBURB_BAND[0]:+.0f}..{SUBURB_BAND[1]:+.0f}% (falling/overheated suburb "
+                   f"-- the fixed copy would be untrue)")
+    if yoy_days == 0:
+        bad.append("days-on-market unchanged year-on-year -- no time-to-sell signal to show")
     if bad:
-        return {"ok": False, "stage": "narrative", "address": full_addr,
-                "errors": bad + ["an easing/surging teaser variant would be needed here"]}
+        return {"ok": False, "stage": "narrative", "address": full_addr, "errors": bad}
+    variant = "risen" if home_6m >= RISEN_MIN else "holding"
+    # Days-on-market is presented factually in whichever direction it moved: "up
+    # from" when selling has slowed, "down from" when it has sped up. The "signals
+    # worth watching" thesis rests on the macro leading indicators (Will's quote +
+    # the three questions), not on local DOM, so either direction is honest here.
+    dom_word = "up from" if yoy_days > 0 else "down from"
 
     hero = boa.build_hero(client, doc, suburb_key, slug, out_dir)
     aerial_uri = _img_datauri(os.path.join(out_dir, hero["file"])) if hero else None
@@ -531,10 +548,11 @@ def teaser_facts(client, address, suburb=None, skip_market_check=False,
         "ok": True, "address": full_addr, "url_slug": slug, "suburb_key": suburb_key,
         "address_short": full_addr.split(",")[0].strip(),
         "suburb_display": suburb_key.replace("_", " ").title(),
-        "home_6m": home_6m, "suburb_6m": suburb_6m,
+        "home_6m": home_6m, "suburb_6m": suburb_6m, "variant": variant,
         "home_move_word": _move_word(home_6m),
         "month_from": month_from, "month_to": month_to,
         "dom_now": int(round(latest)), "dom_prev": int(round(latest - yoy_days)),
+        "dom_word": dom_word,
         "aerial_uri": aerial_uri, "aerial_cap": (hero or {}).get("caption", ""),
     }
 
@@ -664,12 +682,23 @@ def teaser_html(f: dict, url: str) -> str:
 </div>
 """
 
+    # Sign-aware headline: a risen home leads with the rise (national down, this home
+    # up); a holding home keeps the original line. Second clause is shared -- it sets
+    # up the "signals worth watching" back half.
+    if f.get("variant") == "risen":
+        # Kept to two lines (like the holding headline) so the fixed A4 back page
+        # does not overflow and silently crop the QR panel at the foot.
+        headline = ('This home&rsquo;s value has risen &mdash; not fallen.<br>'
+                    '<b>But the market underneath it is beginning to change.</b>')
+    else:
+        headline = ('This home is still holding its value.<br>'
+                    '<b>But the market underneath it is beginning to change.</b>')
+
     back = f"""
 <div class="page back">
   {brand}
   <div class="top">
-    <h2 class="serif">This home is still holding its value.<br>
-      <b>But the market underneath it is beginning to change.</b></h2>
+    <h2 class="serif">{headline}</h2>
   </div>
   <div class="figs">
     <div class="fig"><div class="n serif">{_fmt_pct(f['home_6m'])}</div>
@@ -679,7 +708,7 @@ def teaser_html(f: dict, url: str) -> str:
       <div class="l">The {suburb} median over the same six months,
         {f['month_from']} to {f['month_to']}</div></div>
     <div class="fig"><div class="n serif">{f['dom_now']} <span>days</span></div>
-      <div class="l">Typical time to sell, up from {f['dom_prev']} days</div></div>
+      <div class="l">Typical time to sell, {f['dom_word']} {f['dom_prev']} days</div></div>
   </div>
   <div class="quotebox" style="margin-left:20mm;margin-right:20mm">
     {portrait_img}
@@ -733,7 +762,7 @@ def verify_teaser_pdf(pdf_path: str, f: dict) -> list[str]:
     folded = re.sub(r"\s+", " ", txt).lower()
     must = [f["address_short"].lower(), _fmt_pct(f["home_6m"]).lower(),
             _fmt_pct(f["suburb_6m"]).lower(), f"{f['dom_now']} days",
-            f"up from {f['dom_prev']} days", "turn over for what we found",
+            f"{f['dom_word']} {f['dom_prev']} days", "turn over for what we found",
             "why did the wider market turn down", "will the gold coast turn down too",
             "read your property analysis", "will simpson"]
     for m in must:
