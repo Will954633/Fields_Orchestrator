@@ -29,7 +29,10 @@ def tf(name, text):
 OV = [
     # HOOK 0.0-2.4  "Same house, three different values."
     ("h1", "SAME HOUSE", 100, "white", "black@0.5", "(w-tw)/2", 150, 0.0, 2.4, FONTSERIF),
-    ("h2", "$1.31M     $1.54M     $1.76M", 58, "white", TERRA + "@0.85", "(w-tw)/2", 320, 0.4, 2.4, FONT),
+    # three figures appear one-by-one (each with a charm chime at 0.5 / 1.0 / 1.5s)
+    ("p1", "$1.31M", 62, "white", TERRA + "@0.9", "90", 320, 0.5, 2.4, FONT),
+    ("p2", "$1.54M", 62, "white", TERRA + "@0.9", "(w-tw)/2", 320, 1.0, 2.4, FONT),
+    ("p3", "$1.76M", 62, "white", TERRA + "@0.9", "w-tw-90", 320, 1.5, 2.4, FONT),
     ("cap1", "Same house, three different values.", 44, "white", "black@0.55", "(w-tw)/2", 1520, 0.0, 2.4, FONT),
     # THE FACT 2.5-6.6  "In our test, the typical gap was over $215,000."
     ("n1", "OVER  $215,000", 100, "white", TERRA + "@0.92", "(w-tw)/2", 720, 2.5, 6.6, FONT),
@@ -54,13 +57,27 @@ for i, (name, text, size, fc, box, x, y, t0, t1, font) in enumerate(OV):
     draw.append(f"[{prev}]drawtext=fontfile={font}:textfile={path}:fontsize={size}:fontcolor={fc}:"
                 f"box=1:boxcolor={box}:boxborderw=24:x={x}:y={y}:enable='between(t,{t0},{t1})'[{out}]")
     prev = out
-filter_complex = ";".join(filters + draw)
+# --- audio: VO + three soft ascending "charm" chimes at each figure's entrance ---
+def chime(freq):
+    # bell = fundamental + soft octave, fast attack, exponential decay (~0.8s)
+    e = f"0.26*exp(-6*t)*sin(2*PI*{freq}*t)+0.09*exp(-10*t)*sin(2*PI*{2*freq}*t)"
+    return f"{e}|{e}"   # stereo
+CHIMES = [(1047, 500), (1319, 1000), (1568, 1500)]   # C6/E6/G6 ascending @ 0.5/1.0/1.5s
+achains, mixins = [], ["[voa]"]
+for i, (freq, delay_ms) in enumerate(CHIMES):
+    achains.append(f"aevalsrc=exprs='{chime(freq)}':s=44100:d=0.8[cs{i}]")
+    achains.append(f"[cs{i}]adelay={delay_ms}:all=1[cd{i}]")
+    mixins.append(f"[cd{i}]")
+achains.append("[1:a]aformat=sample_rates=44100:channel_layouts=stereo[voa]")
+achains.append("".join(mixins) + "amix=inputs=4:normalize=0:duration=first[aout]")
+
+filter_complex = ";".join(filters + draw + achains)
 
 cmd = ["ffmpeg", "-v", "error", "-y",
        "-loop", "1", "-i", str(PHOTO),      # static photo, held
        "-i", str(VOICE),
        "-filter_complex", filter_complex,
-       "-map", "[vout]", "-map", "1:a",
+       "-map", "[vout]", "-map", "[aout]",
        "-t", str(DUR),
        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30", "-preset", "medium", "-crf", "20",
        "-c:a", "aac", "-b:a", "160k", str(OUT)]
