@@ -59,10 +59,11 @@ for i, (name, text, size, fc, box, x, y, t0, t1, font) in enumerate(OV):
     prev = out
 # --- audio: VO + three soft ascending "charm" chimes at each figure's entrance ---
 def chime(freq):
-    # bell = fundamental + soft octave, fast attack, exponential decay (~0.8s)
-    e = f"0.26*exp(-6*t)*sin(2*PI*{freq}*t)+0.09*exp(-10*t)*sin(2*PI*{2*freq}*t)"
+    # gentle "ting": a single clean high sine with quick decay (~0.4s), soft
+    e = f"0.16*exp(-13*t)*sin(2*PI*{freq}*t)"
     return f"{e}|{e}"   # stereo
-CHIMES = [(1047, 500), (1319, 1000), (1568, 1500)]   # C6/E6/G6 ascending @ 0.5/1.0/1.5s
+TING = 2093   # C7 — one gentle ting, same pitch for all three figures
+CHIMES = [(TING, 500), (TING, 1000), (TING, 1500)]   # @ 0.5/1.0/1.5s
 achains, mixins = [], ["[voa]"]
 for i, (freq, delay_ms) in enumerate(CHIMES):
     achains.append(f"aevalsrc=exprs='{chime(freq)}':s=44100:d=0.8[cs{i}]")
