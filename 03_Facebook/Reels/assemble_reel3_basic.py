@@ -14,7 +14,7 @@ from pathlib import Path
 
 BASE = Path("/home/fields/Fields_Orchestrator/03_Facebook/Reels/renders")
 PHOTO = BASE / "robina_house.png"          # static, no movement
-VOICE = BASE / "basic_vo_src.mp4"          # AU VO
+VOICE = BASE / "basic_vo215_src.mp4"       # AU VO ("over $215,000")
 OUT = BASE / "reel3_basic_draft.mp4"
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 FONTSERIF = "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
@@ -31,14 +31,14 @@ OV = [
     ("h1", "SAME HOUSE", 100, "white", "black@0.5", "(w-tw)/2", 150, 0.0, 3.4, FONTSERIF),
     ("h2", "$1.31M     $1.54M     $1.76M", 58, "white", TERRA + "@0.85", "(w-tw)/2", 320, 0.5, 3.4, FONT),
     ("cap1", "Same house, three different values.", 44, "white", "black@0.55", "(w-tw)/2", 1520, 0.0, 3.4, FONT),
-    # THE FACT 4.0-8.6
-    ("n1", "OVER  $200,000", 100, "white", TERRA + "@0.92", "(w-tw)/2", 720, 4.0, 8.6, FONT),
-    ("n2", "Typical gap  ·  Fields analysis of 512 homes", 36, "white", "black@0.6", "(w-tw)/2", 890, 4.1, 8.6, FONT),
-    ("cap2", "In our test, the typical gap was over $200,000.", 40, "white", "black@0.55", "(w-tw)/2", 1520, 4.0, 8.6, FONT),
-    # CTA 8.6-10
-    ("d1", "TEST MY HOME'S", 76, "white", "black@0.55", "(w-tw)/2", 680, 8.7, 10.0, FONTSERIF),
-    ("d1b", "ESTIMATE", 76, "white", "black@0.55", "(w-tw)/2", 790, 8.7, 10.0, FONTSERIF),
-    ("d2", "Get Started", 56, "white", FOREST + "@0.95", "(w-tw)/2", 930, 8.7, 10.0, FONT),
+    # THE FACT 3.7-8.9
+    ("n1", "OVER  $215,000", 100, "white", TERRA + "@0.92", "(w-tw)/2", 720, 3.7, 8.9, FONT),
+    ("n2", "Typical gap  ·  Fields analysis of 512 homes", 36, "white", "black@0.6", "(w-tw)/2", 890, 3.8, 8.9, FONT),
+    ("cap2", "In our test, the typical gap was over $215,000.", 40, "white", "black@0.55", "(w-tw)/2", 1520, 3.7, 8.9, FONT),
+    # CTA 8.9-10
+    ("d1", "TEST MY HOME'S", 76, "white", "black@0.55", "(w-tw)/2", 680, 8.95, 10.0, FONTSERIF),
+    ("d1b", "VALUATION", 76, "white", "black@0.55", "(w-tw)/2", 790, 8.95, 10.0, FONTSERIF),
+    ("d2", "Get Started", 56, "white", FOREST + "@0.95", "(w-tw)/2", 930, 8.95, 10.0, FONT),
 ]
 
 filters = ["[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,format=yuv420p[base]"]
