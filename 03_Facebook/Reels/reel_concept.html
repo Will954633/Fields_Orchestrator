@@ -1,0 +1,759 @@
+<title>Reels — "Same home. Three valuations." · Fields</title>
+<style>
+  :root{
+    --cream:#F5F1E7; --paper:#FBF8F1; --ink:#23241F; --ink-soft:#54564C;
+    --forest:#1E3A2F; --forest-2:#2C5343; --terra:#C05A38; --terra-2:#D97B54;
+    --line:#E2DBCB; --mist:#EEE9DB;
+    --bg:var(--cream); --surface:var(--paper); --fg:var(--ink); --fg-soft:var(--ink-soft);
+    --accent:var(--terra); --brand:var(--forest); --hair:var(--line); --panel:var(--mist);
+    --shadow:0 18px 50px -24px rgba(30,58,47,.45);
+    --serif:Georgia,"Iowan Old Style","Times New Roman",serif;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#14180F; --surface:#1C2117; --fg:#ECE7D8; --fg-soft:#A7A896;
+      --brand:#8FBFA4; --accent:#E08a63; --hair:#2C331F; --panel:#222719;
+      --shadow:0 22px 60px -28px rgba(0,0,0,.7); }
+  }
+  :root[data-theme="light"]{ --bg:#F5F1E7; --surface:#FBF8F1; --fg:#23241F; --fg-soft:#54564C;
+    --brand:#1E3A2F; --accent:#C05A38; --hair:#E2DBCB; --panel:#EEE9DB;
+    --shadow:0 18px 50px -24px rgba(30,58,47,.45); }
+  :root[data-theme="dark"]{ --bg:#14180F; --surface:#1C2117; --fg:#ECE7D8; --fg-soft:#A7A896;
+    --brand:#8FBFA4; --accent:#E08a63; --hair:#2C331F; --panel:#222719;
+    --shadow:0 22px 60px -28px rgba(0,0,0,.7); }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1160px;margin:0 auto;padding:clamp(20px,4vw,56px)}
+  a{color:var(--accent)}
+  h1,h2,h3{text-wrap:balance;margin:0}
+  .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:600}
+
+  header.mast{border-bottom:2px solid var(--brand);padding-bottom:28px}
+  .mast .kicker{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+  .badge{font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;padding:5px 11px;border:1px solid var(--hair);border-radius:100px;color:var(--fg-soft);background:var(--surface)}
+  .badge.solid{background:var(--brand);color:var(--bg);border-color:var(--brand)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(2.1rem,5.4vw,3.7rem);line-height:1.02;letter-spacing:-.01em}
+  h1 em{font-style:italic;color:var(--accent)}
+  .dek{font-size:clamp(1.02rem,1.7vw,1.24rem);color:var(--fg-soft);max-width:62ch;margin-top:16px}
+  .specrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+  .spec{font-family:var(--mono);font-size:.72rem;padding:6px 10px;background:var(--panel);border-radius:6px;color:var(--fg)}
+
+  section{margin-top:clamp(40px,6vw,72px)}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:20px;border-bottom:1px solid var(--hair);padding-bottom:10px}
+  .sec-head h2{font-family:var(--serif);font-weight:600;font-size:clamp(1.4rem,2.6vw,1.95rem)}
+  .sec-head .n{font-family:var(--mono);color:var(--accent);font-size:.82rem}
+  .sec-head .tag{margin-left:auto;font-family:var(--mono);font-size:.68rem;color:var(--fg-soft)}
+
+  .thesis{display:grid;grid-template-columns:1.35fr 1fr;gap:28px;align-items:stretch}
+  .thesis .lead{font-family:var(--serif);font-size:clamp(1.22rem,2.3vw,1.62rem);line-height:1.36}
+  .thesis .lead b{color:var(--accent);font-weight:600}
+  .card{background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:22px 24px;box-shadow:var(--shadow)}
+  .card h3{font-family:var(--mono);font-size:.74rem;letter-spacing:.16em;text-transform:uppercase;color:var(--fg-soft);margin-bottom:12px;font-weight:600}
+  .card ul{margin:0;padding-left:18px}
+  .card li{margin:7px 0}
+  .card li b{color:var(--brand)}
+
+  /* reel header band */
+  .reelband{display:flex;align-items:center;gap:16px;background:var(--brand);color:var(--bg);border-radius:14px;padding:16px 22px;flex-wrap:wrap}
+  .reelband .big{font-family:var(--serif);font-size:1.5rem;font-weight:600}
+  .reelband .meta{font-family:var(--mono);font-size:.72rem;opacity:.9;letter-spacing:.08em}
+  .reelband .pill{margin-left:auto;background:var(--accent);color:#fff;font-family:var(--mono);font-size:.68rem;padding:6px 12px;border-radius:100px;letter-spacing:.06em}
+
+  .strip{display:grid;gap:22px;margin-top:22px}
+  .beat{display:grid;grid-template-columns:230px 1fr;gap:26px;align-items:start;background:var(--surface);border:1px solid var(--hair);border-radius:16px;padding:20px;box-shadow:var(--shadow)}
+  @media(max-width:720px){.beat{grid-template-columns:1fr}.thesis{grid-template-columns:1fr}}
+
+  .phone{position:relative;aspect-ratio:9/16;border-radius:22px;overflow:hidden;border:7px solid #0e120b;box-shadow:0 12px 30px -12px rgba(0,0,0,.6);background:#0e120b}
+  .phone .scene{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:16px 15px 20px}
+  .phone .tc{position:absolute;top:10px;left:12px;font-family:var(--mono);font-size:.6rem;color:#fff;background:rgba(0,0,0,.42);padding:3px 7px;border-radius:5px;letter-spacing:.05em}
+  .phone .safe{position:absolute;top:9px;right:12px;font-family:var(--mono);font-size:.56rem;color:rgba(255,255,255,.7)}
+  .otext{font-family:var(--serif);color:#fff;font-weight:600;line-height:1.1;font-size:1.24rem;text-shadow:0 2px 14px rgba(0,0,0,.55)}
+  .otext .hl{color:#F4C89B}
+  .otext.big{font-size:1.7rem;letter-spacing:.01em}
+  .osub{font-family:var(--sans);color:rgba(255,255,255,.9);font-size:.72rem;margin-top:8px;text-shadow:0 1px 8px rgba(0,0,0,.6)}
+  .qual{font-family:var(--sans);color:rgba(255,255,255,.72);font-size:.58rem;margin-top:7px;line-height:1.35;text-shadow:0 1px 6px rgba(0,0,0,.7)}
+  .chip-cta{display:inline-block;margin-top:12px;font-family:var(--mono);font-size:.64rem;background:var(--terra);color:#fff;padding:7px 11px;border-radius:7px;letter-spacing:.05em}
+  .s-house{background:radial-gradient(120% 90% at 55% 22%,#6a8a70 0%,#3c5945 44%,#22331f 100%)}
+  .s-split{background:linear-gradient(135deg,#7a3f2c 0%,#2C5343 50%,#1e3a2f 100%)}
+  .s-cards{background:linear-gradient(155deg,#1E3A2F 0%,#274a3b 55%,#16281f 100%)}
+  .s-evid{background:linear-gradient(160deg,#243f33 0%,#39604d 100%)}
+  .s-cta{background:radial-gradient(120% 100% at 50% 30%,#2C5343 0%,#1E3A2F 60%,#14251d 100%)}
+  .s-q{background:linear-gradient(160deg,#2b2b2b 0%,#33372c 60%,#1e2118 100%)}
+  .grain{position:absolute;inset:0;opacity:.5;background-image:radial-gradient(rgba(255,255,255,.14) 1px,transparent 1px);background-size:7px 7px;mix-blend-mode:overlay;pointer-events:none}
+  .threeprices{display:flex;gap:6px;margin-bottom:10px;font-family:var(--mono);font-weight:700;color:#fff}
+  .threeprices span{flex:1;text-align:center;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.25);border-radius:7px;padding:7px 2px;font-size:.72rem}
+  .threeprices span:nth-child(2){transform:translateY(-6px);border-color:#F4C89B;color:#F4C89B}
+  .threeprices span:nth-child(3){transform:translateY(4px)}
+  .compcards{display:flex;gap:5px;margin-bottom:9px}
+  .compcards i{flex:1;height:30px;border-radius:5px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);display:block}
+  .compcards i:nth-child(2){transform:translateY(-4px)}
+  .compcards i:nth-child(4){transform:translateY(3px)}
+  .evidrow{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.58rem;color:rgba(255,255,255,.9);border-top:1px dashed rgba(255,255,255,.3);padding:4px 0}
+
+  .bd h3{font-family:var(--serif);font-size:1.15rem;margin-bottom:2px}
+  .bd .role{font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
+  .row{display:grid;grid-template-columns:92px 1fr;gap:12px;padding:9px 0;border-top:1px solid var(--hair)}
+  .row .lab{font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-soft);padding-top:2px}
+  .row .val{font-size:.9rem}
+  .row .val.vo{font-family:var(--serif);font-style:italic;font-size:1rem}
+  .prompt{font-family:var(--mono);font-size:.76rem;background:var(--panel);border:1px solid var(--hair);border-radius:8px;padding:11px 12px;color:var(--fg);white-space:pre-wrap;line-height:1.5}
+  .prompt .k{color:var(--accent)}
+
+  .pipe{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  @media(max-width:720px){.pipe{grid-template-columns:1fr 1fr}}
+  .step{background:var(--surface);border:1px solid var(--hair);border-radius:12px;padding:16px;box-shadow:var(--shadow)}
+  .step .num{font-family:var(--mono);font-size:.7rem;color:var(--accent);font-weight:600}
+  .step h4{font-family:var(--serif);font-size:1.04rem;margin:6px 0}
+  .step p{margin:0;font-size:.84rem;color:var(--fg-soft)}
+  .step code{font-family:var(--mono);font-size:.72rem;background:var(--panel);padding:1px 5px;border-radius:4px}
+
+  table.test{width:100%;border-collapse:collapse;font-size:.9rem;margin-top:4px}
+  table.test th,table.test td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--hair)}
+  table.test th{font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-soft)}
+  table.test td b{color:var(--brand)}
+  table.test .len{font-family:var(--mono);color:var(--accent)}
+  .metrics{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+  .metrics span{font-family:var(--mono);font-size:.74rem;background:var(--panel);border:1px solid var(--hair);border-radius:100px;padding:6px 13px}
+
+  .checks{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:720px){.checks{grid-template-columns:1fr}}
+  .chk{display:flex;gap:11px;align-items:flex-start;background:var(--surface);border:1px solid var(--hair);border-radius:10px;padding:13px 15px}
+  .chk .tick{flex:none;width:20px;height:20px;border-radius:50%;background:var(--brand);color:var(--bg);display:grid;place-items:center;font-size:.72rem;font-weight:700;margin-top:1px}
+  .chk .no{background:var(--accent)}
+  .chk b{color:var(--fg)}
+  .chk span{font-size:.86rem;color:var(--fg-soft)}
+  .callout{background:var(--panel);border-left:4px solid var(--accent);border-radius:0 10px 10px 0;padding:16px 20px;font-size:.92rem}
+  .callout.warn{border-left-color:var(--accent)}
+  .callout b{color:var(--brand)}
+  .callout code{font-family:var(--mono);font-size:.82rem}
+  .altfigs{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}
+  @media(max-width:600px){.altfigs{grid-template-columns:1fr}}
+  .fig{background:var(--surface);border:1px solid var(--hair);border-radius:10px;padding:14px}
+  .fig .amt{font-family:var(--serif);font-size:1.5rem;font-weight:600;color:var(--fg)}
+  .fig.pick{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+  .fig .lab{font-family:var(--mono);font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-soft);margin-bottom:4px}
+  .fig p{margin:6px 0 0;font-size:.8rem;color:var(--fg-soft)}
+  .fig .badge2{font-family:var(--mono);font-size:.6rem;color:var(--accent);font-weight:700}
+
+  footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--hair);font-family:var(--mono);font-size:.72rem;color:var(--fg-soft);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  .note{font-size:.82rem;color:var(--fg-soft);margin-top:8px}
+
+  /* two-step flow */
+  .flow{display:flex;align-items:stretch;gap:12px;margin-top:18px;flex-wrap:wrap}
+  .fstep{flex:1;min-width:220px;background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:18px 18px 20px;box-shadow:var(--shadow)}
+  .fstep .fnum{font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);font-weight:600}
+  .fstep h4{font-family:var(--serif);font-size:1.14rem;margin:8px 0 4px}
+  .fstep .fsub{font-size:.84rem;color:var(--fg-soft);margin:0 0 12px}
+  .field{font-family:var(--sans);font-size:.86rem;background:var(--panel);border:1px solid var(--hair);border-radius:8px;padding:9px 11px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+  .field em{font-family:var(--mono);font-size:.6rem;color:var(--fg-soft);font-style:normal}
+  .fbtn{margin-top:6px;text-align:center;font-family:var(--mono);font-size:.74rem;letter-spacing:.04em;background:var(--brand);color:var(--bg);padding:10px;border-radius:8px;font-weight:600}
+  .fbtn.ghost{background:transparent;color:var(--accent);border:1.5px solid var(--accent)}
+  .farrow{align-self:center;font-family:var(--mono);color:var(--fg-soft);font-size:1.4rem;font-weight:700}
+  @media(max-width:720px){.farrow{display:none}}
+
+  /* hook variants */
+  .hookcard{background:var(--surface);border:1px solid var(--hair);border-radius:12px;padding:16px 18px}
+  .hookcard.pickhook{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+  .hookcard .hl-lab{font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:8px}
+  .hookcard p{font-family:var(--serif);font-size:1.04rem;margin:0 0 10px;line-height:1.3}
+  .hookcard .pred{font-size:.78rem;color:var(--fg-soft)}
+
+  /* presenter blocking */
+  .phone-she .scene{justify-content:space-between}
+  .she{position:absolute;inset:0;background:linear-gradient(160deg,#8a9a86 0%,#5f7161 45%,#3a4a3d 100%)}
+  .she::after{content:"";position:absolute;left:50%;top:34%;transform:translateX(-50%);width:44%;height:52%;border-radius:44% 44% 40% 40%;background:radial-gradient(circle at 50% 38%,rgba(255,255,255,.35),rgba(255,255,255,.08) 60%,transparent 70%);box-shadow:inset 0 -10px 30px rgba(0,0,0,.25)}
+  .she .halo{position:absolute;left:50%;top:30%;transform:translateX(-50%);width:34%;aspect-ratio:1;border-radius:50%;background:rgba(255,255,255,.14);border:1px dashed rgba(255,255,255,.4)}
+  .pip{position:absolute;bottom:78px;left:12px;width:34%;aspect-ratio:3/4;border-radius:12px;overflow:hidden;border:2px solid rgba(255,255,255,.85);background:linear-gradient(160deg,#8a9a86,#3a4a3d);box-shadow:0 6px 16px rgba(0,0,0,.5)}
+  .pchip{position:absolute;font-family:var(--mono);font-weight:700;font-size:.64rem;color:#fff;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.35);border-radius:6px;padding:4px 6px}
+  .role-badge{display:inline-block;font-family:var(--mono);font-size:.58rem;letter-spacing:.08em;text-transform:uppercase;background:rgba(0,0,0,.42);color:#fff;padding:3px 8px;border-radius:5px}
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="kicker">
+      <span class="badge solid">Reels concept · v2</span>
+      <span class="badge">Fields Real Estate</span>
+      <span class="badge">Smarter with data</span>
+    </div>
+    <div class="eyebrow">Two-reel campaign · cold + warm retargeting</div>
+    <h1>Same home.<br><em>Three valuations.</em></h1>
+    <p class="dek">Two vertical reels built on one verified, uncomfortable fact: honest valuers,
+      following standard practice on the same home, can land <b>more than $200,000 apart</b> — because
+      the answer depends on <b>which three comparable sales they pick</b>. Reel One lands the fact and
+      earns the click. Reel Two turns it into a <b>“can your estimate be trusted?” reliability check</b> that
+      captures a name and mobile first, and the address second. Neither claims we're
+      <em>more accurate</em> — the claim is that we <b>show the evidence the number is built on</b>.</p>
+    <div class="specrow">
+      <span class="spec">9:16 · 1080×1920</span>
+      <span class="spec">Reel 1 · 10s · address-first</span>
+      <span class="spec">Reel 2 · 8–10s · trust-test · “over $200k”</span>
+      <span class="spec">Reel 3 · 8–10s · trust-test · “$469,000” · female presenter</span>
+      <span class="spec">Veo 3 (Vertex) + motion-graphics</span>
+      <span class="spec">Lead form → /analyse-your-home</span>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head"><span class="n">01</span><h2>The idea &amp; the number</h2></div>
+    <div class="thesis">
+      <p class="lead">The grievance isn't “estimates are wrong.” It's <b>“I have no idea.”</b> An owner
+        with six estimates spanning a third of their home's value doesn't need a seventh number — they
+        need to see <b>what a number is built on</b>. That's the one thing we can show and an agent's
+        gut can't. The reel opens on the dispersion and closes on the evidence.</p>
+      <div class="card">
+        <h3>Where $469,000 comes from</h3>
+        <ul>
+          <li><b>512 sold homes</b>, $1M–$2M, Robina / Varsity Lakes / Burleigh Waters (2026-08-06 run).</li>
+          <li>For each, <b>every possible</b> 3-comparable estimate was enumerated (same type/beds/baths, land ±20%, sold in the prior 12 months).</li>
+          <li>Median gap between the <b>highest and lowest</b> defensible estimate: <b>32.9% = $469,000</b>.</li>
+          <li>A near-perfect estimate <b>exists</b> in the pool ~<b>3 times in 4</b> — the method just can't tell which.</li>
+          <li><b>On air we say “over $200,000”</b> — true under every pool screen (strict $227.5K → statutory $652K), so it's unassailable while the measured median is far higher.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= REEL ONE ================= -->
+  <section>
+    <div class="reelband">
+      <span class="big">Reel One</span>
+      <span class="meta">COLD AUDIENCE · 10s · ~34 spoken words · CTA “See My Home”</span>
+      <span class="pill">Job: land the fact, earn the click</span>
+    </div>
+    <p class="note">Not a methodology lesson. One surprising fact, one look at the evidence, one ask.</p>
+    <div class="strip">
+
+      <div class="beat">
+        <div class="phone"><div class="s-house scene"><div class="grain"></div>
+          <div class="tc">0.0–1.5s</div><div class="safe">HOOK</div>
+          <div class="threeprices"><span>$1.28M</span><span>$1.62M</span><span>$1.44M</span></div>
+          <div class="otext big">SAME HOME.<br>THREE VALUATIONS.</div>
+        </div></div>
+        <div class="bd">
+          <h3>The hook</h3><div class="role">Beat 1 · 0.0–1.5s</div>
+          <div class="row"><div class="lab">Visual</div><div class="val">One aerial home; three different price
+            tags fade up over it, staggered.</div></div>
+          <div class="row"><div class="lab">On-screen</div><div class="val">SAME HOME. THREE VALUATIONS.</div></div>
+          <div class="row"><div class="lab">VO</div><div class="val vo">“These could all be defensible valuations of the same home.”</div></div>
+          <div class="row"><div class="lab">Veo plate</div><div class="val"><div class="prompt"><span class="k">Shot:</span> Slow aerial push-in on one detached Gold Coast house, dawn light,
+neighbours soft-focus. <span class="k">9:16, 8s, no text, no people.</span> Price tags added in post.</div></div></div>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="phone"><div class="s-split scene"><div class="grain"></div>
+          <div class="tc">1.5–5.5s</div><div class="safe">THE FACT</div>
+          <div class="osub" style="margin-bottom:6px">TYPICAL GAP</div>
+          <div class="otext big">OVER <span class="hl">$200,000</span></div>
+          <div class="qual">Median gap between the highest and lowest defensible three-comparable estimate.
+            512 sold homes, $1M–$2M, southern Gold&nbsp;Coast.</div>
+        </div></div>
+        <div class="bd">
+          <h3>The fact</h3><div class="role">Beat 2 · 1.5–5.5s · the payload</div>
+          <div class="row"><div class="lab">Visual</div><div class="val">The three figures pull apart hard; the
+            distance between top and bottom resolves into “$469,000”.</div></div>
+          <div class="row"><div class="lab">On-screen</div><div class="val">TYPICAL GAP: <b>OVER $200,000</b> + small qualifier (see below).</div></div>
+          <div class="row"><div class="lab">VO</div><div class="val vo">“In our test of 512 homes, the typical gap was more than two hundred thousand dollars.”</div></div>
+          <div class="row"><div class="lab">Qualifier</div><div class="val">On-screen, legible: “Median gap, highest to lowest
+            defensible three-comparable estimate. 512 sold homes $1M–$2M, southern Gold Coast.” <b>Naming the pool is mandatory</b> — see §5.</div></div>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="phone"><div class="s-cards scene"><div class="grain"></div>
+          <div class="tc">5.5–8.0s</div><div class="safe">WHY</div>
+          <div class="compcards"><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="otext">THE COMPARABLES<br><span class="hl">CHANGE THE NUMBER.</span></div>
+        </div></div>
+        <div class="bd">
+          <h3>The mechanism</h3><div class="role">Beat 3 · 5.5–8.0s</div>
+          <div class="row"><div class="lab">Visual</div><div class="val">Comparable-sale cards shuffle rapidly;
+            the estimate readout flickers up and down as the selected three change.</div></div>
+          <div class="row"><div class="lab">On-screen</div><div class="val">THE COMPARABLES CHANGE THE NUMBER.</div></div>
+          <div class="row"><div class="lab">VO</div><div class="val vo">“Because the sales chosen can change the answer.”</div></div>
+          <div class="row"><div class="lab">Veo plate</div><div class="val"><div class="prompt"><span class="k">Bg:</span> Dark forest-green surface, faint grid, drifting light particles.
+<span class="k">9:16, 8s, no text.</span> Comp cards composited over.</div></div></div>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="phone"><div class="s-evid scene"><div class="grain"></div>
+          <div class="tc">8.0–10.5s</div><div class="safe">EVIDENCE + CTA</div>
+          <div class="evidrow"><span>12 Elanora Dr · sold</span><span>+ condition</span></div>
+          <div class="evidrow"><span>8 Marsh Ct · sold</span><span>− land size</span></div>
+          <div class="otext">DON'T JUST GET A NUMBER.<br><span class="hl">SEE WHAT IT'S BUILT ON.</span></div>
+          <span class="chip-cta">See My Home →</span>
+        </div></div>
+        <div class="bd">
+          <h3>The evidence &amp; the ask</h3><div class="role">Beat 4 · 8.0–10.5s</div>
+          <div class="row"><div class="lab">Visual</div><div class="val">The Fields evidence interface: the actual
+            sold comps + itemised dollar adjustments behind one estimate.</div></div>
+          <div class="row"><div class="lab">End card</div><div class="val">DON'T JUST GET A NUMBER. SEE WHAT IT'S BUILT ON.</div></div>
+          <div class="row"><div class="lab">VO</div><div class="val vo">“See the evidence behind your home's value.”</div></div>
+          <div class="row"><div class="lab">CTA</div><div class="val">Button <b>See My Home</b> → instant lead form → <b>/analyse-your-home</b>.</div></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================= REEL TWO ================= -->
+  <section>
+    <div class="reelband">
+      <span class="big">Reel Two</span>
+      <span class="meta">“CAN YOU TRUST YOUR ESTIMATE?” · 8–10s · CTA “Get Started”</span>
+      <span class="pill">Job: capture name + mobile, address optional</span>
+    </div>
+    <p class="note">Direct-response cut. Same fact, but the ask is a <b>“reliability check”</b> — and the first form
+      takes only a name and mobile. No methodology on screen; that lives after the lead is captured.</p>
+    <div class="strip">
+
+      <div class="beat">
+        <div class="phone"><div class="s-house scene"><div class="grain"></div>
+          <div class="tc">0.0–1.5s</div><div class="safe">HOOK</div>
+          <div class="threeprices"><span>$1.31M</span><span>$1.54M</span><span>$1.76M</span></div>
+          <div class="otext big">SAME HOME.</div>
+        </div></div>
+        <div class="bd">
+          <h3>The hook</h3><div class="role">Beat 1 · 0.0–1.5s</div>
+          <div class="row"><div class="lab">Visual</div><div class="val">One home; three values appear rapidly —
+            $1.31M / $1.54M / $1.76M.</div></div>
+          <div class="row"><div class="lab">On-screen</div><div class="val">SAME HOME.</div></div>
+          <div class="row"><div class="lab">VO</div><div class="val vo">“Three sites. Three very different values.”</div></div>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="phone"><div class="s-split scene"><div class="grain"></div>
+          <div class="tc">1.5–4.5s</div><div class="safe">THE FACT</div>
+          <div class="osub" style="margin-bottom:6px">TYPICAL DEFENSIBLE RANGE</div>
+          <div class="otext big">OVER <span class="hl">$200,000</span></div>
+          <div class="qual">Fields analysis of 512 homes, $1M–$2M, southern Gold Coast — median gap between the
+            highest and lowest defensible three-comparable estimate.</div>
+        </div></div>
+        <div class="bd">
+          <h3>The fact</h3><div class="role">Beat 2 · 1.5–4.5s</div>
+          <div class="row"><div class="lab">Visual</div><div class="val">The three numbers spread apart; the distance highlights.</div></div>
+          <div class="row"><div class="lab">On-screen</div><div class="val"><b>OVER $200,000</b> · small qualifier “Fields analysis of 512 homes”.</div></div>
+          <div class="row"><div class="lab">VO</div><div class="val vo">“In our test, the typical defensible range was more than $200,000.”</div></div>
+          <div class="row"><div class="lab">Number</div><div class="val"><b>“Over $200,000”</b>, not $469,000 — per §5. Naming the pool in the qualifier stays mandatory.</div></div>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="phone"><div class="s-q scene"><div class="grain"></div>
+          <div class="tc">4.5–7.0s</div><div class="safe">THE CHALLENGE</div>
+          <div class="otext big">CAN YOUR ESTIMATE <span class="hl">BE TRUSTED?</span></div>
+        </div></div>
+        <div class="bd">
+          <h3>The challenge</h3><div class="role">Beat 3 · 4.5–7.0s</div>
+          <div class="row"><div class="lab">On-screen</div><div class="val">CAN YOUR ESTIMATE BE TRUSTED?</div></div>
+          <div class="row"><div class="lab">VO</div><div class="val vo">“We built a quick way to find out.”</div></div>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="phone"><div class="s-cta scene"><div class="grain"></div>
+          <div class="tc">7.0–9.0s</div><div class="safe">CTA</div>
+          <div class="otext">TEST MY HOME'S <span class="hl">ESTIMATE</span></div>
+          <span class="chip-cta">Get Started →</span>
+        </div></div>
+        <div class="bd">
+          <h3>The tap</h3><div class="role">Beat 4 · 7.0–9.0s</div>
+          <div class="row"><div class="lab">Visual</div><div class="val">A button being tapped.</div></div>
+          <div class="row"><div class="lab">End card</div><div class="val">TEST MY HOME'S ESTIMATE.</div></div>
+          <div class="row"><div class="lab">VO</div><div class="val vo">“Check yours.”</div></div>
+          <div class="row"><div class="lab">CTA</div><div class="val">Button <b>Get Started</b> → Meta instant form (Step 1 below).</div></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- post-click flow -->
+    <div class="sec-head" style="margin-top:34px"><span class="n">2·a</span><h2>After the tap — the two-step capture</h2></div>
+    <p class="note">The point of this reel: the <b>first</b> form asks only for a name and mobile, so almost everyone
+      who taps converts. The address is an <b>optional second conversion</b>, not a barrier to the first.</p>
+    <div class="flow">
+      <div class="fstep">
+        <div class="fnum">STEP 1 · instant form</div>
+        <h4>Can your home's estimate be trusted?</h4>
+        <p class="fsub">Get your free valuation reliability check.</p>
+        <div class="field">First name <em>· Meta prefill</em></div>
+        <div class="field">Mobile number <em>· Meta prefill</em></div>
+        <div class="fbtn">Check My Estimate</div>
+      </div>
+      <div class="farrow">→</div>
+      <div class="fstep">
+        <div class="fnum">CONFIRMATION</div>
+        <h4>You're ready to check your estimate.</h4>
+        <p class="fsub">Everyone who reaches here has already given a name + mobile.</p>
+        <div class="fbtn ghost">Enter Property Address</div>
+      </div>
+      <div class="farrow">→</div>
+      <div class="fstep">
+        <div class="fnum">STEP 2 · optional</div>
+        <h4>Address-search experience</h4>
+        <p class="fsub">The most motivated respondents identify their property — the second, higher-intent conversion.</p>
+        <div class="fbtn ghost">Examine my estimate</div>
+      </div>
+    </div>
+    <div class="callout" style="margin-top:16px"><b>Two outcomes, by design.</b> Everyone who submits gives you a
+      name and mobile; the motivated minority continue and name their home. The creative already filters toward
+      owners — the second step identifies the property.</div>
+  </section>
+
+  <!-- ================= REEL THREE ================= -->
+  <section>
+    <div class="reelband">
+      <span class="big">Reel Three</span>
+      <span class="meta">TRUST-TEST · 8–10s · the “$469,000” number variant · CTA “Get Started”</span>
+      <span class="pill">A/B on the number only</span>
+    </div>
+    <p class="note">Identical creative to Reel Two — the <b>only</b> change is the on-screen figure: the full,
+      as-measured <b>$469,000</b> instead of “over $200,000”. Built verbatim to your script. Shares Reel Two's
+      two-step form, 30-second test, hook variants and Meta form spec (§2·a–2·d).</p>
+    <div class="strip">
+
+      <div class="beat">
+        <div class="phone"><div class="s-house scene"><div class="grain"></div>
+          <div class="tc">0.0–1.5s</div><div class="safe">HOOK</div>
+          <div class="threeprices"><span>$1.31M</span><span>$1.54M</span><span>$1.76M</span></div>
+          <div class="otext big">SAME HOME.</div>
+        </div></div>
+        <div class="bd">
+          <h3>The hook</h3><div class="role">Beat 1 · 0.0–1.5s</div>
+          <div class="row"><div class="lab">Visual</div><div class="val">One home; three values appear rapidly —
+            $1.31M / $1.54M / $1.76M.</div></div>
+          <div class="row"><div class="lab">On-screen</div><div class="val">SAME HOME.</div></div>
+          <div class="row"><div class="lab">VO</div><div class="val vo">“Three sites. Three very different values.”</div></div>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="phone"><div class="s-split scene"><div class="grain"></div>
+          <div class="tc">1.5–4.5s</div><div class="safe">THE FACT</div>
+          <div class="osub" style="margin-bottom:6px">TYPICAL DEFENSIBLE RANGE</div>
+          <div class="otext big"><span class="hl">$469,000</span></div>
+          <div class="qual">Fields analysis of 512 homes, $1M–$2M, southern Gold Coast — median gap between the
+            highest and lowest defensible three-comparable estimate (12&nbsp;months, same suburb).</div>
+        </div></div>
+        <div class="bd">
+          <h3>The fact</h3><div class="role">Beat 2 · 1.5–4.5s · the payload</div>
+          <div class="row"><div class="lab">Visual</div><div class="val">The three numbers spread apart; the distance highlights to $469,000.</div></div>
+          <div class="row"><div class="lab">On-screen</div><div class="val"><b>$469,000</b> · small qualifier “Fields analysis of 512 homes”.</div></div>
+          <div class="row"><div class="lab">VO</div><div class="val vo">“In our test, the typical defensible range was $469,000.”</div></div>
+          <div class="row"><div class="lab">⚠ Exposure</div><div class="val">This is the bigger claim. The pool
+            (<b>12-month, same-suburb</b>) <b>must</b> be named in the qualifier — it's not the statutory CMA pool. See §5.</div></div>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="phone"><div class="s-q scene"><div class="grain"></div>
+          <div class="tc">4.5–7.0s</div><div class="safe">THE CHALLENGE</div>
+          <div class="otext big">CAN YOUR ESTIMATE <span class="hl">BE TRUSTED?</span></div>
+        </div></div>
+        <div class="bd">
+          <h3>The challenge</h3><div class="role">Beat 3 · 4.5–7.0s</div>
+          <div class="row"><div class="lab">On-screen</div><div class="val">CAN YOUR ESTIMATE BE TRUSTED?</div></div>
+          <div class="row"><div class="lab">VO</div><div class="val vo">“We built a quick way to find out.”</div></div>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="phone"><div class="s-cta scene"><div class="grain"></div>
+          <div class="tc">7.0–9.0s</div><div class="safe">CTA</div>
+          <div class="otext">TEST MY HOME'S <span class="hl">ESTIMATE</span></div>
+          <span class="chip-cta">Get Started →</span>
+        </div></div>
+        <div class="bd">
+          <h3>The tap</h3><div class="role">Beat 4 · 7.0–9.0s</div>
+          <div class="row"><div class="lab">Visual</div><div class="val">A button being tapped.</div></div>
+          <div class="row"><div class="lab">End card</div><div class="val">TEST MY HOME'S ESTIMATE.</div></div>
+          <div class="row"><div class="lab">VO</div><div class="val vo">“Check yours.”</div></div>
+          <div class="row"><div class="lab">CTA</div><div class="val">Button <b>Get Started</b> → same Step-1 form as Reel Two.</div></div>
+        </div>
+      </div>
+
+    </div>
+    <div class="callout warn" style="margin-top:16px"><b>Why run it as a variant, not a replacement.</b>
+      $469,000 is the real measured median and hits harder — but it's the boldest claim to defend. Running it as
+      Reel Three lets the data decide whether the extra punch is worth the extra exposure, against Reel Two's
+      unassailable “over $200,000”. Both carry the pool name; neither claims we're “more accurate”.</div>
+
+    <!-- presenter development -->
+    <div class="sec-head" style="margin-top:34px"><span class="n">3·a</span><h2>Presenter treatment — female talking-head</h2><span class="tag">the human layer</span></div>
+    <div class="callout warn"><b>She is an unnamed presenter, not a persona.</b> Fields is a one-person business
+      (Will) — so she is never introduced by name, never called a Fields “agent / valuer / consultant”, and never
+      implies she personally valued anyone's home. She's a <b>host reading the finding</b> — first person plural
+      (“<em>we</em> tested 512 homes”), the same voice as the site. This keeps us clear of the no-persona rule and
+      the Property Occupations Act (no implied agent/appraisal service).</div>
+
+    <p class="note" style="margin-top:16px"><b>Composition: bookend (recommended).</b> She owns the human beats —
+      hook, challenge, CTA — and hands to full-screen data for the $469,000 proof, where a face would only compete
+      with the number. Face → number → face is also the retention pattern in our filming rules (visual change every
+      2–3s, eye contact on the hook).</p>
+
+    <div class="strip" style="margin-top:8px">
+      <div class="beat">
+        <div class="phone phone-she"><div class="scene"><div class="she"><div class="halo"></div></div>
+          <div class="tc">0.0–1.5s</div><span class="safe">PRESENTER</span>
+          <div class="pchip" style="top:20%;right:12px">$1.31M</div>
+          <div class="pchip" style="top:40%;right:22px">$1.54M</div>
+          <div class="pchip" style="top:60%;right:14px">$1.76M</div>
+          <div class="otext big" style="position:relative;z-index:2">SAME HOME.</div>
+        </div></div>
+        <div class="bd">
+          <h3>Beat 1 · she opens</h3><div class="role">0.0–1.5s · full-frame presenter</div>
+          <div class="row"><div class="lab">Blocking</div><div class="val">Presenter to camera, mid-chest, eyes top
+            third, slight 5–10% push-in. Three price chips animate in beside her head.</div></div>
+          <div class="row"><div class="lab">She says</div><div class="val vo">“Three sites. Three very different values.”</div></div>
+          <div class="row"><div class="lab">On-screen</div><div class="val">SAME HOME. (from frame 1, white + Fields green)</div></div>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="phone phone-she"><div class="s-split scene"><div class="grain"></div>
+          <div class="tc">1.5–4.5s</div><span class="safe">DATA (VO)</span>
+          <div class="pip"></div>
+          <div class="osub" style="margin-bottom:6px">TYPICAL DEFENSIBLE RANGE</div>
+          <div class="otext big"><span class="hl">$469,000</span></div>
+          <div class="qual">Fields analysis of 512 homes — 12 months, same suburb.</div>
+        </div></div>
+        <div class="bd">
+          <h3>Beat 2 · data owns the proof</h3><div class="role">1.5–4.5s · she goes to VO (or small PiP)</div>
+          <div class="row"><div class="lab">Blocking</div><div class="val">Cut to the full-screen $469,000 spread.
+            She continues in <b>voiceover</b>; optional small lower-left PiP keeps her present without crowding the number.</div></div>
+          <div class="row"><div class="lab">She says</div><div class="val vo">“In our test, the typical defensible range was $469,000.”</div></div>
+          <div class="row"><div class="lab">Note</div><div class="val">Face off the number here — a talking head competes with the payload.</div></div>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="phone phone-she"><div class="scene"><div class="she"><div class="halo"></div></div>
+          <div class="tc">4.5–7.0s</div><span class="safe">PRESENTER</span>
+          <div class="otext big" style="position:relative;z-index:2">CAN YOUR ESTIMATE <span class="hl">BE TRUSTED?</span></div>
+        </div></div>
+        <div class="bd">
+          <h3>Beat 3 · she challenges</h3><div class="role">4.5–7.0s · back to full-frame presenter</div>
+          <div class="row"><div class="lab">Blocking</div><div class="val">Back on her; direct address, slightly faster than natural.</div></div>
+          <div class="row"><div class="lab">She says</div><div class="val vo">“We built a quick way to find out.”</div></div>
+          <div class="row"><div class="lab">On-screen</div><div class="val">CAN YOUR ESTIMATE BE TRUSTED?</div></div>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="phone phone-she"><div class="scene"><div class="she"><div class="halo"></div></div>
+          <div class="tc">7.0–9.0s</div><span class="safe">PRESENTER + CTA</span>
+          <div class="otext" style="position:relative;z-index:2">TEST MY HOME'S <span class="hl">ESTIMATE</span></div>
+          <span class="chip-cta" style="position:relative;z-index:2">Get Started →</span>
+        </div></div>
+        <div class="bd">
+          <h3>Beat 4 · she calls the action</h3><div class="role">7.0–9.0s · presenter + button</div>
+          <div class="row"><div class="lab">Blocking</div><div class="val">She gestures to / taps the button; Get Started
+            overlays lower third.</div></div>
+          <div class="row"><div class="lab">She says</div><div class="val vo">“Check yours.”</div></div>
+          <div class="row"><div class="lab">End card</div><div class="val">TEST MY HOME'S ESTIMATE · <b>Get Started</b>.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="thesis" style="margin-top:22px">
+      <div class="card">
+        <h3>Recording spec (our filming rules)</h3>
+        <ul>
+          <li><b>Eye contact never breaks</b> — the single biggest retention lever.</li>
+          <li>Frame mid-chest to above head, <b>eyes in the top third</b>; natural / neutral background.</li>
+          <li>Deliver <b>slightly faster than natural</b>, over-deliver energy a touch.</li>
+          <li>Text from <b>frame 1</b> (most watch muted), white + Fields green/copper, change every 2–4s.</li>
+          <li>Record beats in short bursts; jump-cut between them; 5–10% push-in on the hook.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Alternative compositions</h3>
+        <ul>
+          <li><b>Full-frame throughout</b> — she stays on screen over every beat, data as overlays around her. Most human, but the $469k has to share the frame.</li>
+          <li><b>Corner PiP</b> — data is hero, she's a small persistent insert. Keeps the number dominant; lower trust than full face.</li>
+          <li><b>Bookend</b> ✓ — the recommended cut above.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="sec-head" style="margin-top:30px"><span class="n">3·b</span><h2>How we source her — the decision</h2></div>
+    <div class="altfigs">
+      <div class="fig pick"><div class="lab">Real presenter</div><div class="amt" style="font-size:1.15rem">Filmed host</div>
+        <p>A real person (creator / contractor) delivers the lines. Most authentic, zero impersonation risk, works muted-or-not. Needs casting + a short shoot. <span class="badge2">recommended</span></p></div>
+      <div class="fig"><div class="lab">AI-generated</div><div class="amt" style="font-size:1.15rem">Veo 3 / avatar</div>
+        <p>Synthetic presenter with synced speech. Fast &amp; cheap, but uncanny risk and <b>must not read as a real Fields staffer</b> — generic host register only, and disclosure if it looks like a real person.</p></div>
+      <div class="fig"><div class="lab">Licensed UGC</div><div class="amt" style="font-size:1.15rem">Creator marketplace</div>
+        <p>Brief a Meta/creator-marketplace creator to shoot it. Real face, native Reels feel, licensed — middle ground on cost and turnaround.</p></div>
+    </div>
+    <p class="note">This is the one call I can't make for you: it changes the next build step (a casting/shoot brief vs a
+      Veo/avatar talking-head prompt). Whichever we pick, she stays an unnamed host — never “your Fields valuer”.</p>
+  </section>
+
+  <!-- ================= THE 30-SECOND TEST ================= -->
+  <section>
+    <div class="sec-head"><span class="n">2·b</span><h2>The 30-second test — it must be real</h2></div>
+    <div class="thesis">
+      <div class="card">
+        <h3>What the test asks</h3>
+        <ul>
+          <li>Do you currently have an online estimate?</li>
+          <li>Approximately when was the home last renovated?</li>
+          <li>Does the estimate show the <b>comparable sales</b> behind it?</li>
+          <li>Enter the property address to examine it.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>What it returns (tangible)</h3>
+        <ul>
+          <li><b>Reliability: Low</b> — “Your estimate does not expose enough evidence to assess its reliability.”</li>
+          <li>or <b>“We found enough local sales to perform a more detailed comparison.”</b></li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout warn" style="margin-top:16px"><b>⚠ A real diagnostic, not a decorative quiz.</b>
+      The answer must not always resolve to “contact an agent.” The reliability read has to reflect the actual inputs —
+      whether an estimate discloses its comps, and whether we have enough local sales to compare — or the promise
+      in the hook is broken. Keep the read <em>evidence-based</em> (does it show its working), never a swipe at a named site.</div>
+  </section>
+
+  <!-- ================= HOOK VARIANTS ================= -->
+  <section>
+    <div class="sec-head"><span class="n">2·c</span><h2>Hook variants — test the opening only</h2><span class="tag">not different ads</span></div>
+    <div class="checks">
+      <div class="hookcard"><div class="hl-lab">Variant A · Three estimates</div>
+        <p>“Three websites valued the same home hundreds of thousands apart.”</p>
+        <span class="pred">Prediction: most attention — visually immediate &amp; credible.</span></div>
+      <div class="hookcard"><div class="hl-lab">Variant B · Hidden unreliability</div>
+        <p>“Your online property estimate could look precise — and still be hundreds of thousands out.”</p>
+        <span class="pred">Prediction: more provocative, slightly more confrontational.</span></div>
+      <div class="hookcard"><div class="hl-lab">Variant C · Direct challenge</div>
+        <p>“How accurate is your home's online estimate? Take the 30-second test.”</p>
+        <span class="pred">Prediction: most submissions — action &amp; effort are explicit.</span></div>
+      <div class="hookcard pickhook"><div class="hl-lab">Hybrid · likely winner</div>
+        <p>“Three websites. One home. Three different values. Take the 30-second test to see whether yours can be trusted.”</p>
+        <span class="pred">Combines A's credibility with C's explicit action.</span></div>
+    </div>
+  </section>
+
+  <!-- ================= META FORM SPEC ================= -->
+  <section>
+    <div class="sec-head"><span class="n">2·d</span><h2>Meta form — “More Volume”, near-empty</h2></div>
+    <div class="thesis">
+      <div class="card">
+        <h3>Include only</h3>
+        <ul>
+          <li><b>First name</b> — Meta prefills</li>
+          <li><b>Mobile number</b> — Meta prefills</li>
+        </ul>
+        <p class="note" style="margin-top:10px">User may only need to check the details and tap. Maximum quantity.</p>
+      </div>
+      <div class="card">
+        <h3>Do <em>not</em> request (initially)</h3>
+        <ul>
+          <li>email · surname · suburb</li>
+          <li>selling timeframe · ownership status</li>
+          <li>property address <em>(that's the Step-2 conversion)</em></li>
+        </ul>
+        <p class="note" style="margin-top:10px">The creative filters toward homeowners; the second step identifies the property.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= TEST PLAN ================= -->
+  <section>
+    <div class="sec-head"><span class="n">02</span><h2>What we're actually testing</h2><span class="tag">funnel as the variable</span></div>
+    <table class="test">
+      <thead><tr><th>Reel</th><th>Length</th><th>Funnel &amp; first ask</th><th>Number on screen</th></tr></thead>
+      <tbody>
+        <tr><td><b>Reel One</b> · address-first</td><td class="len">10 sec</td><td>Straight to <b>/analyse-your-home</b> (address)</td><td>Over $200,000 (gap)</td></tr>
+        <tr><td><b>Reel Two</b> · trust-test</td><td class="len">8–10 sec</td><td><b>Name + mobile</b> first; address optional Step 2</td><td>Over $200,000</td></tr>
+        <tr><td><b>Reel Three</b> · trust-test</td><td class="len">8–10 sec</td><td>Same as Reel Two</td><td><b>$469,000</b> (variant)</td></tr>
+      </tbody>
+    </table>
+    <p class="note"><b>Two things are being tested, cleanly separated.</b> Reel One vs Reel Two is an
+      <b>offer/funnel</b> test (address-first vs name+mobile-first) — which capture path wins on
+      cost-per-<em>valid</em>-lead. Reel Two vs Reel Three is a <b>number</b> test on identical creative —
+      does the full “$469,000” beat the unassailable “over $200,000” enough to justify the extra exposure.
+      Change one variable per pair, never both at once.</p>
+    <div class="callout" style="margin-top:16px"><b>Judge on cost per <em>valid</em> lead — not raw volume.</b>
+      Reel Two will almost certainly submit more; the question is whether those name-and-mobile leads convert to a
+      named property and a contactable owner as cheaply as Reel One's address-first leads. Watch all five together:</div>
+    <div class="metrics">
+      <span>cost / valid lead</span><span>form-open rate</span><span>form-completion rate</span>
+      <span>% who reach Step 2 (address)</span><span>contactable-lead rate</span>
+    </div>
+  </section>
+
+  <!-- ================= PRODUCTION ================= -->
+  <section>
+    <div class="sec-head"><span class="n">03</span><h2>How it gets made — Google video API</h2></div>
+    <div class="pipe">
+      <div class="step"><div class="num">STEP 1</div><h4>Generate b-roll</h4>
+        <p>Plates via <b>Veo 3</b> on Vertex (<code>veo-3.0-generate-001</code>, <code>predictLongRunning</code>),
+          8s / 9:16, GCP <code>fields-estate</code> billing — same account as Gemini vision.</p></div>
+      <div class="step"><div class="num">STEP 2</div><h4>Overlay the evidence</h4>
+        <p>Price tags, comp cards, the $469,000 reveal and the evidence UI are a <b>motion-graphics layer</b>
+          (After Effects / Playwright frames) composited on the plates. Veo makes the world; we draw the number.</p></div>
+      <div class="step"><div class="num">STEP 3</div><h4>Cut, caption, voice</h4>
+        <p>Cut to 10s &amp; 15s, burned-in captions (sound-off autoplay), VO or clean TTS, brand end-card.
+          Export 1080×1920 H.264, Reels-safe.</p></div>
+      <div class="step"><div class="num">STEP 4</div><h4>Ship PAUSED + log</h4>
+        <p><b>OFFSITE_CONVERSIONS</b>, broad, geofenced to the 3 suburbs. Start <b>PAUSED</b>;
+          write <code>system_monitor.ad_decisions</code> on create.</p></div>
+    </div>
+    <div class="callout warn" style="margin-top:16px"><b>Build status — Veo tooling done, blocked on project access.</b>
+      <code>scripts/veo_generate.py</code> + the per-beat prompt pack (<code>03_Facebook/Reels/veo_prompts.json</code>)
+      are written and validated end-to-end (auth, request build, dry-run all pass). The one blocker: the
+      <b>fields-estate</b> GCP project isn't granted access to the Veo publisher models — every Veo call 404s
+      “your project does not have access”, while Gemini on the same token returns 200. <b>Action needed:</b> enable
+      Veo for the project in the GCP console (Vertex AI → media/video generation → accept terms), or switch to the
+      Gemini Developer API Veo endpoint with a paid key. No spend incurred — no render ever ran.</div>
+  </section>
+
+  <!-- ================= COMPLIANCE ================= -->
+  <section>
+    <div class="sec-head"><span class="n">04</span><h2>Compliance pre-flight (Rule 5)</h2></div>
+    <div class="checks">
+      <div class="chk"><span class="tick">✓</span><span><b>No single figure as “your home is worth X.”</b>
+        The number on screen is a <b>gap</b> — exactly the differences/savings framing ads are cleared to show.</span></div>
+      <div class="chk"><span class="tick">✓</span><span><b>Landing page shows methodology + confidence disclaimer</b>
+        — <b>/analyse-your-home</b> does. Mandatory pre-flight for a $ claim is met.</span></div>
+      <div class="chk"><span class="tick">✓</span><span><b>No advice, no predictions.</b> The reel states a
+        measured fact and shows evidence; the viewer draws the conclusion.</span></div>
+      <div class="chk"><span class="tick">✓</span><span><b>Source never named.</b> “Our test” / “homes that sold near you” —
+        never “Domain” / “onthehouse”.</span></div>
+      <div class="chk"><span class="no">✕</span><span><b>Never claim we're “more accurate.”</b> Our own 512-home run
+        <b>retracts</b> that — it's falsifiable. The claim is <b>determinacy &amp; disclosed evidence</b>, not accuracy.</span></div>
+      <div class="chk"><span class="no">✕</span><span><b>Forbidden words</b> — no “stunning”, “nestled”, “boasting”,
+        “rare opportunity”, “robust market”.</span></div>
+    </div>
+
+    <div class="callout warn" style="margin-top:18px">
+      <b>⚠ Why we say “over $200,000”, not a single measured figure.</b> The spread depends entirely on which
+      comparable pool you screen on. Every one of the three measured pools below <em>exceeds $200,000</em> — so
+      “over $200,000” is true no matter which screen a critic applies, while the actual measured median sits far above it.
+      That's the safest striking claim we can make. The three measured options, for reference:
+    </div>
+    <div class="altfigs">
+      <div class="fig pick"><div class="lab">On air</div><div class="amt">Over $200,000</div>
+        <p>True under every pool. What Reel One says. <span class="badge2">Will's call ✓</span></p></div>
+      <div class="fig"><div class="lab">Strict · 6mo, 2km, ±20%</div><div class="amt">$227,500</div>
+        <p>The most conservative measured floor — “over $200k” is anchored here.</p></div>
+      <div class="fig"><div class="lab">As-run · 12mo, same suburb</div><div class="amt">$469,000</div>
+        <p>The 512-home run's actual median. Real headroom behind the claim.</p></div>
+    </div>
+    <p class="note">On air: <b>Reel Two runs “over $200,000”</b> (clears every screen — strict, same-suburb and statutory
+      all exceed it), and <b>Reel Three runs the full “$469,000”</b> as an A/B variant. Both name the 12-month same-suburb
+      pool in the qualifier, so both are defensible; Reel Three simply carries the bolder claim. Let the test decide.</p>
+  </section>
+
+  <footer>
+    <span>Fields Real Estate · two-reel valuation campaign · nothing generated or spending</span>
+    <span>Figures: 2026-08-06 dispersion run (n=512) · status: concept for sign-off</span>
+  </footer>
+
+</div>
