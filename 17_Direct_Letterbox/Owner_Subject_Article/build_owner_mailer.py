@@ -375,10 +375,12 @@ def build_mail_html(html: str, url: str, address_short: str) -> tuple[str, int]:
 
 
 # ------------------------------------------------------------------ PDF render
-def html_to_pdf(html_path: str, pdf_path: str, margin: str = "13mm"):
-    """Render the mailer HTML to A4 print PDF via headless Chrome (faithful to the
+def html_to_pdf(html_path: str, pdf_path: str, margin: str = "13mm", prefer_css: bool = False):
+    """Render the mailer HTML to print PDF via headless Chrome (faithful to the
     article's own print stylesheet). file:// so local data-URI/relative assets load.
-    margin='0' for the fixed-box teaser (full-bleed); '13mm' for the flowed article."""
+    margin='0' for the fixed-box teaser (full-bleed); '13mm' for the flowed article.
+    prefer_css=True honours the CSS @page size (the teaser sets 216x303mm for a real
+    3mm bleed); the flowed article stays format=A4."""
     from playwright.sync_api import sync_playwright
 
     exe = next((p for p in ("/usr/bin/google-chrome",
@@ -406,8 +408,13 @@ def html_to_pdf(html_path: str, pdf_path: str, margin: str = "13mm"):
         # ~9 flowed pages; the brandbar and CTA are inset blocks (not full-bleed),
         # which a long multi-page document handles far more predictably than bleed.
         # The teaser passes margin='0' — it is a fixed 210x297 box that bleeds.
-        page.pdf(path=pdf_path, format="A4", print_background=True,
-                 margin={"top": margin, "bottom": margin, "left": margin, "right": margin})
+        pdf_kw = {"print_background": True,
+                  "margin": {"top": margin, "bottom": margin, "left": margin, "right": margin}}
+        if prefer_css:
+            pdf_kw["prefer_css_page_size"] = True   # honour @page{size:216mm 303mm}
+        else:
+            pdf_kw["format"] = "A4"
+        page.pdf(path=pdf_path, **pdf_kw)
         browser.close()
 
 
@@ -558,7 +565,7 @@ def teaser_facts(client, address, suburb=None, skip_market_check=False,
 
 
 TEASER_CSS = """
-@page{size:A4;margin:0}
+@page{size:216mm 303mm;margin:0}
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--green:#22382c;--green-deep:#1b2d24;--terra:#b76749;--terra-dark:#8d4d33;
  --sand:#c9b9a0;--paper:#fdf3ec;--cream:#efe8de;--sage:#7a8a80;--ink:#2a2a24;
@@ -566,12 +573,17 @@ TEASER_CSS = """
 html,body{font-family:'Liberation Sans',-apple-system,Segoe UI,Roboto,sans-serif;
  color:var(--ink);-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .serif{font-family:Georgia,'Liberation Serif',serif}
-.page{width:210mm;height:297mm;position:relative;overflow:hidden;
+/* Real 3mm bleed: the sheet is 216x303 (trim 210x297 + 3mm each edge). The
+   original design lives untouched inside a 3mm-inset .trim canvas; only the
+   full-bleed elements (green brandbar, aerial) spill 3mm out into the bleed.
+   The cream page background fills the bleed everywhere else. */
+.page{width:216mm;height:303mm;position:relative;overflow:hidden;
  background:var(--paper);page-break-after:always}
 .page:last-child{page-break-after:auto}
+.trim{position:absolute;top:3mm;left:3mm;width:210mm;height:297mm}
 .pad{padding:0 20mm}
 .brandbar{background:var(--green);color:var(--paper);display:flex;align-items:center;
- justify-content:space-between;padding:6mm 20mm}
+ justify-content:space-between;padding:9mm 23mm 6mm 23mm;margin:-3mm -3mm 0}
 .brandbar img{height:8mm;width:auto;display:block}
 .brandbar .tag{font:400 13pt/1 Georgia,serif;color:var(--sand);letter-spacing:-.01em}
 .brandbar .tag b{color:#c98a52}
@@ -583,7 +595,7 @@ html,body{font-family:'Liberation Sans',-apple-system,Segoe UI,Roboto,sans-serif
 .front h1{font-size:31pt;line-height:1.08;color:var(--green-deep);font-weight:400;
  letter-spacing:-.3pt;margin-top:4mm}
 .front h1 b{color:var(--terra);font-weight:400}
-.aerialband{width:210mm;height:150mm;position:relative;background:var(--cream)}
+.aerialband{width:calc(100% + 6mm);margin:0 -3mm;height:150mm;position:relative;background:var(--cream)}
 .aerialband img{width:100%;height:100%;object-fit:cover;display:block}
 .aerialcap{position:absolute;left:0;right:0;bottom:0;background:rgba(27,45,36,.72);
  color:var(--paper);font-size:8.5pt;letter-spacing:.2pt;padding:2.6mm 20mm}
@@ -661,7 +673,7 @@ def teaser_html(f: dict, url: str) -> str:
     urltext = url.replace("https://", "")
 
     front = f"""
-<div class="page front">
+<div class="page front"><div class="trim">
   {brand}
   <div class="top">
     <div class="kicker">Prepared for this address</div>
@@ -679,7 +691,7 @@ def teaser_html(f: dict, url: str) -> str:
       a change.</p>
     <div class="turn">Turn over for what we found &rarr;</div>
   </div>
-</div>
+</div></div>
 """
 
     # Sign-aware headline: a risen home leads with the rise (national down, this home
@@ -695,7 +707,7 @@ def teaser_html(f: dict, url: str) -> str:
                     '<b>But the market underneath it is beginning to change.</b>')
 
     back = f"""
-<div class="page back">
+<div class="page back"><div class="trim">
   {brand}
   <div class="top">
     <h2 class="serif">{headline}</h2>
@@ -736,7 +748,7 @@ def teaser_html(f: dict, url: str) -> str:
     </div>
     <div class="respond-qr"><img src="{qr}" alt="Scan for the full analysis of {addr}"></div>
   </div>
-</div>
+</div></div>
 """
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8">\n'
             f'<meta name="robots" content="noindex">\n<style>{TEASER_CSS}</style>'
@@ -794,7 +806,7 @@ def build_teaser(address, suburb=None, out_dir=None, skip_market_check=False,
     with open(html_path, "w", encoding="utf-8") as fh:
         fh.write(html)
     pdf_path = os.path.join(out_dir, f"{slug}.teaser.pdf")
-    html_to_pdf(html_path, pdf_path, margin="0")
+    html_to_pdf(html_path, pdf_path, margin="0", prefer_css=True)
 
     layout = verify_teaser_pdf(pdf_path, f)
     if layout:
