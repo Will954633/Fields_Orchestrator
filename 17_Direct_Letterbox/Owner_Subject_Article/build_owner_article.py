@@ -738,6 +738,17 @@ def compose(bundle: dict, variant: str = "report") -> tuple[str, FactBook, dict]
                     f"be misleading — there are a number of reasons single valuations can be "
                     f"variable. We need more market context to confirm whether that "
                     f"direction is reflected in the broader market.\n")
+            elif subj_pct >= 8:
+                # A clear rise — "holding, edging up" would badly understate it (the
+                # subject that prompted this was +17.9%). Name the rise honestly; the
+                # figure itself sits in the line just above, so the word only has to
+                # not contradict it. Keep the one-sample caveat.
+                P.append(
+                    f"Now we have our first data point, the price trajectory of your own "
+                    f"home, and on this measure it has risen meaningfully over the period, "
+                    f"not merely held its ground. That is still a single sample, so the next "
+                    f"step is to set it against the wider market — the next ring out is to "
+                    f"look at what's happening at the suburb level.\n")
             else:
                 hold = ("holding — if anything, edging up —" if subj_pct >= 3
                         else "holding broadly steady")
