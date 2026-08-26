@@ -76,6 +76,50 @@ def host() -> str:
     return f"{REGION}-aiplatform.googleapis.com"
 
 
+# --- Agent Platform "interactions" backend (WHAT ACTUALLY WORKS on this project) ---
+# The classic veo-3.0-generate-001:predictLongRunning publisher endpoint 404s for
+# fields-estate — the project is on the new Agent Platform surface. Video generation
+# works through the google-genai SDK's interactions API with model
+# gemini-omni-flash-preview, vertexai=True, location=global, and the Api-Revision
+# header. Produces 720x1280 (9:16) ~10s mp4 with audio; aspect comes from the PROMPT
+# TEXT (say "vertical 9:16"), not a parameter. See fix-history 2026-08-26.
+GENAI_MODEL = os.environ.get("VEO_GENAI_MODEL", "gemini-omni-flash-preview")
+_GENAI_CLIENT = None
+
+
+def _genai_client():
+    global _GENAI_CLIENT
+    if _GENAI_CLIENT is None:
+        from google import genai
+        from google.genai import types
+        keyfile = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or "/home/fields/.gcp-vertex-key.json"
+        creds = None
+        if os.path.exists(keyfile):
+            from google.oauth2 import service_account
+            creds = service_account.Credentials.from_service_account_file(
+                keyfile, scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        _GENAI_CLIENT = genai.Client(
+            vertexai=True, project=PROJECT, location="global", credentials=creds,
+            http_options=types.HttpOptions(headers={"Api-Revision": "2026-05-20"}))
+    return _GENAI_CLIENT
+
+
+def genai_generate(prompt, out, negative=None):
+    import base64
+    text = prompt if not negative else f"{prompt}\n\nAvoid: {negative}"
+    it = _genai_client().interactions.create(
+        model=GENAI_MODEL,
+        input=[{"type": "user_input", "content": [{"type": "text", "text": text}]}])
+    for step in (it.steps or []):
+        if getattr(step, "type", None) == "model_output":
+            for part in (getattr(step, "content", None) or []):
+                if getattr(part, "type", None) == "video" and getattr(part, "data", None):
+                    Path(out).parent.mkdir(parents=True, exist_ok=True)
+                    Path(out).write_bytes(base64.b64decode(part.data))
+                    return out
+    raise RuntimeError(f"no video part in interaction (steps={[getattr(s,'type',None) for s in (it.steps or [])]})")
+
+
 # --- Gemini Developer API backend (key-based, no project/GCS) ---------------
 GEMINI_API_HOST = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -227,6 +271,14 @@ def run_one(prompt, out, model, aspect, duration, audio, negative, bucket, dry_r
     print(f"→ backend={backend} model={model}  {aspect} {duration}s audio={audio}  est≈${est:.2f}")
     print(f"  prompt: {prompt[:140]}{'…' if len(prompt) > 140 else ''}")
 
+    if backend == "interactions":
+        if dry_run:
+            print(f"  [dry-run] genai interactions.create model={GENAI_MODEL} (aspect/audio from prompt text)")
+            return None
+        genai_generate(prompt, out, negative=negative)
+        print(f"  ✓ {out}  (interactions/{GENAI_MODEL})")
+        return out
+
     if backend == "gemini":
         if dry_run:
             print("  [dry-run] gemini predictLongRunning params:",
@@ -272,13 +324,18 @@ def main():
     ap.add_argument("--no-audio", action="store_true")
     ap.add_argument("--negative", default=None)
     ap.add_argument("--bucket", default=DEFAULT_BUCKET)
-    ap.add_argument("--backend", choices=["vertex", "gemini"], default="vertex",
-                    help="vertex = SA + GCS (project-gated); gemini = Developer API key")
+    ap.add_argument("--backend", choices=["interactions", "vertex", "gemini"], default="interactions",
+                    help="interactions = genai omni via Agent Platform (WORKS on fields-estate); "
+                         "vertex = SA + GCS publisher endpoint (project-gated, 404s here); "
+                         "gemini = Developer API key")
     ap.add_argument("--model", help="override model id (e.g. veo-3.1-generate-preview)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
-    model = args.model or (MODEL_FAST if args.fast else MODEL_FULL)
+    if args.backend == "interactions":
+        model = args.model or GENAI_MODEL
+    else:
+        model = args.model or (MODEL_FAST if args.fast else MODEL_FULL)
 
     def opts_for(beat):
         return dict(model=model, aspect=beat.get("aspect", args.aspect),
