@@ -46,6 +46,7 @@ INTERNAL_IDS = {
     "019d102e-5fb2-7818-8e2a-99d81b4b4297",  # Will/wife — Balderstone St
     "019d24b3-da5e-7a72-9e6a-b34f118e64c7",  # Will — 86 pageviews, /ops
     "019d24b3-da5d-73ac-af08-e9d16df636f2",  # Will (Android) — 1779 events, /ops ×26, for-sale-v2/v4b
+    "01a01c97-880a-7d14-a611-b791c3474a81",  # Will — 27 Huntingdale test-address device (2026-08-26)
 }
 # Mirrored in Website netlify/functions/offmarket-intent-alert.mjs — change both.
 
