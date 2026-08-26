@@ -56,6 +56,7 @@ from googleapiclient.discovery import build
 
 from shared.db import get_client
 from crm_sync import posthog_query, INTERNAL_IDS, BOT_CITIES
+from test_addresses import TEST_ADDRESS_SLUGS, is_test_address
 from scripts.property_reports import occupancy_classifier as occ
 
 # seller-intent enrichment (own-listing status/days-on-market + live listings viewed)
@@ -78,7 +79,10 @@ GC_DB = "Gold_Coast"
 CORE_SUBURBS = ["robina", "varsity_lakes", "burleigh_waters"]
 
 TEST_EMAILS = {"will@fieldsestate.com.au", "test@tester.com.au"}
-TEST_SLUGS = {"7-huntingdale-crescent-robina", "5-fulham-place-robina"}
+# Will's test addresses live in the shared registry (scripts/test_addresses.py) so
+# every lead surface blocks the same set. Kept under this name for the importers
+# (leads_prune_nonleads, build_call_list) that already reference TEST_SLUGS.
+TEST_SLUGS = set(TEST_ADDRESS_SLUGS)
 
 # property_reports docs that exist for reasons OTHER than a person asking us for a
 # report. A doc here is not a lead and must never reach the sheet — several did, and
@@ -109,8 +113,8 @@ def is_not_a_lead(d: dict) -> str | None:
         return "owner.is_internal"
     if (owner.get("email") or "").lower() in TEST_EMAILS:
         return "test email"
-    if d.get("slug") in TEST_SLUGS:
-        return "test slug"
+    if is_test_address(d.get("slug"), d.get("address")):
+        return "test address"
     src = (d.get("source") or "").lower()
     if src in NOT_A_LEAD_SOURCES:
         return f"source={d.get('source')}"
