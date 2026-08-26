@@ -76,6 +76,78 @@ def host() -> str:
     return f"{REGION}-aiplatform.googleapis.com"
 
 
+# --- Gemini Developer API backend (key-based, no project/GCS) ---------------
+GEMINI_API_HOST = "https://generativelanguage.googleapis.com/v1beta"
+
+
+def _gemini_key() -> str:
+    k = os.environ.get("VEO_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    if k:
+        return k.strip()
+    # fall back to the credentials file line "VEO API: ..."
+    f = Path("/home/fields/Fields_Orchestrator/00_Run_Commands/gh-token-29Mar.txt")
+    if f.exists():
+        for line in f.read_text().splitlines():
+            if line.strip().upper().startswith("VEO API"):
+                return line.split(":", 1)[1].strip()
+    raise RuntimeError("no VEO_API_KEY / GEMINI_API_KEY and no 'VEO API:' line found")
+
+
+def gemini_start(model, prompt, aspect, duration, audio, negative, person="allow_adult"):
+    key = _gemini_key()
+    params = {"aspectRatio": aspect, "sampleCount": 1, "personGeneration": person}
+    # Gemini Developer API Veo: no storageUri; duration/audio fixed by model.
+    instance = {"prompt": prompt}
+    if negative:
+        instance["negativePrompt"] = negative
+    body = {"instances": [instance], "parameters": params}
+    url = f"{GEMINI_API_HOST}/models/{model}:predictLongRunning?key={key}"
+    r = requests.post(url, headers={"Content-Type": "application/json"}, json=body, timeout=60)
+    if not r.ok:
+        raise RuntimeError(f"gemini start {r.status_code}: {r.text[:600]}")
+    return r.json()["name"]
+
+
+def gemini_poll(op_name, timeout=600, interval=15):
+    key = _gemini_key()
+    url = f"{GEMINI_API_HOST}/{op_name}?key={key}"
+    waited = 0
+    while waited <= timeout:
+        r = requests.get(url, timeout=60)
+        if not r.ok:
+            raise RuntimeError(f"gemini poll {r.status_code}: {r.text[:400]}")
+        data = r.json()
+        if data.get("done"):
+            if "error" in data:
+                raise RuntimeError(f"gemini job error: {json.dumps(data['error'])[:600]}")
+            return data.get("response", {})
+        time.sleep(interval)
+        waited += interval
+        print(f"  ... {waited}s", file=sys.stderr)
+    raise TimeoutError(f"gemini job did not finish within {timeout}s")
+
+
+def gemini_download(response, out):
+    key = _gemini_key()
+    gvr = response.get("generateVideoResponse", response)
+    samples = (gvr.get("generatedSamples") or gvr.get("videos")
+               or response.get("generatedSamples") or [])
+    if not samples:
+        filt = (gvr.get("raiMediaFilteredReasons") or response.get("raiMediaFilteredReasons"))
+        raise RuntimeError(f"no video in response (filtered={filt}): {json.dumps(response)[:400]}")
+    uri = (samples[0].get("video") or {}).get("uri") or samples[0].get("uri")
+    if not uri:
+        raise RuntimeError(f"no video uri: {json.dumps(samples[0])[:300]}")
+    dl = uri if "key=" in uri else (uri + ("&" if "?" in uri else "?") + f"key={key}")
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    with requests.get(dl, stream=True, timeout=300) as r:
+        r.raise_for_status()
+        with open(out, "wb") as fh:
+            for chunk in r.iter_content(1 << 16):
+                fh.write(chunk)
+    return uri
+
+
 def build_request(prompt, aspect="9:16", duration=8, audio=True, negative=None,
                   person="allow_adult", storage_uri=None, count=1):
     params = {
@@ -149,12 +221,26 @@ def gsutil_cp(gcs_uri, local_path):
     subprocess.run(["gsutil", "cp", gcs_uri, str(local_path)], check=True)
 
 
-def run_one(prompt, out, model, aspect, duration, audio, negative, bucket, dry_run):
+def run_one(prompt, out, model, aspect, duration, audio, negative, bucket, dry_run,
+            backend="vertex"):
+    est = COST_PER_SEC.get(model, 0.4) * duration
+    print(f"→ backend={backend} model={model}  {aspect} {duration}s audio={audio}  est≈${est:.2f}")
+    print(f"  prompt: {prompt[:140]}{'…' if len(prompt) > 140 else ''}")
+
+    if backend == "gemini":
+        if dry_run:
+            print("  [dry-run] gemini predictLongRunning params:",
+                  json.dumps({"aspectRatio": aspect, "personGeneration": "allow_adult"}))
+            return None
+        op = gemini_start(model, prompt, aspect, duration, audio, negative)
+        print(f"  job: {op}", file=sys.stderr)
+        resp = gemini_poll(op)
+        uri = gemini_download(resp, out)
+        print(f"  ✓ {out}  ({uri[:80]}…)")
+        return out
+
     body = build_request(prompt, aspect=aspect, duration=duration, audio=audio,
                          negative=negative, storage_uri=bucket)
-    est = COST_PER_SEC.get(model, 0.4) * duration
-    print(f"→ model={model}  {aspect} {duration}s audio={audio}  est≈${est:.2f}")
-    print(f"  prompt: {prompt[:140]}{'…' if len(prompt) > 140 else ''}")
     if dry_run:
         print("  [dry-run] request body:")
         print(json.dumps(body, indent=2))
@@ -186,17 +272,20 @@ def main():
     ap.add_argument("--no-audio", action="store_true")
     ap.add_argument("--negative", default=None)
     ap.add_argument("--bucket", default=DEFAULT_BUCKET)
+    ap.add_argument("--backend", choices=["vertex", "gemini"], default="vertex",
+                    help="vertex = SA + GCS (project-gated); gemini = Developer API key")
+    ap.add_argument("--model", help="override model id (e.g. veo-3.1-generate-preview)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
-    model = MODEL_FAST if args.fast else MODEL_FULL
+    model = args.model or (MODEL_FAST if args.fast else MODEL_FULL)
 
     def opts_for(beat):
         return dict(model=model, aspect=beat.get("aspect", args.aspect),
                     duration=beat.get("duration", args.duration),
                     audio=beat.get("audio", not args.no_audio),
                     negative=beat.get("negative", args.negative),
-                    bucket=args.bucket, dry_run=args.dry_run)
+                    bucket=args.bucket, dry_run=args.dry_run, backend=args.backend)
 
     if args.pack:
         pack = json.loads(Path(args.pack).read_text())
@@ -223,7 +312,7 @@ def main():
         sys.exit("need --out")
     run_one(prompt, args.out or "/dev/null", model=model, aspect=args.aspect,
             duration=args.duration, audio=not args.no_audio, negative=args.negative,
-            bucket=args.bucket, dry_run=args.dry_run)
+            bucket=args.bucket, dry_run=args.dry_run, backend=args.backend)
 
 
 if __name__ == "__main__":
