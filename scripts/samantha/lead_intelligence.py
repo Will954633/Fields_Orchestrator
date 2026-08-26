@@ -42,6 +42,7 @@ sys.path.insert(0, "/home/fields")
 from src.mongo_client_factory import get_mongo_client, cosmos_retry  # noqa: E402
 from scripts.property_reports import occupancy_classifier as occ  # noqa: E402
 from scripts.crm_sync import posthog_query, INTERNAL_IDS, BOT_CITIES  # noqa: E402
+from scripts.test_addresses import is_test_address  # noqa: E402
 
 NOW = datetime.now(timezone.utc)
 FRESH_STALE_DAYS = 45  # re-pull fresh only if stored timeline older than this / missing
@@ -460,7 +461,8 @@ def main() -> int:
     # Mark test + resolve property (free enrichment) for everyone first.
     for r in recs:
         r["is_test"] = _is_test(r["email"], r["name"], " ".join(r["sources"]),
-                                (r.get("extra") or {}).get("is_test"))
+                                (r.get("extra") or {}).get("is_test")) \
+            or is_test_address(r.get("address"))
         gc_doc = None if r["is_test"] else _resolve_gc_doc(r, gc_db)
         r["property"] = _property_summary(gc_doc)
         # Occupancy: prefer a report's already-computed occupancy if present.
