@@ -1,0 +1,326 @@
+<title>Win a Tinny — Ad Copy Kit (Quintrex 310 DART)</title>
+<style>
+  :root{
+    --water:#0C3A49; --water-2:#10495B; --alu:#BFC9CE; --alu-2:#8FA0A7;
+    --sand:#EFE7D6; --paper:#F7F1E4; --sun:#F0894B; --sun-deep:#DE5F33; --ink:#0E1C22;
+    --line:#D9CFBB; --foam:#E7F0F1;
+    /* tokens */
+    --bg:var(--sand); --surface:var(--paper); --panel:#FBF6EC; --fg:var(--ink);
+    --fg-soft:#4C5B60; --accent:var(--sun-deep); --brand:var(--water); --hair:var(--line);
+    --chip:#EAE0CC; --preview:#0C3A49;
+    --shadow:0 16px 44px -22px rgba(12,58,73,.5);
+    --disp:"Arial Black","Helvetica Neue",Helvetica,system-ui,sans-serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#08262F; --surface:#0E323E; --panel:#123B48; --fg:#EAF0F0; --fg-soft:#9FB2B7;
+      --accent:#F5975C; --brand:#7FB7C4; --hair:#1C4552; --chip:#123B48; --preview:#061C24;
+      --shadow:0 20px 54px -26px rgba(0,0,0,.7); }
+  }
+  :root[data-theme="light"]{ --bg:#EFE7D6; --surface:#F7F1E4; --panel:#FBF6EC; --fg:#0E1C22;
+    --fg-soft:#4C5B60; --accent:#DE5F33; --brand:#0C3A49; --hair:#D9CFBB; --chip:#EAE0CC; --preview:#0C3A49;
+    --shadow:0 16px 44px -22px rgba(12,58,73,.5); }
+  :root[data-theme="dark"]{ --bg:#08262F; --surface:#0E323E; --panel:#123B48; --fg:#EAF0F0;
+    --fg-soft:#9FB2B7; --accent:#F5975C; --brand:#7FB7C4; --hair:#1C4552; --chip:#123B48; --preview:#061C24;
+    --shadow:0 20px 54px -26px rgba(0,0,0,.7); }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1120px;margin:0 auto;padding:clamp(20px,4vw,52px)}
+  h1,h2,h3{margin:0;text-wrap:balance}
+  .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.24em;text-transform:uppercase;color:var(--accent);font-weight:700}
+
+  /* masthead */
+  header.mast{position:relative;border-radius:20px;overflow:hidden;background:
+      linear-gradient(180deg,var(--water) 0%,var(--water-2) 70%,#0a2f3b 100%);color:#EAF0F0;
+      padding:clamp(26px,5vw,52px);box-shadow:var(--shadow)}
+  header.mast .wl{position:absolute;left:0;right:0;bottom:0;height:120px;opacity:.5;
+      background:repeating-linear-gradient(100deg,transparent 0 22px,rgba(255,255,255,.05) 22px 24px);
+      pointer-events:none}
+  header.mast .kick{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:20px}
+  .tag{font-family:var(--mono);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;
+      padding:5px 11px;border-radius:100px;border:1px solid rgba(255,255,255,.25);color:#DDEAEC}
+  .tag.sun{background:var(--sun);color:#20140c;border-color:var(--sun);font-weight:700}
+  h1{font-family:var(--disp);font-weight:900;letter-spacing:-.02em;line-height:.92;
+      font-size:clamp(2.5rem,8vw,5.4rem);text-transform:uppercase}
+  h1 .sun{color:var(--sun)}
+  .mast .sub{margin-top:16px;font-size:clamp(1rem,1.8vw,1.28rem);color:#CFE0E3;max-width:60ch}
+  .specs{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px;position:relative;z-index:2}
+  .spec{font-family:var(--mono);font-size:.72rem;background:rgba(255,255,255,.1);
+      border:1px solid rgba(255,255,255,.16);border-radius:8px;padding:7px 11px;color:#EAF0F0}
+  .spec b{color:var(--sun)}
+
+  section{margin-top:clamp(38px,6vw,64px)}
+  .band{display:flex;align-items:center;gap:14px;margin-bottom:8px}
+  .band h2{font-family:var(--disp);font-weight:900;text-transform:uppercase;letter-spacing:-.01em;
+      font-size:clamp(1.5rem,3.4vw,2.3rem);color:var(--brand)}
+  .band .n{font-family:var(--mono);font-size:.8rem;color:var(--accent);font-weight:700}
+  .band .rule{flex:1;height:2px;background:var(--hair)}
+  .lede{color:var(--fg-soft);max-width:66ch;margin:2px 0 22px;font-size:.96rem}
+  .lede b{color:var(--fg)}
+
+  /* prize facts */
+  .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .fact{background:var(--surface);border:1px solid var(--hair);border-radius:12px;padding:15px 16px}
+  .fact .k{font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-soft)}
+  .fact .v{font-family:var(--disp);font-weight:900;font-size:1.5rem;margin-top:5px;color:var(--brand)}
+  .fact .v small{font-family:var(--sans);font-weight:600;font-size:.8rem;color:var(--fg-soft);display:block;letter-spacing:0}
+
+  /* copy card = ad preview + copy block */
+  .kit{display:grid;gap:22px}
+  .card{display:grid;grid-template-columns:300px 1fr;gap:24px;background:var(--surface);
+      border:1px solid var(--hair);border-radius:16px;padding:20px;box-shadow:var(--shadow)}
+  @media(max-width:760px){.card{grid-template-columns:1fr}}
+  .variant{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+  .variant .badge{font-family:var(--mono);font-size:.66rem;font-weight:700;letter-spacing:.08em;
+      text-transform:uppercase;background:var(--accent);color:#fff;padding:4px 9px;border-radius:6px}
+  .variant .badge.ghost{background:transparent;color:var(--accent);border:1.5px solid var(--accent)}
+  .variant h3{font-family:var(--sans);font-weight:700;font-size:1.02rem;color:var(--fg)}
+
+  /* feed-ad mock */
+  .mock{background:var(--surface);border:1px solid var(--hair);border-radius:12px;overflow:hidden;align-self:start}
+  .mock .top{display:flex;align-items:center;gap:9px;padding:10px 12px}
+  .mock .av{width:34px;height:34px;border-radius:50%;background:var(--water);color:var(--sun);
+      display:grid;place-items:center;font-family:var(--disp);font-weight:900;font-size:.9rem}
+  .mock .who{font-size:.8rem;font-weight:700;line-height:1.1}
+  .mock .who span{display:block;font-weight:500;font-size:.66rem;color:var(--fg-soft);font-family:var(--mono)}
+  .mock .ptext{font-size:.78rem;padding:0 12px 10px;color:var(--fg)}
+  .mock .img{aspect-ratio:1.91/1;background:
+      radial-gradient(120% 130% at 70% 10%,#2a6478 0%,var(--water) 55%,#08303c 100%);
+      position:relative;display:flex;flex-direction:column;justify-content:center;align-items:center;color:#EAF0F0;text-align:center;padding:12px}
+  .mock .img .wl{position:absolute;left:0;right:0;bottom:0;height:38%;
+      background:linear-gradient(180deg,transparent,rgba(9,44,55,.6));
+      border-top:1px solid rgba(255,255,255,.12)}
+  .mock .img .boat{position:absolute;bottom:16%;font-size:1.7rem}
+  .mock .img .win{font-family:var(--disp);font-weight:900;text-transform:uppercase;font-size:1.5rem;line-height:.95;letter-spacing:-.01em;z-index:2}
+  .mock .img .win .sun{color:var(--sun)}
+  .mock .img .price{font-family:var(--mono);font-size:.66rem;margin-top:6px;background:var(--sun);color:#20140c;padding:3px 8px;border-radius:5px;font-weight:700;z-index:2}
+  .mock .bar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel);border-top:1px solid var(--hair);padding:10px 12px}
+  .mock .bar .hd{font-size:.72rem;font-weight:700}
+  .mock .bar .hd span{display:block;font-family:var(--mono);font-size:.58rem;color:var(--fg-soft);font-weight:500}
+  .mock .bar .btn{font-family:var(--mono);font-size:.64rem;font-weight:700;background:var(--water);color:#EAF0F0;padding:7px 11px;border-radius:6px;white-space:nowrap}
+
+  /* copy block */
+  .copy{display:flex;flex-direction:column;gap:12px}
+  .field{border-left:3px solid var(--hair);padding-left:14px}
+  .field .lab{font-family:var(--mono);font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-soft);margin-bottom:4px}
+  .field .val{font-size:.96rem;white-space:pre-line}
+  .field.primary{border-left-color:var(--accent)}
+  .field.primary .val{font-size:1rem}
+  .field .val .ph{color:var(--accent);font-family:var(--mono);font-size:.85em}
+  .onscreen{font-family:var(--disp);font-weight:900;text-transform:uppercase;line-height:1;font-size:1.05rem;color:var(--brand)}
+  .onscreen span{color:var(--accent)}
+
+  /* small copy blocks (form/thankyou/winner) */
+  .subgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:6px}
+  @media(max-width:700px){.subgrid{grid-template-columns:1fr}}
+  .mini{background:var(--surface);border:1px solid var(--hair);border-radius:12px;padding:16px 18px}
+  .mini .lab{font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  .mini h4{margin:0 0 6px;font-size:1rem;font-weight:700}
+  .mini p{margin:0;font-size:.9rem;color:var(--fg)}
+  .mini .ph{color:var(--accent);font-family:var(--mono);font-size:.85em}
+
+  .note{background:var(--chip);border-radius:10px;padding:13px 16px;font-size:.88rem;color:var(--fg);border-left:3px solid var(--accent);margin-bottom:18px}
+  .note b{color:var(--brand)}
+
+  .compliance{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .cc{font-family:var(--mono);font-size:.7rem;background:var(--surface);border:1px solid var(--hair);border-radius:100px;padding:6px 12px;color:var(--fg-soft)}
+  .cc b{color:var(--brand)}
+  footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--hair);font-family:var(--mono);font-size:.72rem;color:var(--fg-soft);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="wl"></div>
+    <div class="kick">
+      <span class="tag sun">Ad copy kit</span>
+      <span class="tag">Fields Real Estate</span>
+      <span class="tag">Gold Coast giveaway</span>
+    </div>
+    <div class="eyebrow" style="color:var(--sun)">The prize</div>
+    <h1>Win a <span class="sun">tinny.</span></h1>
+    <p class="sub">Ready-to-run ad copy for the <b>Quintrex 310 DART</b> giveaway — a lean set for the
+      pilot test and the full-scale launch. Every line grounded in the real boat, and compliant by
+      construction (QLD 30+, free entry, T&Cs, Meta disclaimer).</p>
+    <div class="specs">
+      <span class="spec"><b>$7,490</b> drive-away value</span>
+      <span class="spec">Quintrex <b>310 DART</b> (2026)</span>
+      <span class="spec">Boat + <b>Suzuki 6HP</b> + trailer</span>
+      <span class="spec">Seats <b>3</b></span>
+      <span class="spec"><b>No licence</b> required</span>
+    </div>
+  </header>
+
+  <!-- PRIZE FACTS -->
+  <section>
+    <div class="band"><span class="n">Prize</span><h2>The boat</h2><span class="rule"></span></div>
+    <p class="lede">Quintrex is an Australian icon; the 310 DART is its get-started tinny — light,
+      tough, and ready for the Broadwater or the canals. The facts every line of copy can lean on:</p>
+    <div class="facts">
+      <div class="fact"><div class="k">Value</div><div class="v">$7,490<small>drive-away</small></div></div>
+      <div class="fact"><div class="k">Package</div><div class="v">BMT<small>boat · motor · trailer</small></div></div>
+      <div class="fact"><div class="k">Motor</div><div class="v">6HP<small>Suzuki DF6 4-stroke</small></div></div>
+      <div class="fact"><div class="k">Size</div><div class="v">3.1m<small>seats 3</small></div></div>
+      <div class="fact"><div class="k">Licence</div><div class="v">None<small>needed to operate</small></div></div>
+      <div class="fact"><div class="k">Warranty</div><div class="v">6yr<small>engine · 5yr boat+trailer</small></div></div>
+    </div>
+  </section>
+
+  <!-- PILOT -->
+  <section>
+    <div class="band"><span class="n">Set 1</span><h2>Pilot creative</h2><span class="rule"></span></div>
+    <div class="note"><b>The pilot tests the form, not the creative</b> — so hold ONE creative constant
+      across the A/B/C form arms (per the pilot brief). Pick one of these two. The address, buy/sell-intent
+      question and per-channel consent all live in the <b>form</b>, not the ad.</div>
+
+    <div class="kit">
+      <!-- P1 -->
+      <div class="card">
+        <div class="mock">
+          <div class="top"><div class="av">F</div><div class="who">Fields Real Estate<span>Sponsored</span></div></div>
+          <div class="ptext">🚤 WIN A BOAT. Brand-new Quintrex 310 DART — free to enter…</div>
+          <div class="img"><div class="win">WIN THIS <span class="sun">TINNY</span></div>
+            <div class="price">$7,490 · BOAT · MOTOR · TRAILER</div><div class="boat">🚤</div><div class="wl"></div></div>
+          <div class="bar"><div class="hd">Win a Quintrex tinny<span>fieldsestate.com.au</span></div><div class="btn">SIGN UP</div></div>
+        </div>
+        <div>
+          <div class="variant"><span class="badge">Variant P1</span><h3>Direct “win”</h3></div>
+          <div class="copy">
+            <div class="field primary"><div class="lab">Primary text</div><div class="val">🚤 WIN A BOAT. We're giving away a brand-new Quintrex 310 DART — boat, motor and trailer, $7,490 drive-away. Free to enter. Gold Coast locals, 30+. Takes 15 seconds. 🎣  T&Cs apply.</div></div>
+            <div class="field"><div class="lab">Headline</div><div class="val">Win a Quintrex tinny — free entry</div></div>
+            <div class="field"><div class="lab">Button</div><div class="val">Sign Up</div></div>
+            <div class="field"><div class="lab">On-screen (reel / static)</div><div class="onscreen">Win this <span>tinny</span> · $7,490 · Free to enter</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- P2 -->
+      <div class="card">
+        <div class="mock">
+          <div class="top"><div class="av">F</div><div class="who">Fields Real Estate<span>Sponsored</span></div></div>
+          <div class="ptext">Your own boat, ready for the Broadwater — no licence needed…</div>
+          <div class="img"><div class="win">WIN A <span class="sun">TINNY</span></div>
+            <div class="price">NO LICENCE NEEDED</div><div class="boat">🚤</div><div class="wl"></div></div>
+          <div class="bar"><div class="hd">No licence needed<span>fieldsestate.com.au</span></div><div class="btn">SIGN UP</div></div>
+        </div>
+        <div>
+          <div class="variant"><span class="badge ghost">Variant P2</span><h3>No licence / anyone can</h3></div>
+          <div class="copy">
+            <div class="field primary"><div class="lab">Primary text</div><div class="val">Your own boat, ready for the Broadwater — and no licence needed. Win a brand-new Quintrex 310 DART (boat, motor & trailer, worth $7,490). Free to enter, QLD residents 30+. T&Cs apply. Not sponsored by Meta.</div></div>
+            <div class="field"><div class="lab">Headline</div><div class="val">No licence needed. Win a tinny.</div></div>
+            <div class="field"><div class="lab">Button</div><div class="val">Sign Up</div></div>
+            <div class="field"><div class="lab">On-screen (reel / static)</div><div class="onscreen">Win a <span>tinny</span> · No licence needed · Boat + motor + trailer</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="subgrid">
+      <div class="mini"><div class="lab">Form context card</div><h4>Win a tinny 🚤</h4><p>A brand-new Quintrex 310 DART (boat, motor & trailer, $7,490). Enter free — QLD residents 30+. Not sponsored by Meta. Full T&Cs + Privacy below.</p></div>
+      <div class="mini"><div class="lab">Thank-you screen</div><h4>You're in the draw! 🎣</h4><p>We'll draw the winner on <span class="ph">[date]</span>. While you're here — curious what your own home is worth today?</p></div>
+    </div>
+  </section>
+
+  <!-- REAL GIVEAWAY -->
+  <section>
+    <div class="band"><span class="n">Set 2</span><h2>Full-scale launch</h2><span class="rule"></span></div>
+    <p class="lede">Once the pilot proves the numbers, this is the hero creative to scale — with two
+      alternate angles to rotate against it (lifestyle and deadline).</p>
+
+    <div class="kit">
+      <!-- HERO -->
+      <div class="card">
+        <div class="mock">
+          <div class="top"><div class="av">F</div><div class="who">Fields Real Estate<span>Sponsored</span></div></div>
+          <div class="ptext">🚤 WIN A BRAND-NEW QUINTREX 310 DART — worth $7,490, drive-away…</div>
+          <div class="img"><div class="win">WIN A <span class="sun">QUINTREX</span><br>310 DART</div>
+            <div class="price">$7,490 · BOAT · MOTOR · TRAILER</div><div class="boat">🚤</div><div class="wl"></div></div>
+          <div class="bar"><div class="hd">Win a Quintrex 310 DART<span>fieldsestate.com.au</span></div><div class="btn">SIGN UP</div></div>
+        </div>
+        <div>
+          <div class="variant"><span class="badge">Hero</span><h3>Prize-led</h3></div>
+          <div class="copy">
+            <div class="field primary"><div class="lab">Primary text</div><div class="val">🚤 WIN A BRAND-NEW QUINTREX 310 DART — worth $7,490, drive-away.
+
+Boat, Suzuki motor and trailer — everything you need to hit the Broadwater this summer. No licence required.
+
+Free to enter — open to Queensland locals aged 30+. Enter in 15 seconds. 🎣
+
+T&Cs apply. Not sponsored by Meta.</div></div>
+            <div class="field"><div class="lab">Headline</div><div class="val">Win a Quintrex 310 DART ($7,490)</div></div>
+            <div class="field"><div class="lab">Button</div><div class="val">Sign Up</div></div>
+            <div class="field"><div class="lab">On-screen</div><div class="onscreen">Win a <span>Quintrex 310 DART</span> · $7,490 · No licence needed</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ALT A -->
+      <div class="card">
+        <div class="mock">
+          <div class="top"><div class="av">F</div><div class="who">Fields Real Estate<span>Sponsored</span></div></div>
+          <div class="ptext">Picture your summer: the Broadwater, a line in the water, your own tinny…</div>
+          <div class="img"><div class="win">YOUR <span class="sun">SUMMER</span><br>ON THE WATER</div>
+            <div class="price">WIN A QUINTREX 310 DART</div><div class="boat">🎣</div><div class="wl"></div></div>
+          <div class="bar"><div class="hd">Your summer starts here<span>fieldsestate.com.au</span></div><div class="btn">SIGN UP</div></div>
+        </div>
+        <div>
+          <div class="variant"><span class="badge ghost">Alt A</span><h3>Lifestyle / summer</h3></div>
+          <div class="copy">
+            <div class="field primary"><div class="lab">Primary text</div><div class="val">Picture your summer: the Broadwater, a line in the water, and your own brand-new tinny. We're giving one away — a Quintrex 310 DART (boat, motor & trailer, $7,490 drive-away). No licence needed. Free to enter, QLD locals 30+. T&Cs apply.</div></div>
+            <div class="field"><div class="lab">Headline</div><div class="val">Your summer on the water starts here</div></div>
+            <div class="field"><div class="lab">Button</div><div class="val">Sign Up</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ALT B -->
+      <div class="card">
+        <div class="mock">
+          <div class="top"><div class="av">F</div><div class="who">Fields Real Estate<span>Sponsored</span></div></div>
+          <div class="ptext">One boat. One winner. Entries close soon…</div>
+          <div class="img"><div class="win">ONE BOAT<br>ONE <span class="sun">WINNER</span></div>
+            <div class="price">ENTRIES CLOSE [DATE]</div><div class="boat">🚤</div><div class="wl"></div></div>
+          <div class="bar"><div class="hd">One tinny. One winner.<span>fieldsestate.com.au</span></div><div class="btn">SIGN UP</div></div>
+        </div>
+        <div>
+          <div class="variant"><span class="badge ghost">Alt B</span><h3>Deadline / scarcity</h3></div>
+          <div class="copy">
+            <div class="field primary"><div class="lab">Primary text</div><div class="val">One boat. One winner. Entries close <span class="ph">[date]</span>. Win a brand-new Quintrex 310 DART — $7,490 drive-away, boat + motor + trailer, no licence needed. Free to enter, Gold Coast locals 30+. T&Cs apply. Not sponsored by Meta.</div></div>
+            <div class="field"><div class="lab">Headline</div><div class="val">One tinny. One winner. Enter free.</div></div>
+            <div class="field"><div class="lab">Button</div><div class="val">Sign Up</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="subgrid">
+      <div class="mini"><div class="lab">Form context card</div><h4>Win a tinny 🚤</h4><p>We're giving away a brand-new Quintrex 310 DART (boat, motor & trailer, $7,490 drive-away) to one Gold Coast local. Enter free — Queensland residents aged 30+. This promotion is not sponsored or endorsed by Meta. See full Terms &amp; Conditions and Privacy Policy below.</p></div>
+      <div class="mini"><div class="lab">Thank-you screen</div><h4>You're in the draw! 🎣</h4><p>Good luck — we'll draw the winner on <span class="ph">[date]</span> and call you if it's you. While you're here: curious what your own home is worth in today's market? Take a look.</p></div>
+    </div>
+    <div class="subgrid">
+      <div class="mini" style="grid-column:1/-1;border-left:3px solid var(--accent)"><div class="lab">Winner announcement (organic post)</div><h4>🏆 WE HAVE A WINNER!</h4><p>Congratulations <span class="ph">[first name]</span> from <span class="ph">[suburb]</span> — you've won a brand-new Quintrex 310 DART. Enjoy the Broadwater! Thanks to everyone who entered — keep an eye out for the next one.</p></div>
+    </div>
+  </section>
+
+  <!-- COMPLIANCE -->
+  <section>
+    <div class="band"><span class="n">Guardrails</span><h2>Baked into every line</h2><span class="rule"></span></div>
+    <p class="lede">The copy stays about the <b>boat</b> (keeps it out of Meta's Housing category), and
+      every ad carries the mandatory bits. The real-estate angle lives in the follow-up, not the ad.</p>
+    <div class="compliance">
+      <span class="cc"><b>Free entry</b> · no purchase</span>
+      <span class="cc"><b>QLD residents 30+</b></span>
+      <span class="cc"><b>T&Cs apply</b> (link on landing page)</span>
+      <span class="cc"><b>Not sponsored by Meta</b></span>
+      <span class="cc">No share / tag mechanics</span>
+      <span class="cc">Address · intent · consent → in the <b>form</b></span>
+    </div>
+  </section>
+
+  <footer>
+    <span>Fields · Win a Quintrex 310 DART · ad copy kit</span>
+    <span>Copy is final; [bracketed] = confirm before launch · see LEGAL_COMPLIANCE_BRIEF.md</span>
+  </footer>
+</div>
