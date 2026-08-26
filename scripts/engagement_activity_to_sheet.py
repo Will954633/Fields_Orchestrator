@@ -64,6 +64,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "pro
 
 from shared.db import get_client
 from crm_sync import posthog_query, INTERNAL_IDS, BOT_CITIES
+from test_addresses import is_test_address
 from job_status import job_run
 import market_status as ms
 from live_leads_to_sheet import (
@@ -196,6 +197,12 @@ def address_candidates(c: dict, seen_now: set[str] | None = None) -> list[dict]:
             "the most recent mini-site they opened — NOT evidence of ownership")
     for s in (c.get("probable_address_slugs") or []):
         add(slug_to_address(s), s, T_AMBIGUOUS, "a report they opened")
+
+    # Drop Will's own test addresses (scripts/test_addresses.py). A contact whose
+    # only reach is a test address then has no candidates, reach_for() returns None,
+    # and reachable_contacts() skips them — so his test browsing never lands on the
+    # Activity tab regardless of which device / distinct_id he used.
+    out = [x for x in out if not is_test_address(x.get("slug"), x.get("address"))]
 
     out.sort(key=lambda x: x["tier"])
     return out
