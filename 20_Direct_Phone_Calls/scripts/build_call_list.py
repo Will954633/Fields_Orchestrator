@@ -113,6 +113,7 @@ sys.path.insert(0, _HERE)
 # is weak ("not excluded", never "confirmed owner"). Everything downstream of this
 # import — the exclusion, the score term, the sheet label — is written to respect that.
 from occupancy_evidence import assess_occupancy, rank_people, last_sale  # noqa: E402
+from test_addresses import TEST_ADDRESS_SLUGS, is_test_address  # noqa: E402
 
 AEST = ZoneInfo("Australia/Brisbane")
 
@@ -125,7 +126,9 @@ QUEUE_DB = "system_monitor"
 QUEUE_COLL = "call_queue"
 
 TEST_EMAILS = {"will@fieldsestate.com.au", "test@tester.com.au"}
-TEST_SLUGS = {"7-huntingdale-crescent-robina", "5-fulham-place-robina"}
+# Shared registry of Will's test addresses (scripts/test_addresses.py) — one place
+# to edit so every lead surface (sheet, worklist, call list) blocks the same set.
+TEST_SLUGS = set(TEST_ADDRESS_SLUGS)
 
 # ── EXCLUSION: POA Regulation 2014 s21(3) ────────────────────────────────────
 # s21 ("Prior appointment of another property agent") bites only where another
