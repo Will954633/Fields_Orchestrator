@@ -15,7 +15,7 @@ from pathlib import Path
 
 BASE = Path("/home/fields/Fields_Orchestrator/03_Facebook/Reels/renders")
 PHOTO = BASE / "robina_house.png"
-VOICE = BASE / "basic_vo4_src.mp4"
+VOICE = BASE / "news_vo_src.mp4"   # AU VO; narrator says "Can your estimate be trusted?"
 OUT = BASE / "reel3_news_draft.mp4"
 NEWS = "/usr/share/fonts/truetype/liberation/LiberationSansNarrow-Bold.ttf"
 SERIF = "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
@@ -23,8 +23,8 @@ SANS = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 RED, NAVY, CREAM, FOREST, TERRA = "0xC8102E", "0x0A1B2E", "0xF2EFE6", "0x1E3A2F", "0xC05A38"
 DUR = 11.0
 
-# beat windows
-B1, B2, B3, B4 = (0.0, 2.4), (2.5, 6.6), (6.7, 8.95), (9.0, 11.0)
+# beat windows (matched to news_vo_src timings)
+B1, B2, B3, B4 = (0.0, 2.55), (2.7, 7.35), (7.45, 9.2), (9.25, 11.0)
 
 tmp = Path(tempfile.mkdtemp())
 def tf(name, text):
@@ -50,7 +50,7 @@ def txt(text, size, color, x, y, font=NEWS, boxcolor=None, bw=18, enable=None, k
 # top alert bar
 box(0, 0, 1080, 120, RED + "@0.96")
 box(40, 47, 30, 30, "white")   # signal dot
-txt("FIELDS PROPERTY ALERT", 54, "white", "92", "34", font=NEWS)
+txt("PROPERTY ALERT", 54, "white", "92", "34", font=NEWS)
 txt("GOLD COAST", 42, "white", "w-tw-34", "40")
 # lower-third chyron bands
 box(0, 1446, 1080, 74, RED + "@0.96")
@@ -58,7 +58,7 @@ box(0, 1520, 1080, 122, CREAM + "@0.97")
 # ticker band + red tab
 box(0, 1646, 1080, 86, NAVY + "@0.97")
 # ticker crawl (scrolls right->left), drawn before the tab so the tab masks its start
-TICKER = ("FIELDS PROPERTY ALERT      SAME HOME VALUED $1.31M, $1.54M AND $1.76M BY THREE SITES      "
+TICKER = ("PROPERTY ALERT      SAME HOME VALUED $1.31M, $1.54M AND $1.76M BY THREE SITES      "
           "FIELDS TESTED 512 GOLD COAST HOMES      TYPICAL GAP OVER $215,000      "
           "SEE THE EVIDENCE BEHIND YOUR HOME'S VALUE AT FIELDSESTATE.COM.AU      ")
 tpath = tf("ticker.txt", TICKER)
