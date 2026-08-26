@@ -1,0 +1,77 @@
+[
+ {
+  "suburb": "robina",
+  "card": "01",
+  "file": "robina_card01.png"
+ },
+ {
+  "suburb": "robina",
+  "card": "02",
+  "file": "robina_card02.png"
+ },
+ {
+  "suburb": "robina",
+  "card": "03",
+  "file": "robina_card03.png"
+ },
+ {
+  "suburb": "robina",
+  "card": "04",
+  "file": "robina_card04.png"
+ },
+ {
+  "suburb": "robina",
+  "card": "05",
+  "file": "robina_card05.png"
+ },
+ {
+  "suburb": "varsity",
+  "card": "01",
+  "file": "varsity_card01.png"
+ },
+ {
+  "suburb": "varsity",
+  "card": "02",
+  "file": "varsity_card02.png"
+ },
+ {
+  "suburb": "varsity",
+  "card": "03",
+  "file": "varsity_card03.png"
+ },
+ {
+  "suburb": "varsity",
+  "card": "04",
+  "file": "varsity_card04.png"
+ },
+ {
+  "suburb": "varsity",
+  "card": "05",
+  "file": "varsity_card05.png"
+ },
+ {
+  "suburb": "burleigh",
+  "card": "01",
+  "file": "burleigh_card01.png"
+ },
+ {
+  "suburb": "burleigh",
+  "card": "02",
+  "file": "burleigh_card02.png"
+ },
+ {
+  "suburb": "burleigh",
+  "card": "03",
+  "file": "burleigh_card03.png"
+ },
+ {
+  "suburb": "burleigh",
+  "card": "04",
+  "file": "burleigh_card04.png"
+ },
+ {
+  "suburb": "burleigh",
+  "card": "05",
+  "file": "burleigh_card05.png"
+ }
+]
