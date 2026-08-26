@@ -1,0 +1,38 @@
+{
+  "campaign": "Reels — trust-test (Reel Three, AI presenter, bookend)",
+  "notes": [
+    "Same-face consistency: Veo will NOT keep the same person across separate renders. So we render ONE continuous presenter take (reel3_presenter) and CUT the hook / challenge / CTA moments from it. The $469,000 proof beat is a separate person-free data plate (reel3_data_plate) with the number + qualifier composited in post.",
+    "Audio off on every render — we dub our own VO and burn captions, so we control the exact words (Veo speech is not word-accurate). generateAudio=false.",
+    "She is an unnamed host, generic register — never named, never labelled a Fields agent/valuer. Wardrobe/set neutral with a subtle forest-green accent to match brand.",
+    "Renders are 8s (Veo minimum band); trim to the 1.5-3s beat lengths in edit. Bookend cut: 0-1.5 hook (from presenter take) / 1.5-4.5 data plate / 4.5-7.0 challenge (presenter) / 7.0-9.0 CTA gesture (presenter)."
+  ],
+  "beats": [
+    {
+      "key": "reel3_presenter",
+      "role": "One continuous talking-head take; hook + challenge + CTA are cut from this.",
+      "aspect": "9:16",
+      "duration": 8,
+      "audio": false,
+      "prompt": "Vertical 9:16 portrait video. A warm, credible woman in her mid-30s, natural light makeup, speaking directly to the camera as a friendly presenter. Framed mid-chest to just above the head, her eyes in the top third of the frame, holding steady eye contact with the lens. Bright, clean, softly-lit neutral interior with a shallow depth of field; a subtle forest-green accent in the background styling. She speaks with calm, engaging energy, natural micro-gestures, an approachable half-smile; near the end she gestures openly toward the lower part of the frame as if inviting the viewer to tap a button. Modern, premium, trustworthy fintech-meets-property tone. Realistic skin texture, subtle natural head movement. No on-screen text, no captions, no logos, no graphics.",
+      "negative": "text, captions, subtitles, watermark, logo, brand name, glitch, distortion, extra fingers, deformed hands, harsh shadows, cluttered background, cartoon, oversaturated"
+    },
+    {
+      "key": "reel3_data_plate",
+      "role": "Person-free background for the $469,000 reveal (overlay comps + number + qualifier in post).",
+      "aspect": "9:16",
+      "duration": 8,
+      "audio": false,
+      "prompt": "Vertical 9:16 abstract motion background. A calm, premium dark forest-green surface with a very faint grid and slow-drifting soft light particles, gentle depth and parallax, a subtle warm highlight sweeping slowly left to right like a resolving scale. Elegant, confident, understated fintech aesthetic with plenty of negative space in the centre for graphics to be added later. No people, no text, no numbers, no logos.",
+      "negative": "people, faces, hands, text, numbers, captions, watermark, logo, clutter, busy pattern, flicker, harsh flashing"
+    },
+    {
+      "key": "reel3_aerial_hook_alt",
+      "role": "Optional alt hook plate — the home (if we want the three prices over a house instead of over the presenter).",
+      "aspect": "9:16",
+      "duration": 8,
+      "audio": false,
+      "prompt": "Vertical 9:16 cinematic aerial push-in at dawn, descending slowly toward a single detached Gold Coast house with a tiled roof and a pool, lush green subtropical garden, neighbouring homes softly out of focus. Warm low golden sun, gentle morning haze, smooth stable drone motion with a slight downward tilt. Photorealistic. No text, no numbers, no people, no logos.",
+      "negative": "text, numbers, captions, watermark, logo, people, cars moving fast, glitch, distortion, oversaturation"
+    }
+  ]
+}
