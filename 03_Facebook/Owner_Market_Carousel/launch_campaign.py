@@ -7,10 +7,10 @@ Three GEOFENCED ad sets (one per suburb, each targeting ONLY its own suburb), ea
 is created PAUSED. Nothing spends until someone runs --activate (we will not).
 
 Structure (aligned to fb_ads_experimentation_playbook.md):
-  Campaign  OUTCOME_LEADS, ABO (per-adset budget), PAUSED
-  Ad set    $15/day, OFFSITE_CONVERSIONS on the Lead pixel event (learning #7),
-            geofenced to the one suburb (custom_locations, home residents),
-            broad + Advantage Audience (learning #8), PAUSED
+  Campaign  OUTCOME_TRAFFIC, ABO (per-adset budget), PAUSED
+  Ad set    $15/day, optimize for LANDING_PAGE_VIEWS — people who actually land on the
+            /find page (Will, 2026-08-26), geofenced to the one suburb by Meta
+            NEIGHBORHOOD key (home residents), broad + Advantage Audience (learning #8), PAUSED
   Creative  object_story_spec.link_data carousel, 5 child_attachments (cards 01-05),
             multi_share_optimized/end_card = False so card ORDER is preserved and no
             auto end-card is appended (our card 05 IS the CTA). No standard_enhancements.
@@ -35,12 +35,12 @@ IDS_PATH = os.path.join(HERE, "campaign_ids.json")
 
 DAILY_BUDGET_CENTS = 1500  # AUD $15.00 per ad set (Will, 2026-08-26)
 
-# Each ad set targets ONLY its suburb (residents). Centroids + 4km radius; Will can
-# tighten the radius visually in Ads Manager before activation.
+# Each ad set targets ONLY its suburb (residents), by Meta NEIGHBORHOOD key
+# (adgeolocation search, AU). Cleaner than radius pins and no bleed into neighbours.
 SUBURBS = {
-    "robina":   {"name": "Robina",         "slug": "robina",         "lat": -28.0767, "lng": 153.3899},
-    "varsity":  {"name": "Varsity Lakes",  "slug": "varsity-lakes",  "lat": -28.0916, "lng": 153.4106},
-    "burleigh": {"name": "Burleigh Waters", "slug": "burleigh-waters", "lat": -28.0855, "lng": 153.4330},
+    "robina":   {"name": "Robina",          "slug": "robina",          "geo_key": "2687074"},
+    "varsity":  {"name": "Varsity Lakes",   "slug": "varsity-lakes",   "geo_key": "2674227"},
+    "burleigh": {"name": "Burleigh Waters", "slug": "burleigh-waters", "geo_key": "2719184"},
 }
 ORDER = ["robina", "varsity", "burleigh"]
 
@@ -96,7 +96,7 @@ def upload_images():
 def create_campaign():
     return _call("POST", f"{ACT}/campaigns", TOK,
                  name="Owner Market — Find Your Home (carousel, Aug 2026)",
-                 objective="OUTCOME_LEADS", special_ad_categories=[],
+                 objective="OUTCOME_TRAFFIC", special_ad_categories=[],
                  is_adset_budget_sharing_enabled=False,
                  status="PAUSED")["id"]
 
@@ -104,9 +104,8 @@ def create_adset(campaign_id, sub):
     s = SUBURBS[sub]
     targeting = {
         "geo_locations": {
-            "custom_locations": [{"latitude": s["lat"], "longitude": s["lng"],
-                                  "radius": 4, "distance_unit": "kilometer"}],
-            "location_types": ["home"],           # people who LIVE here (homeowners)
+            "neighborhoods": [{"key": s["geo_key"]}],   # the suburb itself
+            "location_types": ["home"],                 # people who LIVE here (homeowners)
         },
         "age_min": 25,                             # light owner skew; advantage_audience treats as suggestion
         "targeting_automation": {"advantage_audience": 1},   # broad wins (learning #8)
@@ -116,10 +115,9 @@ def create_adset(campaign_id, sub):
                  campaign_id=campaign_id,
                  daily_budget=DAILY_BUDGET_CENTS,
                  billing_event="IMPRESSIONS",
-                 optimization_goal="OFFSITE_CONVERSIONS",       # learning #7
+                 optimization_goal="LANDING_PAGE_VIEWS",        # people who actually land on the page (Will)
                  bid_strategy="LOWEST_COST_WITHOUT_CAP",
                  destination_type="WEBSITE",
-                 promoted_object={"pixel_id": PIXEL, "custom_event_type": "LEAD"},
                  targeting=targeting,
                  status="PAUSED")["id"]
 
