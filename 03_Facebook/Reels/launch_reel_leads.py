@@ -137,6 +137,10 @@ def create_adset(campaign_id):
                           "location_types": ["home"]},
         "age_min": 25,
         "targeting_automation": {"advantage_audience": 1},
+        # pinned to vertical placements — a true Reels ad (+ Stories companion), no Feed
+        "publisher_platforms": ["facebook", "instagram"],
+        "facebook_positions": ["facebook_reels", "story"],
+        "instagram_positions": ["reels", "story"],
     }
     return _call("POST", f"{ACT}/adsets", TOK,
                  name="Reel3 Trust Test · Robina+Varsity+Burleigh",
