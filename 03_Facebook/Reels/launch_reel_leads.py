@@ -57,23 +57,12 @@ def page_token():
 
 def create_form(ptok):
     """Instant Form: FIRST_NAME + PHONE only — both prefill from the Meta profile.
-    Methodology + disclaimer live in the context card (Rule 5 $-claim pre-flight).
+    NO context card (Will's call 2026-08-28): the CTA opens straight onto the two
+    prefilled fields so the viewer just taps Submit — no intro screen to read first.
+    The $-claim disclaimer therefore lives in the reel + primary text + the
+    /analyse-your-home landing page, not in an in-form intro.
     Thank-you screen = the optional address second step (/analyse-your-home)."""
     questions = [{"type": "FIRST_NAME"}, {"type": "PHONE"}]
-    context_card = {
-        "style": "PARAGRAPH_STYLE",
-        "title": "Can your home's estimate be trusted?",
-        "content": [
-            "Different websites can value the same Gold Coast home hundreds of thousands apart. "
-            "In our test of 512 homes, the typical gap between defensible estimates was over "
-            "$215,000. Leave your name and mobile and we'll show you the actual comparable sales "
-            "and adjustments behind your home's value.\n\n"
-            "Figures: Fields' analysis of 512 sold houses ($1M-$2M) across Robina, Varsity Lakes "
-            "and Burleigh Waters. The 'gap' is the spread between the highest and lowest "
-            "defensible three-comparable estimate - a measure of spread, not an error rate. "
-            "Estimates are guides, not formal valuations. Compiled from public sale records."],
-        "button_text": "See my home's evidence",
-    }
     thank_you = {
         "title": "You're all set.",
         "body": "One optional step - enter your home's address to see the actual comparable "
@@ -83,10 +72,9 @@ def create_form(ptok):
         "button_text": "Enter my address",
     }
     resp = _call("POST", f"{PAGE}/leadgen_forms", ptok,
-                 name="Reel3 Trust Test — name+phone (prefilled)",
+                 name="Reel3 Trust Test — name+phone (prefilled, no intro)",
                  questions=questions,
                  privacy_policy={"url": PRIVACY, "link_text": "Privacy Policy"},
-                 context_card=context_card,
                  thank_you_page=thank_you,
                  follow_up_action_url=LANDING,
                  locale="en_US")
