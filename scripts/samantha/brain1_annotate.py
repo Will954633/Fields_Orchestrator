@@ -28,7 +28,11 @@ LOG = f"{BASE}/brain1_annotate.log"
 LOCK = f"{BASE}/.lock"
 COMPLETE = f"{BASE}/COMPLETE"
 MODEL = "claude-haiku-4-5-20251001"
-MAX_WORDS_PER_UNIT = 1500  # cap runaway transcripts; keeps a 10-unit batch well within Haiku
+MAX_WORDS_PER_UNIT = 4000  # runaway guard only. Was 1500 (2026-08-27): that discarded ~40% of
+# on-disk text for 77% of units (mean unit = 2,520 words), stacking a SECOND truncation on top of
+# the vanished chunker's ~18,158-char/unit cap. The batches are already capped at ~18K chars/unit
+# (~3,200 words max), so 4000 captures 100% of on-disk text while still bounding a pathological unit.
+# Closes cap #2 of [BRAIN1-CORPUS-TRUNCATED-AT-18K]; cap #1 (Drive re-ingest) is a separate fix.
 
 PROMPT_HEADER = """You are annotating transcript UNITS from real-estate coaching programs to build a knowledge graph of client-acquisition methods that are claimed to work.
 
