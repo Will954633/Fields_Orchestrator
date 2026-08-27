@@ -52,7 +52,9 @@ def card01(sub):
     .c1 .aerial{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
     .c1 .scrim{position:absolute;inset:0;background:linear-gradient(180deg,
         rgba(24,40,30,.30) 0%,rgba(22,37,28,.55) 45%,rgba(18,31,24,.93) 100%)}
-    .c1 .kick{color:#C89B4A}
+    .c1 .lock{display:flex;flex-direction:column;gap:6px}
+    .c1 .lock .sub{font-size:62px;color:#FEC66F;line-height:.98}
+    .c1 .lock .an{font-size:46px;color:#FEC66F;line-height:.98}
     .c1 h1{font-size:74px;color:#F4EFE3;margin-top:20px}
     .c1 .body{font-size:31px;line-height:1.42;color:#DCE6D8;margin-top:30px;max-width:20ch}
     .c1 .body .sp{display:block;height:20px}
@@ -61,7 +63,7 @@ def card01(sub):
       <img class="aerial" src="{sub['aerial']}">
       <div class="scrim"></div>
       <div class="pad">
-        <div class="kick">The national picture</div>
+        <div class="lock"><span class="serif sub">{sub['name']}</span><span class="serif an">Analysis</span></div>
         <div style="margin-top:auto">
           <h1 class="serif">Prices are falling.<br>Is your home next?</h1>
           <div class="body">Sydney and Melbourne have turned. Brisbane has slipped.
