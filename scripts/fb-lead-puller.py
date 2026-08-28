@@ -51,6 +51,16 @@ SELLER_FORM_IDS = {
                          # through to the generic buyer notify(), which renders neither
                          # name nor phone, so Will got an email-only alert for four
                          # phone-bearing seller leads.
+    "3247679548765163",  # Independent Listing Analysis (carousel) v1 — ...-copy
+                         # A duplicate of the form above with its own ID; inherited the
+                         # same gap. Added 2026-08-28.
+    # Property Narratives Instant Form campaign (owner-intent angles, name+phone,
+    # 2026-08-25). Uncategorised on launch -> generic buyer notify() -> 3 leads /
+    # $81 spend fired contactless alerts. Added 2026-08-28.
+    "942432315543625",   # Fields Narratives — Nearby Sold (name+phone)
+    "1580988970376517",  # Fields Narratives — Price Reduction (name+phone)
+    "1010229908733472",  # Fields Narratives — Scarcity (name+phone)
+    "3039075966262793",  # Fields Narratives — Value Gap (name+phone)
 }
 
 # OUT-OF-MARKET copy-test forms (SEQ ex-GC). Captured SILENTLY as signal only:
@@ -127,6 +137,21 @@ def notify(fields, form_name, created, campaign_name=None, ad_name=None):
     src_line = f"📣 _{source}_" if source else "📣 _Organic (no ad)_"
     lines = ["🎯 *New buyer lead*" + ("  — OWNS A GC HOME 🏠" if owns else ""),
              f"_{form_name}_", src_line, ""]
+    # SAFETY NET (2026-08-28): surface name + phone on ANY lead that carries them,
+    # even a form we never categorised. This function used to render only the buyer
+    # qualifier fields below, so an uncategorised name+phone form (owner/seller
+    # angle mislabelled as buyer) fired an alert with NO contact detail at all —
+    # uncallable. That bit twice: the Listing-Analysis form on 2026-08-20 and the
+    # Property Narratives (name+phone) forms on 2026-08-25 (3 leads, $81 spent).
+    # Explicit categorisation (SELLER_FORM_IDS etc.) still gives the richer
+    # "call them / selling intent" alert; this just guarantees no lead is ever
+    # contactless. See fix-history [TELEGRAM-GENERIC-NOTIFY-NO-CONTACT].
+    _name = fields.get("full_name") or fields.get("name")
+    _phone = fields.get("phone_number") or fields.get("phone")
+    if _name:
+        lines.append(f"• *Name:* {_name}")
+    if _phone:
+        lines.append(f"• *📞 Phone:* {_phone}")
     label = {"area": "Area", "bedrooms": "Beds", "bathrooms": "Baths",
              "timeframe": "Timeframe", "owns_gc_home": "Owns GC home", "email": "Email"}
     for k in ["email", "area", "bedrooms", "bathrooms", "timeframe", "owns_gc_home"]:
