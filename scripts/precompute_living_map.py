@@ -781,40 +781,40 @@ def run(args):
             _shared_tile("suburb", (*c, ZOOM_SUBURB, f"_shared/{s}.jpg", ("suburb", s)),
                          key, shared_tiles)
 
+    from concurrent.futures import ThreadPoolExecutor
+    # ⚠ MEMORY: never list() a whole suburb's off-market stock — that's ~11k FULL
+    # docs (~400 KB each) = a multi-GB spike the VM resource guard kills (it did,
+    # 2026-08-28, RSS 4.48 GB). We collect only _ids (tiny), then load + build FULL
+    # docs in bounded chunks, so peak memory is CHUNK docs, not the collection.
+    CHUNK = int(os.environ.get("LIVING_MAP_CHUNK", "120"))
+    workers = int(os.environ.get("LIVING_MAP_WORKERS", "4"))
+
     for suburb in suburbs:
         if args.address:
-            docs = [d for d in [gc[suburb].find_one({"address": args.address})] if d]
+            base_q = {"address": args.address}
         elif args.offmarket:
-            # Off-market stock = has cadastre (LOT/PLAN), not sold/for-sale. Mirrors
-            # batch_render_aerials' off-market query. These docs carry the same
-            # valuation_data (~72% of them), so comps/subject_value populate as-is;
+            # Off-market stock = has cadastre (LOT/PLAN), not sold/for-sale. These
+            # carry the same valuation_data (~72%), so comps/subject_value populate;
             # the rest degrade gracefully.
-            q = {"listing_status": {"$nin": ["sold", "for_sale"]},
-                 "LOT": {"$nin": [None, ""]}, "PLAN": {"$nin": [None, ""]}}
-            if not args.force:
-                q["living_map"] = {"$exists": False}
-            cur = gc[suburb].find(q)
-            if args.limit:
-                cur = cur.limit(args.limit)
-            docs = list(cur)
+            base_q = {"listing_status": {"$nin": ["sold", "for_sale"]},
+                      "LOT": {"$nin": [None, ""]}, "PLAN": {"$nin": [None, ""]}}
         else:
-            q = {"listing_status": "for_sale"}
-            if not args.force:
-                q["living_map"] = {"$exists": False}
-            cur = gc[suburb].find(q)
-            if args.limit:
-                cur = cur.limit(args.limit)
-            docs = list(cur)
+            base_q = {"listing_status": "for_sale"}
+        if not args.force and not args.address:
+            base_q["living_map"] = {"$exists": False}
 
-        if not docs:
+        # _ids only — a projected scan, never the full docs. ~25 bytes each.
+        id_cur = gc[suburb].find(base_q, {"_id": 1})
+        if args.limit:
+            id_cur = id_cur.limit(args.limit)
+        ids = [d["_id"] for d in id_cur]
+        if not ids:
             continue
-        result.eligible += len(docs)
+        result.eligible += len(ids)
 
         # ── Area POIs: ONE Overpass call for the whole suburb, reused by every
         #    property via haversine (nearest_pois_from_area). Replaces N per-property
-        #    Overpass calls — the public-API fair-use bottleneck. A single --address
-        #    run keeps the per-property fetch (area_pois stays None). On any failure
-        #    we fall back to per-property fetches, so this only ever speeds things up.
+        #    Overpass calls. On failure we fall back to per-property fetches.
         area_pois = None
         if not args.address:
             c = SUBURB_CENTROIDS.get(suburb)
@@ -824,17 +824,17 @@ def run(args):
                     area_pois = fetch_overpass_pois_area(
                         (c[0] - m, c[1] - m, c[0] + m, c[1] + m))
                     print(f"  · {suburb}: area POIs = {len(area_pois)} "
-                          f"(1 Overpass call for {len(docs)} properties)")
+                          f"(1 Overpass call for {len(ids)} properties)")
                 except Exception as e:                      # noqa: BLE001
                     print(f"  · {suburb}: area POI fetch failed ({type(e).__name__}) "
                           f"— falling back to per-property")
 
         # ── Pre-warm the geocode cache serially (Nominatim ≤1/s) so the parallel
-        #    build below never geocodes — making the shared cache read-only and
-        #    thread-safe. Comp addresses repeat heavily, so this is small + one-time.
+        #    build never geocodes → shared cache is read-only + thread-safe. Reads
+        #    ONLY comp addresses (projected), not full docs.
         addrs = set()
-        for d in docs:
-            for cmp in comps_from_valuation(d.get("valuation_data") or {}):
+        for d in gc[suburb].find(base_q, {"valuation_data.adjusted_comparables.address": 1}):
+            for cmp in (d.get("valuation_data") or {}).get("adjusted_comparables") or []:
                 a = cmp.get("address")
                 if a:
                     addrs.add(a)
@@ -842,35 +842,37 @@ def run(args):
             geocode_addresses(list(addrs), geocode_cache)
             _save_geocode_cache(geocode_cache)
 
-        # ── Build properties concurrently. Static Maps / OSRM(local) / ArcGIS are
-        #    network-I/O bound and independent per doc; the geocode cache is now
-        #    read-only and shared_tiles is pre-warmed, so no shared mutable state
-        #    needs a lock. Results are aggregated in this thread.
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        workers = int(os.environ.get("LIVING_MAP_WORKERS", "6"))
+        # ── Build in bounded chunks. Each chunk loads its own full docs by _id, builds
+        #    them across `workers` threads (Static Maps / OSRM-local / ArcGIS are I/O
+        #    bound; geocode cache read-only; shared_tiles pre-warmed → no locks), then
+        #    the docs are freed before the next chunk. Reading by _id also decouples
+        #    the load from the update_one writes (no cursor-while-writing hazard).
+        def _flush(chunk_docs):
+            with ThreadPoolExecutor(max_workers=workers) as ex:
+                futs = [ex.submit(build_one, gc, suburb, d, key,
+                                  geocode_cache, shared_tiles, area_pois)
+                        for d in chunk_docs]
+                for d, fut in zip(chunk_docs, futs):
+                    try:
+                        lm, info = fut.result()
+                    except Exception as e:                  # noqa: BLE001
+                        result.failed += 1
+                        print(f"  ✗ {d.get('address','?')}: {type(e).__name__}: {e}")
+                        continue
+                    if lm is None:
+                        result.failed += 1
+                        continue
+                    gaps, tiles_fetched = info
+                    result.n += 1
+                    result.tiles += tiles_fetched
+                    if gaps:
+                        result.gaps += 1
 
-        def _build(doc):
-            return doc, build_one(gc, suburb, doc, key, geocode_cache,
-                                  shared_tiles, area_pois)
-
-        with ThreadPoolExecutor(max_workers=workers) as ex:
-            futs = [ex.submit(_build, d) for d in docs]
-            for fut in as_completed(futs):
-                try:
-                    doc, (lm, info) = fut.result()
-                except Exception as e:                      # noqa: BLE001
-                    result.failed += 1
-                    print(f"  ✗ build error: {type(e).__name__}: {e}")
-                    continue
-                if lm is None:
-                    result.failed += 1
-                    print(f"  – {doc.get('address','?')}: {info}")
-                    continue
-                gaps, tiles_fetched = info
-                result.n += 1
-                result.tiles += tiles_fetched
-                if gaps:
-                    result.gaps += 1
+        for i in range(0, len(ids), CHUNK):
+            chunk_docs = list(gc[suburb].find({"_id": {"$in": ids[i:i + CHUNK]}}))
+            _flush(chunk_docs)
+            print(f"  … {suburb}: {result.n} built / {len(ids)} "
+                  f"({result.failed} failed, {result.gaps} partial)")
 
     _save_geocode_cache(geocode_cache)
     return result
