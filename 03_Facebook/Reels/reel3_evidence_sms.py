@@ -35,7 +35,11 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 from lead_sms_responder import send_sms, first_name, load_env  # noqa: E402
 
 SITE = "https://fieldsestate.com.au"
-SOURCE = "fb_reel3_evidence"
+# Both landing pages capture name+phone into campaign_leads and want the same
+# "here's the comparable-sales evidence" SMS: /your-home-evidence (Reel3) and
+# /what-the-comps-say (valuation reel, added 2026-08-28). The dedupe flag
+# reel3_sms_sent is shared; the lead's own `source` is preserved in the log.
+SOURCES = ["fb_reel3_evidence", "fb_valuation_reel"]
 
 
 def e164_au(raw):
@@ -72,7 +76,7 @@ def build_body(name, slug):
 
 def eligible(db, limit):
     return list(db.campaign_leads.find(
-        {"source": SOURCE, "reel3_sms_sent": {"$exists": False}}
+        {"source": {"$in": SOURCES}, "reel3_sms_sent": {"$exists": False}}
     ).sort("created_at", 1).limit(limit))
 
 
@@ -100,7 +104,7 @@ def process(db, send, limit):
                 "reel3_sms_body": body,
                 "reel3_needs_manual_link": not slug}})
             db.lead_sms_log.insert_one({"lead_id": str(d.get("_id")), "phone": phone,
-                "source": SOURCE, "name": name, "body": body, "direction": "out",
+                "source": d.get("source"), "name": name, "body": body, "direction": "out",
                 "channel": "sms", "reel3_slug": slug,
                 "created_at": datetime.now(timezone.utc).isoformat()})
             print("  SENT"); sent += 1
