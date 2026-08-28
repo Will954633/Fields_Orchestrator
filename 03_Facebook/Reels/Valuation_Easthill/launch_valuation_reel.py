@@ -32,7 +32,10 @@ IDS_PATH = os.path.join(HERE, "valuation_reel_ids.json")
 
 DAILY_BUDGET_CENTS = 1500  # AUD $15/day (matches the proven Reel3 test)
 SUBURB_KEYS = ["2687074", "2674227", "2719184"]  # Robina, Varsity Lakes, Burleigh Waters
-LANDING = "https://fieldsestate.com.au/analyse-your-home"
+# Dedicated reel-matched landing page (forest-green, continues the end card with a
+# live address field). Address-only, same submit funnel as /analyse-your-home, and
+# already carries the methodology + confidence disclaimer (Rule 5 $-claim pre-flight).
+LANDING = "https://fieldsestate.com.au/what-the-comps-say"
 
 PRIMARY_TEXT = (
     "This Robina home sold $76,000 above its guide — and the comparable sales suggested why.\n\n"
