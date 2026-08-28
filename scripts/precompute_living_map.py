@@ -89,9 +89,13 @@ SUBURBS = ("robina", "varsity_lakes", "burleigh_waters")
 # so a shared on-disk cache turns most geocodes into a dict lookup (PLAN §3).
 GEOCODE_CACHE = Path(_HERE).parent / "data" / "livingmap_geocode_cache.json"
 
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-OSRM_BASE = "https://router.project-osrm.org"     # ⚠ public demo — self-host before real volume (PLAN §3)
-NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+OVERPASS_URL = os.environ.get("OVERPASS_URL", "https://overpass-api.de/api/interpreter")
+# Self-hosted OSRM on this VM (Docker, QLD/AU extract) → http://localhost:5000. Falls
+# back to the public demo when OSRM_BASE is unset, so a dev run still works, but the
+# 8k backfill/nightly job MUST set OSRM_BASE to the local server (the public demo
+# rate-limits at volume — PLAN §3).
+OSRM_BASE = os.environ.get("OSRM_BASE", "https://router.project-osrm.org")
+NOMINATIM_URL = os.environ.get("NOMINATIM_URL", "https://nominatim.openstreetmap.org/search")
 USER_AGENT = "FieldsEstate-LivingMap/1.0 (will@fieldsestate.com.au)"
 
 QLD_CATCHMENT = ("https://spatial-gis.information.qld.gov.au/arcgis/rest/services/"
@@ -773,6 +777,15 @@ def main():
     from shared.env import load_env
     load_env()
 
+    # Re-resolve service endpoints AFTER load_env() — the module-level defaults (l.92-98)
+    # are read at import, BEFORE .env is loaded. Without this, OSRM_BASE=http://localhost:5000
+    # in .env (the self-hosted OSRM) would be ignored unless it were also a real exported
+    # env var. This makes both paths work (Rule 7.3: load your own environment).
+    global OSRM_BASE, NOMINATIM_URL, OVERPASS_URL
+    OSRM_BASE = os.environ.get("OSRM_BASE", OSRM_BASE)
+    NOMINATIM_URL = os.environ.get("NOMINATIM_URL", NOMINATIM_URL)
+    OVERPASS_URL = os.environ.get("OVERPASS_URL", OVERPASS_URL)
+
     ap = argparse.ArgumentParser(description="Living Map precompute (Phase 0)")
     ap.add_argument("--suburb", choices=list(SUBURBS))
     ap.add_argument("--address")
@@ -789,8 +802,14 @@ def main():
         return self_test()
 
     from job_status import job_run
-    with job_run("precompute_living_map", cadence_hours=24,
-                 title="Living Map precompute") as beat:
+    # Distinct heartbeat per mode so the on-market (daily) and off-market (weekly)
+    # nightly runs don't overwrite each other's status on the health board.
+    _job = os.environ.get("LIVING_MAP_JOB_NAME",
+                          "precompute_living_map_offmarket" if args.offmarket
+                          else "precompute_living_map")
+    _cadence = 24 * 7 if args.offmarket else 24
+    with job_run(_job, cadence_hours=_cadence,
+                 title="Living Map precompute" + (" (off-market)" if args.offmarket else "")) as beat:
         # Was there any input at all? An empty for-sale set is a legitimate "no
         # work to do"; input-present-but-nothing-built is a failure (Rule 7b).
         result = run(args)
