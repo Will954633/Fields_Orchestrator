@@ -46,14 +46,13 @@ SELLER_FORM_IDS = {
     "1961613607744103",  # GC Seller Intent (report) — name+email+phone
     "1689297792302611",  # GC Sold-Price Alerts — name+email+phone
     "1307646261451971",  # GC Seller Intent (report+address)
-    "2542687336206872",  # Independent Listing Analysis (carousel) — name+email+phone
-                         # Missing until 2026-08-20: its 4 leads (all with phones) fell
-                         # through to the generic buyer notify(), which renders neither
-                         # name nor phone, so Will got an email-only alert for four
-                         # phone-bearing seller leads.
-    "3247679548765163",  # Independent Listing Analysis (carousel) v1 — ...-copy
-                         # A duplicate of the form above with its own ID; inherited the
-                         # same gap. Added 2026-08-28.
+    # NOTE (2026-08-29): the two "Independent Listing Analysis (carousel)" forms
+    # (2542687336206872, 3247679548765163) were REMOVED from here and moved to
+    # FORSALE_BUYER_FORMS below. They are fed by the "Buyer Brief — Carousel"
+    # campaign — a buyer-facing ad offering to SHOW people homes for sale — and
+    # leads answered "not selling" on the on-page ladder, yet were being announced
+    # as "SELLER — call them". They are buyers wanting the /for-sale listings, not
+    # sellers. See fix-history [LEAD-BUYER-VS-SELLER-MISLABEL].
     # Property Narratives Instant Form campaign (owner-intent angles, name+phone,
     # 2026-08-25). Uncategorised on launch -> generic buyer notify() -> 3 leads /
     # $81 spend fired contactless alerts. Added 2026-08-28.
@@ -61,6 +60,22 @@ SELLER_FORM_IDS = {
     "1580988970376517",  # Fields Narratives — Price Reduction (name+phone)
     "1010229908733472",  # Fields Narratives — Scarcity (name+phone)
     "3039075966262793",  # Fields Narratives — Value Gap (name+phone)
+}
+
+# BUYER leads from "homes for sale" ads. These people asked to SEE listings — the
+# ads are buyer-facing (carousels/landing pages offering the for-sale feed), the
+# thank-you page sends them to /for-sale-v3, and on-page they self-describe as
+# buyers. They must NOT be announced as sellers. Routed to notify_forsale_buyer(),
+# which labels them a buyer wanting for-sale listings. (Traffic-objective siblings
+# of these ads send clicks straight to the site and generate no lead here.)
+# Established 2026-08-29 at Will's direction.
+FORSALE_BUYER_FORMS = {
+    "2542687336206872",  # Independent Listing Analysis (carousel) — name+email+phone
+    "3247679548765163",  # Independent Listing Analysis (carousel) v1 — ...-copy
+    "1017406421335871",  # Subscriber Lookalike LEADFORM — Houses for sale
+    "1556201945441499",  # Subscriber Lead — Tailored: Buyer Landing Page Test
+    "2620916168378070",  # Subscriber Lead — Traffic: Buyer Landing Page v4b
+    "1966015337395067",  # Subscriber Lead — Traffic for homes (video)
 }
 
 # OUT-OF-MARKET copy-test forms (SEQ ex-GC). Captured SILENTLY as signal only:
@@ -209,6 +224,35 @@ def notify_seller(fields, form_name, created, campaign_name=None, ad_name=None):
         print(f"  telegram notify failed: {e}", file=sys.stderr)
 
 
+def notify_forsale_buyer(fields, form_name, created, campaign_name=None, ad_name=None):
+    """Buyer lead from a 'homes for sale' ad — these people asked to SEE listings,
+    NOT to sell. Deliberately distinct from notify_seller(): labelled as a buyer and
+    tied to the for-sale funnel. Still surfaces name+phone+email so Will can follow
+    up, plus any qualifier answers the form/ladder captured."""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat = os.environ.get("TELEGRAM_CHAT_ID")
+    if not (token and chat):
+        return
+    name = fields.get("full_name") or fields.get("name") or "?"
+    phone = fields.get("phone_number") or fields.get("phone") or "?"
+    lines = ["🏠 *New buyer lead — wants for-sale listings*",
+             f"_{form_name}_", *source_lines(campaign_name, ad_name), "",
+             f"• *Name:* {name}",
+             f"• *📞 Phone:* {phone}",
+             f"• *Email:* {fields.get('email','?')}"]
+    label = {"area": "Area", "suburb": "Suburb", "bedrooms": "Beds",
+             "bathrooms": "Baths", "timeframe": "Timeframe", "budget": "Budget"}
+    for k in ("area", "suburb", "bedrooms", "bathrooms", "timeframe", "budget"):
+        if fields.get(k):
+            lines.append(f"• *{label.get(k, k)}:* {fields[k]}")
+    lines += ["", f"_{created}_"]
+    try:
+        requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                      json={"chat_id": chat, "text": "\n".join(lines), "parse_mode": "Markdown"}, timeout=20)
+    except Exception as e:
+        print(f"  telegram notify failed: {e}", file=sys.stderr)
+
+
 def fulfil_ayh(fields):
     """Resolve address -> mini-site -> email via the Netlify fulfilment function."""
     payload = {"address": fields.get("property_address", ""),
@@ -342,6 +386,11 @@ def main():
                 if not args.no_notify:
                     notify_seller(fields, form["name"], lead.get("created_time"),
                                   lead.get("campaign_name"), lead.get("ad_name"))
+            elif form["id"] in FORSALE_BUYER_FORMS:
+                coll.insert_one(doc)
+                if not args.no_notify:
+                    notify_forsale_buyer(fields, form["name"], lead.get("created_time"),
+                                         lead.get("campaign_name"), lead.get("ad_name"))
             elif form["id"] in BYL_FORM_IDS:
                 coll.insert_one(doc)
                 q, needs_review = fulfil_byl(fields, doc, coll)
