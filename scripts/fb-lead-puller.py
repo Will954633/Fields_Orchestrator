@@ -124,19 +124,31 @@ def flatten(lead):
     return out
 
 
+def source_lines(campaign_name=None, ad_name=None):
+    """Attribution lines for a lead alert — the CAMPAIGN and, crucially, the exact
+    AD NAME. The Telegram notification used to show only the campaign (or fall back
+    to the ad), so the ad name never appeared and Will couldn't match a lead to the
+    specific creative in Ads Manager (e.g. the 'C' card of a carousel test). Both are
+    now surfaced. Absent both = organic form post. Added 2026-08-29, see fix-history
+    [TELEGRAM-LEAD-NO-AD-NAME]."""
+    if not (campaign_name or ad_name):
+        return ["📣 _Organic (no ad)_"]
+    out = []
+    if campaign_name:
+        out.append(f"📣 _{campaign_name}_")
+    if ad_name:
+        out.append(f"🏷️ *Ad:* _{ad_name}_")
+    return out
+
+
 def notify(fields, form_name, created, campaign_name=None, ad_name=None):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat = os.environ.get("TELEGRAM_CHAT_ID")
     if not (token and chat):
         return
     owns = str(fields.get("owns_gc_home", "")).lower() == "yes"
-    # Source line: which ad/campaign this lead came from (lets us tell the
-    # carousel lead ad apart from the single-image one — they share nothing but
-    # both feed a Buyer-Brief-style form). Absent = organic form post.
-    source = campaign_name or ad_name
-    src_line = f"📣 _{source}_" if source else "📣 _Organic (no ad)_"
     lines = ["🎯 *New buyer lead*" + ("  — OWNS A GC HOME 🏠" if owns else ""),
-             f"_{form_name}_", src_line, ""]
+             f"_{form_name}_", *source_lines(campaign_name, ad_name), ""]
     # SAFETY NET (2026-08-28): surface name + phone on ANY lead that carries them,
     # even a form we never categorised. This function used to render only the buyer
     # qualifier fields below, so an uncategorised name+phone form (owner/seller
@@ -179,10 +191,8 @@ def notify_seller(fields, form_name, created, campaign_name=None, ad_name=None):
     hot = str(intent).lower().startswith(("yes", "now", "within", "0", "1", "2", "3"))
     name = fields.get("full_name") or fields.get("name") or "?"
     phone = fields.get("phone_number") or fields.get("phone") or "?"
-    source = campaign_name or ad_name
-    src_line = f"📣 _{source}_" if source else "📣 _Organic (no ad)_"
     lines = ["🏷️ *New SELLER lead — call them*" + ("  🔥 SELLING INTENT" if hot else ""),
-             f"_{form_name}_", src_line, "",
+             f"_{form_name}_", *source_lines(campaign_name, ad_name), "",
              f"• *Name:* {name}",
              f"• *📞 Phone:* {phone}",
              f"• *Email:* {fields.get('email','?')}",
@@ -211,7 +221,7 @@ def fulfil_ayh(fields):
         return {"ok": False, "reason": f"call_failed:{e}"}
 
 
-def notify_ayh(fields, form_name, created, result):
+def notify_ayh(fields, form_name, created, result, campaign_name=None, ad_name=None):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat = os.environ.get("TELEGRAM_CHAT_ID")
     if not (token and chat):
@@ -224,7 +234,7 @@ def notify_ayh(fields, form_name, created, result):
     else:
         head = "⚠️ *New AYH lead — NEEDS MANUAL HANDLING*"
         tail = f"Reason: `{result.get('reason')}` — resolve/send by hand."
-    lines = [head, f"_{form_name}_", "",
+    lines = [head, f"_{form_name}_", *source_lines(campaign_name, ad_name), "",
              f"• *Address:* {addr}", f"• *Suburb:* {fields.get('suburb','?')}",
              f"• *Selling?:* {fields.get('selling_timeframe','?')}", f"• *Email:* {email}",
              "", tail, f"_{created}_"]
@@ -256,13 +266,14 @@ def fulfil_byl(fields, doc, coll):
     return q, needs_review
 
 
-def notify_byl(fields, form_name, created, arm, address, needs_review):
+def notify_byl(fields, form_name, created, arm, address, needs_review,
+               campaign_name=None, ad_name=None):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat = os.environ.get("TELEGRAM_CHAT_ID")
     if not (token and chat):
         return
     head = "📕 *Before You List — post the book*" + ("  ⚠️ CHECK ADDRESS" if needs_review else "")
-    lines = [head, f"_{form_name}_  ·  arm *{arm}*", "",
+    lines = [head, f"_{form_name}_  ·  arm *{arm}*", *source_lines(campaign_name, ad_name), "",
              f"• *Name:* {fields.get('full_name', '?')}",
              f"• *📞 Phone:* {fields.get('phone_number', '?')}",
              f"• *Email:* {fields.get('email', '?')}",
@@ -315,7 +326,8 @@ def main():
                 print(f"    AYH fulfil -> {result}")
                 coll.insert_one(doc)
                 if not args.no_notify:
-                    notify_ayh(fields, form["name"], lead.get("created_time"), result)
+                    notify_ayh(fields, form["name"], lead.get("created_time"), result,
+                               lead.get("campaign_name"), lead.get("ad_name"))
             elif form["id"] in TEST_FORM_IDS:
                 # out-of-market signal only: store tagged, NO notify / CRM / fulfilment
                 # Write BOTH flags. `test_market` is the descriptive one; `is_test` is
@@ -336,7 +348,8 @@ def main():
                 print(f"    BYL -> print_post_queue (arm {q['arm']}, {q['status']})")
                 if not args.no_notify:
                     notify_byl(fields, form["name"], lead.get("created_time"),
-                               q["arm"], q["address"], needs_review)
+                               q["arm"], q["address"], needs_review,
+                               lead.get("campaign_name"), lead.get("ad_name"))
             else:
                 coll.insert_one(doc)
                 if not args.no_notify:
