@@ -46,9 +46,13 @@ def primary_text(name):
         "Sydney and Melbourne have turned. Brisbane has slipped. The Gold Coast is still "
         "holding — but some of the early warning signs are beginning to change.\n\n"
         f"We tracked the estimated value of {name} homes over the past 18 months. Enter your "
-        "address and we'll text you the link to the analysis prepared for your home — its "
-        "trajectory, where it sits in the suburb, and the signals we're watching. No sign-up."
+        "address to see where your home sits—and the four market signals we're watching."
     )
+
+# Button label on the ad + every carousel card. Changed 2026-08-28 (Will): was SIGN_UP
+# ("Sign Up"). Will asked for "Get Started" but Meta's lead-form carousel enum doesn't
+# offer it — LEARN_MORE ("Learn More") chosen as the closest available label.
+CTA_TYPE = "LEARN_MORE"
 
 CARD_NAMES = {"01": "Prices are falling. Is your home next?",
               "02": "Your home, traced over 18 months",
@@ -153,7 +157,7 @@ def create_creative(sub, form_id, hashes):
     for num in ["01", "02", "03", "04", "05"]:
         child = {"image_hash": hashes[f"{sub}_{num}"],
                  "link": f"https://fieldsestate.com.au/find/{s['slug']}",
-                 "call_to_action": {"type": "SIGN_UP", "value": {"lead_gen_form_id": form_id}}}
+                 "call_to_action": {"type": CTA_TYPE, "value": {"lead_gen_form_id": form_id}}}
         if CARD_NAMES[num]:
             child["name"] = CARD_NAMES[num]
         children.append(child)
@@ -163,7 +167,7 @@ def create_creative(sub, form_id, hashes):
         "multi_share_optimized": False,
         "multi_share_end_card": False,
         "child_attachments": children,
-        "call_to_action": {"type": "SIGN_UP", "value": {"lead_gen_form_id": form_id}},
+        "call_to_action": {"type": CTA_TYPE, "value": {"lead_gen_form_id": form_id}},
     }}
     return _call("POST", f"{ACT}/adcreatives", TOK,
                  name=f"Owner Market FORM creative · {s['name']}", object_story_spec=oss)["id"]
