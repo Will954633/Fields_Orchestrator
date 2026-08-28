@@ -1,5 +1,12 @@
 # Subscriber Lead-Form Winners — duplicate proven traffic ads as pre-filled lead ads
 
+> **Follow-up experiment (2026-08-28):** ad #5's manual `/exclusive-access` gate captured
+> **0 of 33 clicks**, so we launched an autofill-form arm against it (flattened creative +
+> prefilled name/email/phone Instant Form). Full writeup, live IDs, and the metrics we're
+> reading: **`EXPERIMENT_exclusive_access_form_vs_gate.md`** · build:
+> `build_ad5_leadform_variant.py`.
+
+
 Take our highest-performing **link-click / traffic** ads and re-run each as a Meta **Instant
 Form (lead) ad**. The creative, headline, primary text, image/video — **everything stays
 exactly the same**. The *only* change is one added step inserted between the creative and the
