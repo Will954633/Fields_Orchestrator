@@ -43,11 +43,17 @@ identical, plus we now capture a subscriber on the way through.
 - **#3 (photo)** — reproduced via `link_data` reusing the same image + the full "Who buys…"
   body. This one was an **engagement** ad (pixel CONTENT_VIEW), not traffic; needs its
   destination URL.
-- **#5 (asset_feed / Advantage+)** — this is the one creative that **cannot be byte-identical**
-  as a lead ad: it uses placement-customised Advantage+ assets (4 crops, per-placement rules).
-  Reproduced as a single-image link ad using its primary asset (`9f80727ae1f2…`) + the Robina
-  body + `/for-sale-v4b`. Flagged for Will — if exact Advantage+ behaviour matters here, we
-  keep it as-is and skip the lead-form version, or accept the single-image reproduction.
+- **#5 (asset_feed / Advantage+)** — **DONE, but differently** (Will's call): its
+  placement-customised dynamic creative may be *why* it won, so instead of flattening it into a
+  lead form we **cloned it verbatim** (same image hash, per-placement crops, 4 customization
+  rules, `optimization_type: PLACEMENT`) and changed **only the destination** to a new
+  **`/exclusive-access`** landing page that replicates the ad's Properties-grid view behind a
+  manual Name+Email gate (same "Fields exclusive access for subscribers only" headline), then
+  continues to `/for-sale-v4b`. Kept `OUTCOME_TRAFFIC`. Built by `build_ad5_lookalike.py`;
+  landing page lives in the website repo (`src/routes/exclusive-access.tsx`,
+  `src/pages/ExclusiveAccessPage/*`, `public/exclusive-access/backdrop.jpg`). Capture →
+  `/api/subscribe` → `system_monitor.subscribers` (`source: fb_ad_v4b_lp`). Verified live
+  end-to-end (submit → redirect to `/for-sale-v4b`).
 
 ## Structure created per ad (mirrors the source)
 - New campaign `OUTCOME_LEADS`, `special_ad_categories=[]` (⚠ HOUSING-flag risk — see
