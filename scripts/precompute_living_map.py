@@ -427,6 +427,59 @@ def fetch_overpass_pois(center, radius_m=5000):
     return [v[1] for v in best.values()]
 
 
+def _cat_of(tags):
+    if tags.get("amenity") == "school":   return "School"
+    if tags.get("railway") == "station":  return "Station"
+    if tags.get("shop") == "mall":        return "Mall"
+    if tags.get("amenity") == "hospital": return "Hospital"
+    if tags.get("natural") == "beach":    return "Beach"
+    return None
+
+
+def fetch_overpass_pois_area(bbox):
+    """Fetch EVERY POI of each category in a bounding box in ONE Overpass call, for
+    reuse across all properties in that area. Neighbours share the same schools /
+    stations / malls / hospitals / beaches — only the distances differ, and those are
+    a haversine away (nearest_pois_from_area), no per-property network. This replaces
+    ~N per-property Overpass calls with ONE per suburb, removing the public-API
+    fair-use bottleneck that gated the backfill. Returns [{name,cat,lat,lon}]."""
+    s, w, n, e = bbox
+    parts = [f'{filt}({s},{w},{n},{e});' for filt in POI_QUERIES.values()]
+    q = f"[out:json][timeout:90];({''.join(parts)});out center;"
+    url = f"{OVERPASS_URL}?data={urllib.parse.quote(q)}"
+    data = None
+    for attempt in range(4):
+        try:
+            data = json.loads(_http_get(url, timeout=120))
+            break
+        except Exception:                                       # noqa: BLE001
+            if attempt == 3:
+                raise
+            time.sleep(3 * (attempt + 1))
+    out = []
+    for el in data.get("elements", []):
+        tags = el.get("tags", {})
+        lat = el.get("lat") or (el.get("center") or {}).get("lat")
+        lon = el.get("lon") or (el.get("center") or {}).get("lon")
+        cat = _cat_of(tags)
+        if lat is None or lon is None or not cat:
+            continue
+        out.append({"name": tags.get("name") or cat, "cat": cat,
+                    "lat": lat, "lon": lon})
+    return out
+
+
+def nearest_pois_from_area(center, area_pois):
+    """Nearest POI per category from a pre-fetched area set (haversine, no network).
+    Same output shape as fetch_overpass_pois()."""
+    best = {}
+    for p in area_pois:
+        m = haversine_m(center["lat"], center["lon"], p["lat"], p["lon"])
+        if p["cat"] not in best or m < best[p["cat"]][0]:
+            best[p["cat"]] = (m, p)
+    return [v[1] for v in best.values()]
+
+
 def osrm_drive_table(center, points):
     """Drive time (min) + distance (km) from `center` to each point via OSRM
     `table`. Returns {(lat,lon): {"drive_min", "drive_km"}}. Best-effort."""
@@ -561,7 +614,7 @@ class BuildResult:
         self.eligible = 0
 
 
-def build_one(gc, suburb, doc, key, geocode_cache, shared_tiles):
+def build_one(gc, suburb, doc, key, geocode_cache, shared_tiles, area_pois=None):
     """Build the living_map object for one property and persist it to the doc.
 
     Returns (living_map_dict, gaps_list) on success, or (None, reason) if the
@@ -616,7 +669,11 @@ def build_one(gc, suburb, doc, key, geocode_cache, shared_tiles):
     # ── POIs + drive times ────────────────────────────────────────────────────
     pois = []
     try:
-        raw = fetch_overpass_pois(center)
+        # area_pois (fetched once per suburb) → nearest-per-category via haversine,
+        # no per-property Overpass call. Falls back to a per-property fetch only when
+        # no area set was supplied (e.g. a single --address run).
+        raw = (nearest_pois_from_area(center, area_pois) if area_pois is not None
+               else fetch_overpass_pois(center))
         table = osrm_drive_table(center, raw)
         pois = build_pois(center, raw, table)
         if not pois:
@@ -749,25 +806,71 @@ def run(args):
                 cur = cur.limit(args.limit)
             docs = list(cur)
 
-        for doc in docs:
-            result.eligible += 1
-            try:
-                lm, info = build_one(gc, suburb, doc, key, geocode_cache, shared_tiles)
-            except Exception as e:                          # noqa: BLE001
-                result.failed += 1
-                print(f"  ✗ {doc.get('address','?')}: {type(e).__name__}: {e}")
-                continue
-            if lm is None:
-                result.failed += 1
-                print(f"  – {doc.get('address','?')}: {info}")
-                continue
-            gaps, tiles_fetched = info
-            result.n += 1
-            result.tiles += tiles_fetched
-            if gaps:
-                result.gaps += 1
-            print(f"  ✓ {doc.get('address','?')[:48]:<48} "
-                  f"{len(gaps)} gap(s), {tiles_fetched} tile(s)")
+        if not docs:
+            continue
+        result.eligible += len(docs)
+
+        # ── Area POIs: ONE Overpass call for the whole suburb, reused by every
+        #    property via haversine (nearest_pois_from_area). Replaces N per-property
+        #    Overpass calls — the public-API fair-use bottleneck. A single --address
+        #    run keeps the per-property fetch (area_pois stays None). On any failure
+        #    we fall back to per-property fetches, so this only ever speeds things up.
+        area_pois = None
+        if not args.address:
+            c = SUBURB_CENTROIDS.get(suburb)
+            if c:
+                m = 0.09  # ~10 km half-box: suburb extent + the old 5 km POI radius
+                try:
+                    area_pois = fetch_overpass_pois_area(
+                        (c[0] - m, c[1] - m, c[0] + m, c[1] + m))
+                    print(f"  · {suburb}: area POIs = {len(area_pois)} "
+                          f"(1 Overpass call for {len(docs)} properties)")
+                except Exception as e:                      # noqa: BLE001
+                    print(f"  · {suburb}: area POI fetch failed ({type(e).__name__}) "
+                          f"— falling back to per-property")
+
+        # ── Pre-warm the geocode cache serially (Nominatim ≤1/s) so the parallel
+        #    build below never geocodes — making the shared cache read-only and
+        #    thread-safe. Comp addresses repeat heavily, so this is small + one-time.
+        addrs = set()
+        for d in docs:
+            for cmp in comps_from_valuation(d.get("valuation_data") or {}):
+                a = cmp.get("address")
+                if a:
+                    addrs.add(a)
+        if addrs:
+            geocode_addresses(list(addrs), geocode_cache)
+            _save_geocode_cache(geocode_cache)
+
+        # ── Build properties concurrently. Static Maps / OSRM(local) / ArcGIS are
+        #    network-I/O bound and independent per doc; the geocode cache is now
+        #    read-only and shared_tiles is pre-warmed, so no shared mutable state
+        #    needs a lock. Results are aggregated in this thread.
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        workers = int(os.environ.get("LIVING_MAP_WORKERS", "6"))
+
+        def _build(doc):
+            return doc, build_one(gc, suburb, doc, key, geocode_cache,
+                                  shared_tiles, area_pois)
+
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futs = [ex.submit(_build, d) for d in docs]
+            for fut in as_completed(futs):
+                try:
+                    doc, (lm, info) = fut.result()
+                except Exception as e:                      # noqa: BLE001
+                    result.failed += 1
+                    print(f"  ✗ build error: {type(e).__name__}: {e}")
+                    continue
+                if lm is None:
+                    result.failed += 1
+                    print(f"  – {doc.get('address','?')}: {info}")
+                    continue
+                gaps, tiles_fetched = info
+                result.n += 1
+                result.tiles += tiles_fetched
+                if gaps:
+                    result.gaps += 1
 
     _save_geocode_cache(geocode_cache)
     return result
