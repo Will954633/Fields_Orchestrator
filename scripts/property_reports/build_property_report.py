@@ -51,6 +51,41 @@ def get_system_monitor_db():
     return get_client()["system_monitor"]
 
 
+# Cache Meta ad-id -> ad-name lookups for the life of the process so a batch of
+# notifications resolving the same ad only hits the Graph API once.
+_AD_NAME_CACHE: Dict[str, Optional[str]] = {}
+
+
+def _resolve_ad_name(ad_id: Optional[str]) -> Optional[str]:
+    """Resolve a Meta ad id (the utm_term we stamp on lead-page links) to its
+    human ad name, e.g. 'Owner Market LEADPAGE Ad · Burleigh Waters'. Returns
+    None if unresolvable (no token, bad id, API error) — the caller degrades to
+    the campaign name."""
+    if not ad_id or not str(ad_id).isdigit():
+        return None
+    ad_id = str(ad_id)
+    if ad_id in _AD_NAME_CACHE:
+        return _AD_NAME_CACHE[ad_id]
+    import os
+    import requests
+
+    name = None
+    token = os.environ.get("FACEBOOK_ADS_TOKEN")
+    if token:
+        try:
+            r = requests.get(
+                f"https://graph.facebook.com/v18.0/{ad_id}",
+                params={"access_token": token, "fields": "name"},
+                timeout=10,
+            )
+            if r.ok:
+                name = r.json().get("name")
+        except Exception:
+            name = None
+    _AD_NAME_CACHE[ad_id] = name
+    return name
+
+
 def _notify_new_lead(report_doc: Dict[str, Any], occ: Optional[Dict[str, Any]]) -> None:
     """Telegram alert for a new Analyse Your Home lead, with occupancy verdict."""
     import os
@@ -65,7 +100,13 @@ def _notify_new_lead(report_doc: Dict[str, Any], occ: Optional[Dict[str, Any]]) 
     address = report_doc.get("address", slug)
     attribution = (report_doc.get("owner") or {}).get("attribution") or {}
     channel = attribution.get("channel_type") or "unknown"
-    campaign = (attribution.get("first_touch") or {}).get("utm_campaign")
+    first_touch = attribution.get("first_touch") or {}
+    campaign = first_touch.get("utm_campaign")
+    # Prefer the actual ad name (resolved from utm_term = the Meta ad id we stamp
+    # on every lead-page link) so the alert says exactly which creative drove the
+    # lead — e.g. 'Owner Market LEADPAGE Ad · Burleigh Waters' — not just the
+    # campaign-level utm_campaign slug.
+    ad_name = _resolve_ad_name(first_touch.get("utm_term"))
 
     occ = occ or {}
     otype = occ.get("type", "unknown")
@@ -80,7 +121,7 @@ def _notify_new_lead(report_doc: Dict[str, Any], occ: Optional[Dict[str, Any]]) 
         "📩 *New Analyse Your Home lead*",
         f"*{address}*",
         "",
-        f"📈 *Source:* {channel}" + (f" — {campaign}" if campaign else ""),
+        f"📈 *Source:* {channel}" + (f" — {ad_name or campaign}" if (ad_name or campaign) else ""),
         occ_line,
     ]
     if signals:
