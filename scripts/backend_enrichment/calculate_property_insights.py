@@ -138,8 +138,14 @@ def get_room_area(property_doc, room_keywords, fallback_largest_bedroom=False):
     rooms = floor_plan.get('rooms', [])
 
     for room in rooms:
-        room_name = room.get('room_name', '').lower()
-        room_type = room.get('room_type', '').lower()
+        # `or ''` not `.get(k, '')` — the default only applies when the key is ABSENT,
+        # and floor-plan analysis writes an explicit null for a room it could not name
+        # (e.g. 53 Easthill Drive, Robina: {"room_name": null, "room_type": "powder_room"}).
+        # This function is also called across the whole for-sale comparison pool, so ONE
+        # such room failed 140 of 738 subject properties -> 18.96% error ratio -> step 15
+        # failed the entire nightly run (2026-08-30).
+        room_name = (room.get('room_name') or '').lower()
+        room_type = (room.get('room_type') or '').lower()
 
         # Check if any keyword matches
         for keyword in room_keywords:
@@ -153,8 +159,8 @@ def get_room_area(property_doc, room_keywords, fallback_largest_bedroom=False):
     if fallback_largest_bedroom:
         largest_area = None
         for room in rooms:
-            room_name = room.get('room_name', '').lower()
-            room_type = room.get('room_type', '').lower()
+            room_name = (room.get('room_name') or '').lower()
+            room_type = (room.get('room_type') or '').lower()
             if 'bed' in room_name or room_type == 'bedroom':
                 dimensions = room.get('dimensions', {})
                 area = dimensions.get('area')
@@ -730,7 +736,16 @@ def calculate_property_insights() -> None:
                 except Exception as exc:  # pylint: disable=broad-except
                     errors += 1
                     if errors <= 5:
-                        print(f"  ✗ Error processing property: {exc}")
+                        # Print the TRACEBACK, not just str(exc). This handler swallowed
+                        # 140 failures a night behind the bare string "'NoneType' object
+                        # has no attribute 'lower'", which names neither the line nor the
+                        # field — the try body is ~140 lines and calls out to several
+                        # helpers, so the message alone could not be acted on (2026-08-30).
+                        # CLAUDE.md Rule 7b: record the error text.
+                        import traceback
+                        print(f"  ✗ Error processing {prop.get('address', prop.get('_id'))}: "
+                              f"{type(exc).__name__}: {exc}")
+                        traceback.print_exc()
 
             print(
                 f"  ✓ Processed {len(suburb_properties)} properties, "
