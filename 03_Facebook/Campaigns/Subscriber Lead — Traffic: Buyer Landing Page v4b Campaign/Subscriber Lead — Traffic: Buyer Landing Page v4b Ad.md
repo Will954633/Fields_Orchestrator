@@ -25,5 +25,18 @@ _Auto-generated 2026-08-29 from the Meta Ads API. Edit freely — notes below ar
 - **Destination:** `https://fieldsestate.com.au/for-sale-v4b`
 - **CTA:** LEARN_MORE
 
+## History & intent
+
+**Why we created it** (2026-08-28)
+- One of four "Subscriber Lead" ads created by **duplicating the top link-click ads as pre-filled lead-form ads**. Will's directive: re-run proven traffic winners as lead ads to grow the subscriber list while preserving exactly what made each ad work.
+- Hypothesis: adding one pre-filled name+email step (both autofilled from the Meta profile) **before the SAME landing page** (`/for-sale-v4b`) captures subscribers off already-proven creative without hurting the funnel — creative, headline, primary text, media, targeting and daily budget copied verbatim; only the CTA now opens an Instant Form (FULL_NAME + EMAIL prefilled) → thank-you → original landing page.
+- Source ad's proven performance: **"v4b" — 40 lifetime link clicks @ $0.41**.
+
+**What changed (pivots)**
+- No prior pivot recorded for this creative beyond its inclusion in the 2026-08-28 duplication of the four top link-click ads.
+
+**What we're looking for now**
+- Subscribers captured per proven-winner creative — cost-per-captured-subscriber, leads auto-ingested by `fb-lead-puller.py` into `fb_leads` + CRM.
+
 ## Notes / hypothesis / performance
 _(add observations, what this ad is testing, results)_
