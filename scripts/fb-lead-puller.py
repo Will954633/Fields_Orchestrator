@@ -76,6 +76,9 @@ FORSALE_BUYER_FORMS = {
     "1556201945441499",  # Subscriber Lead — Tailored: Buyer Landing Page Test
     "2620916168378070",  # Subscriber Lead — Traffic: Buyer Landing Page v4b
     "1966015337395067",  # Subscriber Lead — Traffic for homes (video)
+    "934428149716778",   # Arm 3 — Instant Form Browser Add-On (tracking fields_arm=browser_addon,
+                         # fields_test=houses_for_sale_3arm). Native form that pops on scroll of
+                         # /for-sale-v3 in the FB in-app browser. Added 2026-08-29.
 }
 
 # OUT-OF-MARKET copy-test forms (SEQ ex-GC). Captured SILENTLY as signal only:
