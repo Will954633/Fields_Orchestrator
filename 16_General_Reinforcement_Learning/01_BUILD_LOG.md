@@ -1304,3 +1304,35 @@ collapsed from ~50 impr/day to ~2-6 from 08-17; rank transferred, 9.5 -> 9.1).
 Ledger: withdrew REC-seo-004 (its evidence was the 9% sample, two claims false), re-filed as
 REC-seo-007 with true numbers. 2/2. Two peer directives sent (`articles`, `all`).
 Doc: `cycles/2026-W35/2026-08-30/seo_cycle_20260830_0700.md`
+
+## 2026-08-30 08:00 — GEO weekly cycle (briefing tier: STALE, 17d)
+
+- **Measured** the post-REC-geo-003 result: description unchanged, but the engine is citing a
+  ~3-week-stale cache (legacy `/market-metrics/*` URL, pre-08-13 title). Live pages verified
+  correct as OAI-SearchBot. **REC-geo-003 is not gradeable yet** — due 2026-09-20 stands.
+- **Bing fully recovered:** InIndex 1,987 → 2,127 monotonic over 12d, impressions 40–72/day,
+  Code5xx 13 → 1. Neither geo action caused it (caveat retained on REC-geo-002).
+- **Submitted** 11 identity + cited-overview URLs to IndexNow + Bing SubmitUrlbatch (both 200).
+  Checked against `rl_seo_actions` first — not duplicate churn.
+- **Closed the 3-cycle-old `AllOtherCodes` mystery.** 304 hypothesis tested and rejected
+  (Netlify serves ETags but never answers 304). Decoupled from every health metric → stop
+  tracking it.
+- **Proposed 2 (at cap):** REC-geo-004 — `/about/will-simpson` says "licensed" ×0, "agent" ×0,
+  and its Person schema contradicts `/about`'s `founder.jobTitle: "Licensed Real Estate Agent"`.
+  REC-geo-005 — `/about/<anything>` returns 200 with a self-referencing canonical; asked Will to
+  fold it into the open REC-seo-006 rather than decide the same cluster twice.
+- Actions GEO-027…GEO-032 in `system_monitor.rl_geo_actions` (32 docs).
+- Cycle doc: `cycles/2026-W35/2026-08-30/geo_cycle_20260830_0800.md`
+
+## 2026-08-30 — ads cycle (20260830_0900)
+Brief `stale`/NARROWED (17d). Measured 14d paid: **$796.08 / 17 form leads** — against a brief
+that says all spend is paused. Cost per identified SELLER: **address ask $26.20 (n=4) vs
+selling-intent ask $199.00 (n=1)** — directional, but corroborated independently by
+`reward_ledger` (`submitted_address` = ★reward, 53.1× lift, n=13). Fixed
+`owner_market_sms.py`: the per-suburb ad was forcing its own suburb into the resolver, so
+Burleigh Heads owners answering a Burleigh Waters ad could never match — 3 of 4 paid address
+leads came back unresolved and were told "I'm finalising your link" with no process behind
+it. 2 of the 3 were in `address_search_index` already. Also closed a Rule 7b gap (the holding
+SMS made an all-unresolved batch report success) and surfaced the orphaned
+`om_needs_manual_link` backlog. Did NOT contact anyone — REC-ads-006. Also REC-ads-007: the
+brief needs a rewrite. Pushed `9c09977`, `24ac3cc`.
