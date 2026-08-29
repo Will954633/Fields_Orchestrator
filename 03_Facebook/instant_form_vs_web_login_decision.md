@@ -94,13 +94,28 @@ notifies, and CRM-syncs.
   "Continue" → `/for-sale-v4b`.
 - It has barely spent ($1.53 / 29 impressions) — it is **unfunded**, not broken.
 
-### The two arms (the A/B)
-- **Arm A — Instant Form (Facebook path):** fund the LEADFORM ad. Autofilled in-app
-  capture → thank-you → `/for-sale` listings.
-- **Arm B — on-site soft-gate:** the value-first `/for-sale-v3?gate=1` gate, capturing
-  via **Google + email**.
+### The THREE arms (revised 2026-08-29 after Will found the Browser Add-On)
 
-Measure which captures more, and at what quality.
+| Arm | Objective | Lands on | Capture | Timing |
+|---|---|---|---|---|
+| **1. Lead form** (running) | Leads | form opens in FB | Native Instant Form, autofilled name+email+phone | on tap, **before** website |
+| **2. On-site gate** | Traffic | `/for-sale-v3?gate=1` | **our** gate → Google / email | **after 20s** browsing |
+| **3. Instant Form Browser Add-On** | Traffic | `/for-sale-v3` (no `?gate=1`) | **Meta's** native form, autofilled, in the in-app browser | **on first scroll** |
+
+**⚠ CORRECTION to §4's implication:** a *standard* Instant Form is capture-first (opens
+on tap, before the website). BUT the **Instant Form Browser Add-On** (a distinct Meta
+feature) DOES support **browse-first-then-form**: on a Traffic ad, Meta triggers its own
+native, autofilled instant form **from inside the FB/IG in-app browser once the person
+scrolls on your website**; if ignored it minimises to a footer. This is arm 3 — it needs
+**no website code** (Meta renders the form), and it sidesteps every web-login problem.
+Refs: jonloomer.com/instant-form-browser-add-on, leadsync.me/blog/meta-instant-form-browser-add-on.
+
+**Clean separation of arms 2 and 3 (same landing page):** the on-site gate is armed ONLY
+by `?gate=1`. Arm 2 uses `/for-sale-v3?gate=1` (our gate fires; no Meta add-on). Arm 3
+uses plain `/for-sale-v3` (our gate stays dormant; Meta's add-on fires on scroll). They
+must never share a URL or they'd double-gate.
+
+Measure which of the three captures more, and at what quality.
 
 ## 6. Current state (what's live vs dormant)
 
@@ -143,13 +158,20 @@ Measure which captures more, and at what quality.
    we ever need that app live, this must be solved first (likely needs the app icon +
    category + all required Basic fields present so Facebook's all-or-nothing form saves).
 
-## 8. Decisions still pending (Will)
+## 8. Build state / next steps (2026-08-29)
 
-- [ ] **Fund Arm A** (the LEADFORM Instant Form ad) — an ad-budget change; log to
-      `system_monitor.ad_decisions`.
-- [ ] **Pause or repoint the `/exclusive-access` Traffic ad** (0% conversion). If keeping
-      an on-site arm, repoint to `/for-sale-v3?gate=1`.
-- [ ] Decide whether to run A vs B head-to-head or just switch to the Instant Form.
+- **Arm 1 (Lead form):** already **LIVE** — LEADFORM ad `120252455742200134`, ad set
+  `$10/day`, launched 28 Aug 21:44. (My earlier "unfunded" was a stale-30d-data error.)
+  Watch for submissions (19 form-opens → 0 leads on day 1; early).
+- **Arm 2 (on-site gate):** build a new Traffic ad → `/for-sale-v3?gate=1`. The gate code
+  is live. Because the existing `/exclusive-access` ad is an **Advantage+ dynamic
+  creative** (`asset_feed_spec`), it's duplicated in **Ads Manager** (API rebuild would
+  risk mangling the multi-asset creative), then the old `/exclusive-access` ad paused.
+- **Arm 3 (Browser Add-On):** build a new Traffic ad → plain `/for-sale-v3`, with the
+  **Instant Form Browser Add-On** enabled (Ads Manager only — newer feature). Reuse the
+  existing form copy. No website work.
+- **Old `/exclusive-access` Traffic ad** (`120252450388660134`, 0% conversion): pause
+  once arm 2 is live (can be paused via API on request).
 
 ## 9. Related records
 
