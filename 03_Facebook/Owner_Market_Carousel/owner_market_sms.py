@@ -18,7 +18,7 @@ Usage:
   python3 owner_market_sms.py --send             # live: resolve + text each new lead
   python3 owner_market_sms.py --test +61XXXXXXXXX  # one test SMS (uses a sample address)
 """
-import os, sys, json, argparse, requests
+import os, sys, json, re, argparse, requests
 from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -77,6 +77,89 @@ def lead_field(doc, *keys):
             if m.get(k): return m[k]
     return None
 
+# Street-type words and locality noise we must NOT mistake for the street NAME.
+_STREET_TYPES = {
+    "ST", "STREET", "RD", "ROAD", "AVE", "AV", "AVENUE", "CT", "CRT", "COURT",
+    "CR", "CRES", "CRESCENT", "DR", "DRV", "DRIVE", "PL", "PLACE", "PDE",
+    "PARADE", "LN", "LANE", "WAY", "CCT", "CIRCUIT", "CL", "CLOSE", "TCE",
+    "TERRACE", "BVD", "BLVD", "BOULEVARD", "ESP", "ESPLANADE", "GR", "GROVE",
+    "RISE", "LOOP", "LINK", "MEWS", "QUAY", "PROMENADE", "HIGHWAY", "HWY",
+}
+_NOISE = {"QLD", "QUEENSLAND", "AUSTRALIA", "AU"}
+
+def _norm_tokens(text):
+    """Uppercase alnum tokens, '/' kept as a separator (unit numbers)."""
+    return [t for t in re.sub(r"[^A-Za-z0-9/]+", " ", text or "").upper().split() if t]
+
+def _name_variants(tok):
+    """'CAMPELLE' <-> 'CAMPELLES'. Typed street names lose/gain a trailing S constantly."""
+    v = {tok}
+    if tok.endswith("S"):
+        v.add(tok[:-1])
+    else:
+        v.add(tok + "S")
+    return v
+
+def resolve_address_locality(db_client, typed, form_suburb_key, form_suburb_name):
+    """Find the REAL suburb of a typed address from Gold_Coast.address_search_index.
+
+    The Owner-Market ads are per-suburb, and the old code passed the AD's suburb to the
+    resolver regardless of what the person actually typed. Burleigh Waters ads are seen
+    by (and answered by) Burleigh Heads owners, so their address could never resolve —
+    the search was scoped to the wrong suburb. Measured 2026-08-30: 3 of 4 paid leads
+    came back 'unresolved' and 2 of those 3 were sitting in the index verbatim.
+
+    Returns (suburb_key, suburb_name, canonical_address) — falling back to the form's
+    own suburb and the typed string when nothing matches, i.e. the previous behaviour.
+    """
+    tokens = _norm_tokens(typed)
+    if not tokens:
+        return form_suburb_key, form_suburb_name, typed
+    # Street number: first token containing a digit. '2/9' -> '9' (index stores the
+    # street number, unit stripped into address only).
+    street_no = None
+    for t in tokens:
+        if any(ch.isdigit() for ch in t):
+            street_no = t.split("/")[-1].lstrip("0") or t.split("/")[-1]
+            break
+    if not street_no:
+        return form_suburb_key, form_suburb_name, typed
+    words = [t for t in tokens
+             if not any(ch.isdigit() for ch in t) and t not in _NOISE]
+    cands = set()
+    for w in words:
+        if w not in _STREET_TYPES:
+            cands |= _name_variants(w)
+    if not cands:
+        return form_suburb_key, form_suburb_name, typed
+    try:
+        idx = db_client["Gold_Coast"]["address_search_index"]
+        rows = list(idx.find({"street_no": street_no,
+                              "street_name": {"$in": sorted(cands)}}).limit(60))
+    except Exception:
+        return form_suburb_key, form_suburb_name, typed
+    if not rows:
+        return form_suburb_key, form_suburb_name, typed
+    typed_set = set(words)
+
+    def score(r):
+        s = 0
+        # Suburb the person actually wrote beats the suburb the ad was for.
+        if set(_norm_tokens(r.get("suburb") or "")) & typed_set:
+            s += 4
+        if (r.get("street_type") or "") in typed_set:
+            s += 2
+        if (r.get("street_name") or "") in typed_set:
+            s += 2          # exact spelling beats the plural/singular variant
+        if r.get("suburb_key") == form_suburb_key:
+            s += 1          # weakest tiebreak, not the deciding factor
+        return s
+
+    best = max(rows, key=score)
+    return (best.get("suburb_key") or form_suburb_key,
+            best.get("suburb") or form_suburb_name,
+            best.get("address") or typed)
+
 def resolve_link(address, suburb_key, suburb_name):
     """Resolve a raw typed address to its analysis link. Returns (kind, url, note).
     kind: 'analysis' | 'listed' | 'unresolved'. Endpoint needs BOTH suburb (display)
@@ -129,7 +212,12 @@ def process(db, forms, send, limit):
         name = lead_field(d, "full_name", "name")
         if not address:
             print(f"  SKIP {name}: no address in lead"); failed += 1; continue
-        kind, url, note = resolve_link(address, suburb_key, suburb_name)
+        # Trust the address the person TYPED over the suburb the ad happened to be for.
+        suburb_key, suburb_name, canonical = resolve_address_locality(
+            db.client, address, suburb_key, suburb_name)
+        if canonical != address:
+            print(f"  locality: {address!r} -> {canonical!r} ({suburb_key})")
+        kind, url, note = resolve_link(canonical, suburb_key, suburb_name)
         if kind == "unresolved": unresolved += 1
         body = build_body(name, address, suburb_name, kind, url)
         print(f"\n[{suburb_name}] {name} ph={phone} em={email}\n  addr: {address}\n  -> {kind} ({note}) {url or ''}\n  {body}")
@@ -211,6 +299,20 @@ def main():
         # the pipeline is broken, not empty.
         if res["processed"] > 0 and res["sent"] == 0 and res.get("emailed", 0) == 0 and res["failed"] > 0:
             raise RuntimeError(f"had {res['processed']} leads, sent 0 SMS / 0 email, {res['failed']} failed")
+        # 7b: sending the "I'm finalising your link" holding SMS counts as sent=1, so a
+        # batch where EVERY address failed to resolve used to report success. It is not
+        # success — we took the lead, promised a link and produced none. Distinguish
+        # "no work to do" (processed=0, fine) from "could not do the work".
+        if res["processed"] > 0 and res["unresolved"] == res["processed"]:
+            raise RuntimeError(
+                f"resolved 0 of {res['processed']} addresses to a link; everyone got only "
+                f"the holding SMS. Check the locality resolver / address_search_index.")
+        # A promise with no consumer is how leads go cold: nothing reads
+        # om_needs_manual_link, so surface the backlog on the health board.
+        waiting = db.fb_leads.count_documents({"om_needs_manual_link": True})
+        beat.metrics = dict(res, awaiting_manual_link=waiting)
+        if waiting:
+            beat.detail += f" | {waiting} awaiting a manual link"
 
 if __name__ == "__main__":
     main()
