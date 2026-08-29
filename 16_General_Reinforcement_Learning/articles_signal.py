@@ -95,8 +95,13 @@ def build(dry_run=False):
         r["converters"] += int(d.get("converters") or 0)
         r["paths"].add(d.get("entry_path"))
 
-    # --- how it's FOUND: GSC per-query rows aggregated up to the article ---
-    for d in sm["seo_landing_performance"].find({"page": {"$regex": "/articles?/"}}):
+    # --- how it's FOUND: GSC per-PAGE rows aggregated up to the article ---
+    # ⚠ dims='page' is authoritative. The per-QUERY rows below withhold anonymized queries
+    # and hold only ~9% of impressions, so they name the top query but never supply totals.
+    # Summing them understated every article's search volume ~10x until 2026-08-30
+    # ([SEO-QUERY-DIMENSION-BLINDNESS]).
+    for d in sm["seo_landing_performance"].find(
+            {"page": {"$regex": "/articles?/"}, "dims": "page"}):
         aid = resolve.get(_slug_of(d.get("page")))
         if not aid:
             continue
@@ -105,6 +110,14 @@ def build(dry_run=False):
         r["clicks"] += int(d.get("clicks") or 0)
         r["impressions"] += impr
         r["pos_wsum"] += float(d.get("position") or 0) * impr
+
+    for d in sm["seo_landing_performance"].find(
+            {"page": {"$regex": "/articles?/"}, "dims": "page,query,device"}):
+        aid = resolve.get(_slug_of(d.get("page")))
+        if not aid:
+            continue
+        r = articles[aid]
+        impr = int(d.get("impressions") or 0)
         if impr > r["top_query_impr"]:
             r["top_query_impr"] = impr
             r["top_query"] = d.get("query")
