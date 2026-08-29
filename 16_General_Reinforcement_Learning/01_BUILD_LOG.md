@@ -1255,3 +1255,52 @@ false (ads §2 "all spend paused"; valuation §1 carried a disproved figure unti
 
 One Telegram sent, 5 tappable rows, tokens printed beside each question. `mark-briefed` run
 before the send, per the contract.
+
+## 2026-08-30 06:00 — ops weekly cycle
+- Board: 37 actionable (ERROR=16, STALE=20). Briefing tier `stale` (17d) → bug fixes only.
+- **FIXED (Tier 1)** `[LIVING-MAP-COORD-FIELD-BLIND]` — `precompute_living_map.build_one`
+  read only `doc["LATITUDE"]`, so 36 of 51 eligible for-sale listings that had a point under
+  `geocoded_coordinates` were counted as having no coordinates and the whole job asserted
+  "0 built". Added `georeference_data.coordinates` + `geocoded_coordinates` fallbacks.
+  Re-ran: 33 built, 15 failed, heartbeat `success`. Pushed `202ce215`. The 15 residual have
+  no coordinates under any path (unit addresses) and were left honestly red, not silenced.
+- **RAISED REC-ops-007 (Tier 3)** — `weekly_cycle.sh:125` `set -e 2>/dev/null || true`
+  enables errexit (file header is `set -uo pipefail`), so `ops_integrity.py` returning 1 on a
+  violation kills the runner before it writes the `rl_weekly_ops` heartbeat. The 08-23 ops
+  cycle ran and wrote its doc but has shown "may not be firing, 14d" ever since. The guard
+  makes the board *silent* in the exact case it was built to make loud. Not self-applied:
+  it is my own tamper guard's wrapper.
+- Ledger now 2/2 at cap. Nothing due for grading.
+- Not diagnosed, next cycle's first job: `live_leads_to_sheet` exit 1 blocking 2 steps of the
+  nightly lead chain.
+- **FIXED (Tier 1, added after first write-up)** `[FB-MULTISELECT-LIST-POISONS-SHEET]` —
+  `live_leads_to_sheet` exit 1 was a Facebook multi-select answer arriving as a LIST in
+  `fields["area"]`; Sheets fails the whole batch on a nested list, so one lead emptied the
+  Live Leads Tracker and blocked 2 chain steps. Added `_cell()` coercion across all row
+  values. Re-ran: exit 0, 33 rows added. Pushed `c6975144`. The 2 blocked steps left for
+  tonight's scheduled chain (one prunes, one can alert — Tier 1 forbids re-running those).
+- **FIXED (Tier 1)** `[INSIGHTS-NULL-ROOM-NAME-POISONS-POOL]` — step 15 failed the nightly run
+  at an 18.96% error ratio. `get_room_area` used `.get('room_name','')`, which returns None on
+  an explicit null; exactly ONE doc has one, and the function runs over the whole for-sale
+  comparison pool, so it failed 140 of 738 subject properties. Guarded both branches and made
+  the broad `except` print the address + traceback (it had hidden the cause behind a bare
+  string). **Threshold untouched.** Re-ran: exit 0, zero errors. Pushed `8fceef9f`.
+
+## 2026-08-30 07:00 — SEO cycle (briefing tier: stale, narrowed to bug fixes)
+Found and fixed the measurement defect that has mis-sized this domain since it was built:
+`seo_landing_performance` stored only GSC `[page,query,device]` rows, and Google DROPS
+anonymized-query rows rather than bucketing them — so every consumer was summing **9.5% of
+impressions / 6.7% of clicks** and calling it the channel (5,334/78 stored vs 56,341/1,168
+actual, 90d). Collector now pulls three dimension sets tagged with `dims`; all four consumers
+updated to filter. Two published conclusions were wrong as a result and are corrected in the
+cycle doc: `/off-market/` is the site's ENGINE (34,588 impr, 801 clicks, 2.32% CTR — the best
+large template, not the worst), and `/for-sale-v3` is at position 13.0, not 41.3.
+Also fixed: `seo_signal`'s CONVERTING arm, which had never fired once (path-vs-URL join key).
+Shipped: Rule 5 number-format fix across 60 live SERP fields on 46 properties ($1.4M ->
+$1,400,000, in the live `<title>`); a `false_confidence_range` check for the ±12% band that
+live copy calls a "high-confidence range" (65 of 359 properties); 46 URLs to IndexNow + Bing.
+Closed: the `/market-metrics` -> `/market-intelligence` consolidation completed (legacy path
+collapsed from ~50 impr/day to ~2-6 from 08-17; rank transferred, 9.5 -> 9.1).
+Ledger: withdrew REC-seo-004 (its evidence was the 9% sample, two claims false), re-filed as
+REC-seo-007 with true numbers. 2/2. Two peer directives sent (`articles`, `all`).
+Doc: `cycles/2026-W35/2026-08-30/seo_cycle_20260830_0700.md`
