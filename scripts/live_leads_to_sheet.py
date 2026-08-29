@@ -677,6 +677,23 @@ def situation_for(lead, idx, sm, gc_db, suburb_index) -> str:
     return format_situation(doc, si)
 
 
+def _cell(v):
+    """Coerce any value to something the Sheets API will accept in a cell.
+
+    A multi-select answer on a Facebook lead form comes back as a LIST, not a string
+    (e.g. area = ["burleigh_waters", "open_to_all_three", "varsity_lakes", "robina"]).
+    Sheets rejects the whole batch on a nested list -- "Invalid values[3][7]: list_value"
+    -- so ONE such lead failed the entire Live Leads Tracker write and blocked both
+    downstream chain steps (2026-08-30). Coerce here, at the boundary, so no future
+    field of any shape can poison the batch the same way.
+    """
+    if isinstance(v, (list, tuple, set)):
+        return ", ".join(str(x) for x in v)
+    if v is None:
+        return ""
+    return v if isinstance(v, (str, int, float, bool)) else str(v)
+
+
 def row_values(lead, city, country):
     # Column O (PostHog) is left blank here on purpose: this batch is written with
     # valueInputOption=RAW, which would store a =HYPERLINK() formula as literal text.
@@ -684,10 +701,11 @@ def row_values(lead, city, country):
     # unit addresses like "1/35 Thornleigh Crescent" as dates. refresh_posthog_links()
     # fills O separately with USER_ENTERED, confining formula parsing to the one column
     # that only ever holds our formula.
-    return [lead["date"], lead["source"], lead["name"], lead["email"], lead["phone"],
-            city, country, lead["suburb_address"], lead["details"], lead["campaign"],
-            lead["status"], lead.get("selling_plan", ""), lead["lead_id"],
-            lead.get("situation", ""), ""]
+    return [_cell(x) for x in
+            (lead["date"], lead["source"], lead["name"], lead["email"], lead["phone"],
+             city, country, lead["suburb_address"], lead["details"], lead["campaign"],
+             lead["status"], lead.get("selling_plan", ""), lead["lead_id"],
+             lead.get("situation", ""), "")]
 
 
 def refresh_posthog_links(svc, ssid, all_leads, dry_run=False):
