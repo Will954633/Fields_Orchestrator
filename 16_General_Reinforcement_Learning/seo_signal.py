@@ -42,10 +42,16 @@ def expected_ctr(pos):
 def build(dry_run=False):
     sm = get_client()["system_monitor"]
 
-    # GSC per-page (aggregate the per-query rows in seo_landing_performance up to the page)
+    # GSC per-page.
+    # ⚠ AUTHORITATIVE rows are dims='page'. Do NOT aggregate the per-query rows up to the
+    # page to get a total: Search Console withholds anonymized queries entirely, so those
+    # rows carried 9% of impressions and 7% of clicks (measured 90d to 2026-08-30). This
+    # sensor did exactly that until 2026-08-30 and reported the channel as ~5.3k impressions
+    # / 78 clicks when it was 58.4k / 1,178 — see [SEO-QUERY-DIMENSION-BLINDNESS]. Every
+    # priority the SEO domain set between 2026-07 and 2026-08 was ranked on that 9% sample.
     pages = defaultdict(lambda: {"clicks": 0, "impressions": 0, "pos_wsum": 0.0, "queries": 0,
                                  "top_query": None, "top_query_impr": 0})
-    for d in sm["seo_landing_performance"].find({}):
+    for d in sm["seo_landing_performance"].find({"dims": "page"}):
         pg = d.get("page")
         if not pg:
             continue
@@ -54,13 +60,34 @@ def build(dry_run=False):
         p["clicks"] += int(d.get("clicks") or 0)
         p["impressions"] += impr
         p["pos_wsum"] += float(d.get("position") or 0) * impr
+
+    # Query attribution only — names the query, never contributes to a total.
+    for d in sm["seo_landing_performance"].find({"dims": "page,query,device"}):
+        pg = d.get("page")
+        if not pg or pg not in pages:
+            continue
+        p = pages[pg]
+        impr = int(d.get("impressions") or 0)
         p["queries"] += 1
         if impr > p["top_query_impr"]:
             p["top_query_impr"] = impr
             p["top_query"] = d.get("query")
 
-    # conversion tie (organic entry pages that convert)
-    affinity = {d.get("entry_path"): d for d in sm["organic_landing_affinity"].find({})}
+    site_totals = sm["seo_landing_performance"].find_one({"dims": "__site_totals__"}) or {}
+
+    # conversion tie (organic entry pages that convert).
+    # ⚠ organic_landing_affinity is keyed by PATH ('/property/x'); GSC pages are absolute
+    # URLs ('https://fieldsestate.com.au/property/x'). Looking one up with the other never
+    # matched, so `converters` was 0 on every row and the CONVERTING arm — the one the
+    # mandate calls the most valuable — never fired once. Fixed 2026-08-30, see
+    # [SEO-SIGNAL-AFFINITY-KEY-MISMATCH]. Trailing slashes are normalised too.
+    def _path_of(u):
+        p = str(u or "").replace("https://fieldsestate.com.au", "").split("?")[0].split("#")[0]
+        return (p.rstrip("/") or "/")
+
+    affinity = {}
+    for d in sm["organic_landing_affinity"].find({}):
+        affinity[_path_of(d.get("entry_path"))] = d
 
     rows = []
     for pg, p in pages.items():
@@ -69,7 +96,7 @@ def build(dry_run=False):
             continue
         ctr = p["clicks"] / impr
         pos = p["pos_wsum"] / impr if impr else None
-        aff = affinity.get(pg) or {}
+        aff = affinity.get(_path_of(pg)) or {}
         converters = int(aff.get("converters") or 0)
         sessions = int(aff.get("sessions") or 0)
         exp = expected_ctr(pos or 99)
@@ -92,10 +119,35 @@ def build(dry_run=False):
 
     tot_impr = sum(r["impressions"] for r in rows)
     tot_clicks = sum(r["clicks"] for r in rows)
+
+    # Template rollup — with ~12k ranking URLs the per-page list no longer shows the shape
+    # of the channel. This is what actually tells you where the traffic lives.
+    tmpl = defaultdict(lambda: {"urls": 0, "impressions": 0, "clicks": 0, "pos_wsum": 0.0})
+    for r in rows:
+        path = r["page"].replace("https://fieldsestate.com.au", "") or "/"
+        key = next((t for t in ("/property/", "/off-market/", "/articles/", "/article/",
+                                "/market-intelligence/", "/market-metrics/", "/houses-for-sale/",
+                                "/report/", "/sold/", "/news", "/about")
+                    if path.startswith(t)), path if len(path) < 25 else "other")
+        t = tmpl[key]
+        t["urls"] += 1
+        t["impressions"] += r["impressions"]
+        t["clicks"] += r["clicks"]
+        t["pos_wsum"] += (r["avg_position"] or 0) * r["impressions"]
+    templates = sorted(
+        ({"template": k, "urls": v["urls"], "impressions": v["impressions"], "clicks": v["clicks"],
+          "ctr": round(v["clicks"] / v["impressions"], 4) if v["impressions"] else 0,
+          "avg_position": round(v["pos_wsum"] / v["impressions"], 1) if v["impressions"] else None}
+         for k, v in tmpl.items()), key=lambda x: -x["impressions"])
+
     snapshot = {
         "kind": "seo_signal_snapshot", "_id": "latest", "computed_at": NOW.isoformat(),
         "totals": {"pages": len(rows), "impressions": tot_impr, "clicks": tot_clicks,
-                   "ctr": round(tot_clicks / tot_impr, 4) if tot_impr else 0},
+                   "ctr": round(tot_clicks / tot_impr, 4) if tot_impr else 0,
+                   "window_days": site_totals.get("window_days"),
+                   "site_impressions": site_totals.get("impressions"),
+                   "site_clicks": site_totals.get("clicks")},
+        "templates": templates,
         "opportunities": {
             "striking_distance": [r for r in rows if "striking_distance" in r["flags"]][:15],
             "low_ctr": [r for r in rows if "low_ctr" in r["flags"]][:15],
@@ -103,7 +155,11 @@ def build(dry_run=False):
         },
         "top_pages": rows[:25],
         "note": ("SENSE half of the SEO sub-workflow. Google organic (~68% of traffic). Joins GSC "
-                 "per-page performance with the reward-ledger conversion tie. Feeds seo_cycle.sh."),
+                 "per-page performance with the reward-ledger conversion tie. Feeds seo_cycle.sh. "
+                 "Totals are from GSC dims='page' (authoritative). The per-query rows are a ~9% "
+                 "sample because Google withholds anonymized queries — they name a page's top "
+                 "query and must never be summed into a total ([SEO-QUERY-DIMENSION-BLINDNESS], "
+                 "fixed 2026-08-30)."),
     }
     if not dry_run:
         c = sm[COLL]
@@ -114,8 +170,16 @@ def build(dry_run=False):
 
 def _summary(s):
     t = s["totals"]
-    print(f"\n=== SEO SIGNAL (Google organic) — {t['pages']} pages, {t['impressions']} impr, "
-          f"{t['clicks']} clicks (CTR {t['ctr']*100:.1f}%) ===")
+    win = f" over {t['window_days']}d" if t.get("window_days") else ""
+    print(f"\n=== SEO SIGNAL (Google organic) — {t['pages']} ranking URLs, {t['impressions']} impr, "
+          f"{t['clicks']} clicks (CTR {t['ctr']*100:.1f}%){win} ===")
+    if t.get("site_impressions"):
+        print(f"    site totals (GSC, exact): {t['site_impressions']} impr / {t['site_clicks']} clicks")
+    if s.get("templates"):
+        print(f"\n{'TEMPLATE':26} {'urls':>6} {'impr':>7} {'clicks':>7} {'CTR':>7} {'pos':>5}")
+        for r in s["templates"][:10]:
+            print(f"  {r['template'][:24]:24} {r['urls']:6d} {r['impressions']:7d} {r['clicks']:7d} "
+                  f"{r['ctr']*100:6.2f}% {r['avg_position'] or 0:5.1f}")
     for label in ("converting", "striking_distance", "low_ctr"):
         opp = s["opportunities"][label]
         print(f"\n{label.upper()} ({len(opp)}):")
