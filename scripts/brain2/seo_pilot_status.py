@@ -56,17 +56,22 @@ def main():
     sm_total, sm_prop = live_sitemap_counts()
 
     # 2) GSC/Bing search performance (from nightly seo_landing_performance)
-    rows = list(db.seo_landing_performance.find({}))
-    prop_rows = [r for r in rows if "/property/" in (r.get("page") or "")]
+    #    ⚠ Totals come from dims='page' ONLY. The dims='page,query,device' rows are a ~9%
+    #    sample (Google withholds anonymized queries) and summing them understated this
+    #    report ~10x until 2026-08-30 — see [SEO-QUERY-DIMENSION-BLINDNESS].
+    page_rows = list(db.seo_landing_performance.find({"dims": "page"}))
+    query_rows = list(db.seo_landing_performance.find({"dims": "page,query,device"}))
+    prop_rows = [r for r in page_rows if "/property/" in (r.get("page") or "")]
     prop_pages = {r.get("page") for r in prop_rows}
     prop_impr = sum(r.get("impressions") or 0 for r in prop_rows)
     prop_clk = sum(r.get("clicks") or 0 for r in prop_rows)
-    all_impr = sum(r.get("impressions") or 0 for r in rows)
-    all_clk = sum(r.get("clicks") or 0 for r in rows)
-    # top property queries by impressions
+    totals = db.seo_landing_performance.find_one({"dims": "__site_totals__"}) or {}
+    all_impr = totals.get("impressions") or sum(r.get("impressions") or 0 for r in page_rows)
+    all_clk = totals.get("clicks") or sum(r.get("clicks") or 0 for r in page_rows)
+    # top property queries by impressions — attribution, so the query rows are correct here
     q = Counter()
-    for r in prop_rows:
-        if r.get("query"):
+    for r in query_rows:
+        if r.get("query") and "/property/" in (r.get("page") or ""):
             q[r["query"]] += r.get("impressions") or 0
     top_prop_q = q.most_common(5)
 
