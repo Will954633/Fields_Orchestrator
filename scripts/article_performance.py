@@ -125,9 +125,17 @@ def build(dry_run=False, only_slug=None, verbose=False):
         p["converters"] += d.get("converters", 0) or 0
 
     # ── Google Search Console ───────────────────────────────────────────────────
-    best_q = {}
-    for d in sm["seo_landing_performance"].find({"page": {"$regex": r"/articles?/"}}):
-        aid = by_key.get(_slug_from_path(re.sub(r"^https?://[^/]+", "", str(d.get("page", "")))) or "")
+    # ⚠ Two dimension sets, deliberately used for different things (2026-08-30,
+    # [SEO-QUERY-DIMENSION-BLINDNESS]): dims='page' is the authoritative per-page
+    # clicks/impressions/position; dims='page,query,device' withholds anonymized queries
+    # and carries only ~9% of impressions, so it may name the top query but must never
+    # supply a total. Summing it was understating every article's search volume ~10x.
+    def _aid_of(d):
+        return by_key.get(_slug_from_path(re.sub(r"^https?://[^/]+", "", str(d.get("page", "")))) or "")
+
+    for d in sm["seo_landing_performance"].find(
+            {"page": {"$regex": r"/articles?/"}, "dims": "page"}):
+        aid = _aid_of(d)
         if not aid:
             continue
         s = perf[aid]["search"]
@@ -135,6 +143,14 @@ def build(dry_run=False, only_slug=None, verbose=False):
         s["clicks"] += d.get("clicks", 0) or 0
         s["impressions"] += imp
         s["position_weighted"] += (d.get("position") or 0) * imp
+
+    best_q = {}
+    for d in sm["seo_landing_performance"].find(
+            {"page": {"$regex": r"/articles?/"}, "dims": "page,query,device"}):
+        aid = _aid_of(d)
+        if not aid:
+            continue
+        imp = d.get("impressions", 0) or 0
         if imp > best_q.get(aid, (0, None))[0]:
             best_q[aid] = (imp, d.get("query"))
     for aid, (_, q) in best_q.items():
