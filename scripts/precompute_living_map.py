@@ -638,9 +638,19 @@ def build_one(gc, suburb, doc, key, geocode_cache, shared_tiles, area_pois=None)
             "area_sqm": poly.get("lot_area_sqm"),
         }
     else:
-        # No parcel -> fall back to the stored point. Without either we cannot
-        # place a single layer, so this is the property's real zero-output path.
+        # No parcel -> fall back to the stored point. Coordinates live under three
+        # different paths depending on which enrichment wrote them; reading only
+        # LATITUDE reported 36 of 51 for-sale listings as having no coordinates at
+        # all while geocoded_coordinates held a perfectly good point (2026-08-30).
+        # Without ANY of them we cannot place a single layer — that is the
+        # property's real zero-output path.
         lat, lon = doc.get("LATITUDE"), doc.get("LONGITUDE")
+        if lat is None or lon is None:
+            geo = (doc.get("georeference_data") or {}).get("coordinates") or {}
+            lat, lon = geo.get("latitude"), geo.get("longitude")
+        if lat is None or lon is None:
+            geo = doc.get("geocoded_coordinates") or {}
+            lat, lon = geo.get("latitude"), geo.get("longitude")
         if lat is None or lon is None:
             return None, "no parcel geometry and no coordinates"
         center = {"lat": float(lat), "lon": float(lon)}
