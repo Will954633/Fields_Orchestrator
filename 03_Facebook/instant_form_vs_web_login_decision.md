@@ -158,6 +158,25 @@ Measure which of the three captures more, and at what quality.
    we ever need that app live, this must be solved first (likely needs the app icon +
    category + all required Basic fields present so Facebook's all-or-nothing form saves).
 
+## 7a. Live campaign IDs (three-arm test, 2026-08-29)
+
+| Arm | Campaign | Ad | Form | Notes |
+|---|---|---|---|---|
+| **1. Lead form** | `120252455741540134` | `120252455742200134` | `1017406421335871` | LIVE, $10/day since 28 Aug |
+| **2. On-site gate** | `120252463818790134` | `120252463819330134` | — (Google/email on site) | LIVE, $10/day (built via API) |
+| **3. Browser Add-On** | `120252463821300134` | `120252463821610134` | `934428149716778` | **PAUSED** — form built + published with tracking `fields_arm=browser_addon` / `fields_test=houses_for_sale_3arm`, but **not yet attached to the ad** (see below) |
+| old wall | — | `120252450388660134` | — | **PAUSED** 29 Aug (0 conversions ever) |
+
+**⚠ Arm 3 not live yet:** the instant form `934428149716778` is published and correct,
+but as of 2026-08-29 it is **not attached to any ad** — the arm-3 ad is still a plain
+traffic ad (no `lead_gen_form_id`). Switching it on would spend with **zero capture**, so
+it is held PAUSED. The Browser Add-On must be enabled on the arm-3 ad in Ads Manager and
+pointed at this form; only then switch the campaign Active. Form `934428149716778` is
+already in `FORSALE_BUYER_FORMS` (`fb-lead-puller.py`) so its leads route as buyers.
+
+**Arm data keys:** Arm 1 → form `1017406421335871`. Arm 2 → `lead_signups.source =
+for_sale_v3_softgate`. Arm 3 → Instant Form leads carrying `fields_arm=browser_addon`.
+
 ## 8. Build state / next steps (2026-08-29)
 
 - **Arm 1 (Lead form):** already **LIVE** — LEADFORM ad `120252455742200134`, ad set
