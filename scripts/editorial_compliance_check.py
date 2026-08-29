@@ -93,6 +93,18 @@ CHECKS = {
         r'\$\s?\d{1,3}(?:,\d{3})*(?:\.\d+)?\s?[mMkK]\b'),
     'forbidden_word': re.compile(
         r'\b(stunning|nestled|boasting|rare opportunity|robust market)\b', re.I),
+    # CLAUDE.md "Valuation System": the range shown beside an estimate is a FLAT ±12% of
+    # that estimate. It is not derived from a distribution and it is not a confidence
+    # interval — measured, it contains the actual sale price 61% of the time (67% inside
+    # the design envelope). CLAUDE.md says in terms: never call it a "90% confidence
+    # range". Describing it as any kind of confidence band asserts a calibration the
+    # method does not have, which is a factual-accuracy breach, not a style preference.
+    # A genuine 90% band would need ±26.4% (the measured P90 error).
+    # Found live on 65 of 359 properties carrying editorial on 2026-08-30, 31 of them
+    # active for-sale listings — see [EDITORIAL-FALSE-CONFIDENCE-RANGE].
+    'false_confidence_range': re.compile(
+        r"((?:high[- ])?confidence (?:range|interval|band)|"
+        r"\d{2}%\s*confidence|statistically confident range)", re.I),
 }
 
 
