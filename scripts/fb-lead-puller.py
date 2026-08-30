@@ -27,6 +27,7 @@ load_dotenv("/home/fields/Fields_Orchestrator/.env")
 from shared.db import get_client  # noqa: E402
 import crm_lead_sync  # noqa: E402
 import fpf_send  # noqa: E402
+from job_status import job_run  # noqa: E402
 
 PAGE_ID = "889412530933297"
 API = "https://graph.facebook.com/v18.0"
@@ -332,15 +333,19 @@ def notify_byl(fields, form_name, created, arm, address, needs_review,
         print(f"  telegram notify failed: {e}", file=sys.stderr)
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--no-notify", action="store_true")
-    args = ap.parse_args()
-
+def run(args):
     ptoken = page_token()
     forms = active_forms(ptoken)
     print(f"[{datetime.now(timezone.utc).isoformat()}] active forms: {[f['name'] for f in forms]}")
+
+    # 7b outcome assertion: this Page carries dozens of ACTIVE lead forms, so an
+    # empty list is never a real state — it means the token expired / lost pages
+    # access and the Graph call returned {} instead of raising. Raise so the
+    # heartbeat records ERROR, instead of reporting "0 new leads" forever while
+    # every real lead silently goes unpulled.
+    if not forms:
+        raise RuntimeError("0 active leadgen forms — FB token likely expired or "
+                           "lost pages_read_engagement/leads_retrieval")
 
     coll = None
     if not args.dry_run:
@@ -423,6 +428,26 @@ def main():
                     print(f"    CRM upsert failed: {e}", file=sys.stderr)
 
     print(f"done — {new_count} new lead(s)")
+    return new_count, len(forms)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--no-notify", action="store_true")
+    args = ap.parse_args()
+
+    # --dry-run is a manual inspection path (writes nothing) — no heartbeat, so it
+    # can't pollute the health board with an intentionally empty run.
+    if args.dry_run:
+        run(args)
+        return
+
+    with job_run("fb_lead_puller", cadence_hours=0.25,
+                 title="FB Instant-Form Lead Puller") as beat:
+        new_count, form_count = run(args)
+        beat.metrics = {"new_leads": new_count, "active_forms": form_count}
+        beat.detail = f"{new_count} new lead(s) across {form_count} active forms"
 
 
 if __name__ == "__main__":
