@@ -34,6 +34,20 @@ ANALYSIS Will has asked for in the meantime, and that work is authorised (§4):
 
 ## 2. Current state — what is ON, OFF, or PAUSED, and deliberately so
 
+> ⚠ **THIS SECTION IS KNOWN TO BE WRONG AS OF 2026-08-30 AND IS AWAITING A RE-BRIEF (REC-ads-007).**
+> The table below says all spend is paused. It is not: six campaigns spent **$796.08 in 14 days**
+> and produced 17 lead-form submissions. Do not treat the table as an authorisation for anything.
+> Freshness has deliberately **not** been reset — this brief stays `stale`/NARROWED until Will
+> rewrites §1/§2/§4, because restoring full autonomy on a brief this wrong would be worse than
+> the narrowing. — Samantha, 2026-W35
+>
+> **Will's own direction recorded since, in his words (verdict on REC-ads-005, 2026-08-24):**
+> he had *"already stopped all ads himself"*; 93 Burleigh Waters (the Messenger-destination
+> carousel) is *"confirmed a failure"*, matching the 0-qualified / 3-blocks finding. **Key
+> learning he named: "the Facebook MARKETPLACE listing of the SAME address succeeded where the
+> paid Messenger carousel failed."** A new ad was launching that day. Carry this into the
+> re-brief — it is the strongest organic-vs-paid signal he has given this domain.
+
 | Thing | State | Why |
 |---|---|---|
 | All ad spend | **PAUSED — Will's deliberate call** | Not a failure. New creative in production with an advertising company. |
