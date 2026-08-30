@@ -3216,7 +3216,7 @@ def run_multi_agent_pipeline(
     sabri_result = _run_sabri(result, sanitized_summary, address, suburb_display, api_key)
     result["headline"] = sabri_result["headline"]
     result["sub_headline"] = sabri_result["sub_headline"]
-    result["meta_title"] = sabri_result["meta_title"]
+    result["meta_title"] = _ensure_meta_title_street_number(sabri_result["meta_title"], address)
     result["meta_description"] = sabri_result["sub_headline"]  # hardcoded: sub_headline IS the meta description
     result["_sabri_suggested_h2s"] = sabri_result.get("suggested_h2s", [])
 
@@ -3313,7 +3313,7 @@ def run_multi_agent_pipeline(
             sabri_final = _run_sabri(result, sanitized_summary, address, suburb_display, api_key)
             result["headline"] = sabri_final["headline"]
             result["sub_headline"] = sabri_final["sub_headline"]
-            result["meta_title"] = sabri_final["meta_title"]
+            result["meta_title"] = _ensure_meta_title_street_number(sabri_final["meta_title"], address)
             result["meta_description"] = sabri_final["sub_headline"]  # hardcoded: sub_headline IS the meta description
             result["_sabri_suggested_h2s"] = sabri_final.get("suggested_h2s", [])
             print(f"    Done ({time.time()-t0:.1f}s) — \"{sabri_final['headline']}\"")
@@ -3407,11 +3407,92 @@ def _expand_abbreviated_money(text: str) -> str:
     return re.sub(r"\$\s?(\d+(?:\.\d+)?)\s?([mMkK])\b", _sub, text)
 
 
+def _ensure_meta_title_street_number(meta_title: str, address: str) -> str:
+    """Restore the street number to a meta_title that dropped it.
+
+    Exact-address queries are the strongest organic position this site holds
+    (/articles/ sits at avg position 9.4; the how-it-sold template ranks page-1
+    on exact addresses), and the street number is the most discriminating token
+    in the query. The Sabri headline specialist optimises for click tension and
+    periodically drops it: "4/44 Frascott Avenue" became "44 Frascott Ave — ..."
+    — which is a DIFFERENT property — and "24 Dandenong Terrace" lost its number
+    entirely. Measured 2026-08-30: 29 of 237 meta_titles, 6 of them published.
+
+    Repairs only the safe case (title opens with the street NAME, so the number
+    is simply missing) and leaves anything else alone with a warning, so this can
+    never mangle a title it does not understand. Costs a few characters against
+    the ~60-char display limit; an address match is worth more than the tail of
+    a headline. See fix-history 2026-08-30 [META-TITLE-STREET-NUMBER-DROPPED].
+    """
+    import re
+
+    if not meta_title or not address:
+        return meta_title
+
+    m = re.match(r"\s*(\d+[A-Za-z]?(?:/\d+[A-Za-z]?)?)\s+(\S+)", address)
+    if not m:
+        return meta_title
+    number, first_street_word = m.group(1), m.group(2)
+
+    if re.match(r"\s*" + re.escape(number) + r"\b", meta_title):
+        return meta_title  # already correct
+
+    if re.match(r"\s*" + re.escape(first_street_word) + r"\b", meta_title, re.I):
+        repaired = f"{number} {meta_title.lstrip()}"
+        print(f"    [META-TITLE] restored street number: {meta_title!r} -> {repaired!r}")
+        return repaired
+
+    print(f"    [WARN] meta_title does not lead with the street number and could "
+          f"not be repaired safely: {meta_title!r} (address: {address!r})")
+    return meta_title
+
+
+_FALSE_CONFIDENCE_PATTERNS = [
+    # "an eight-comparable, high-confidence range" -> "an eight-comparable range"
+    (r",\s*(?:high|medium|low)[-\s]confidence\s+(?:range|interval|band)\b", " range"),
+    # "a high-confidence range" / "a medium-confidence interval" -> "a range"
+    (r"\b(?:high|medium|low)[-\s]confidence\s+(?:range|interval|band)\b", "range"),
+    # "a 90% confidence range" -> "a range"
+    (r"\b\d{1,3}\s*%\s*confidence\s+(?:range|interval|band)\b", "range"),
+    # "statistically confident range" -> "range"
+    (r"\bstatistically\s+confident\s+range\b", "range"),
+    # bare "confidence range" / "confidence interval" / "confidence band" -> "range"
+    (r"\bconfidence\s+(?:range|interval|band)\b", "range"),
+]
+
+
+def _strip_false_confidence(text: str) -> str:
+    """Remove statistical-confidence language from the valuation band.
+
+    The band we publish is a FLAT +/-12% of the reconciled estimate — arithmetic,
+    not a distribution. It has no confidence level: measured, it contains the
+    actual sale price 61% of the time (67% inside the design envelope), and a
+    genuine 90% band would need +/-26.4%. So "a high-confidence range of $X to
+    $Y" is a false statement of fact, not a stylistic wobble, and CLAUDE.md's
+    Valuation System section names "90% confidence range" as forbidden outright.
+
+    Prompt rule 9a asks the agents not to write it. This guarantees it at save
+    time, exactly as _expand_abbreviated_money does for the number-format rule —
+    the prompt alone did not hold that one either. Deterministic and
+    phrase-level: it rewrites how the band is DESCRIBED and never touches the
+    figures themselves.
+
+    See fix-history 2026-08-30 [EDITORIAL-FALSE-CONFIDENCE-BAND-AT-SOURCE].
+    """
+    import re
+
+    for pattern, replacement in _FALSE_CONFIDENCE_PATTERNS:
+        text = re.sub(pattern, replacement, text, flags=re.I)
+    return text
+
+
 def _normalize_money_formats(obj):
-    """Recursively apply _expand_abbreviated_money to every string in a nested
-    dict/list (i.e. the whole ai_analysis document)."""
+    """Recursively apply the deterministic editorial-compliance rewrites to every
+    string in a nested dict/list (i.e. the whole ai_analysis document):
+    _expand_abbreviated_money (number format) and _strip_false_confidence
+    (no statistical-confidence claim on the flat +/-12% band)."""
     if isinstance(obj, str):
-        return _expand_abbreviated_money(obj)
+        return _strip_false_confidence(_expand_abbreviated_money(obj))
     if isinstance(obj, list):
         return [_normalize_money_formats(x) for x in obj]
     if isinstance(obj, dict):
