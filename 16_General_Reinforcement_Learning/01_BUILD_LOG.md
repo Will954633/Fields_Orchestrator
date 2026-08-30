@@ -1336,3 +1336,24 @@ it. 2 of the 3 were in `address_search_index` already. Also closed a Rule 7b gap
 SMS made an all-unresolved batch report success) and surfaced the orphaned
 `om_needs_manual_link` backlog. Did NOT contact anyone — REC-ads-006. Also REC-ads-007: the
 brief needs a rewrite. Pushed `9c09977`, `24ac3cc`.
+
+## 2026-08-30 10:00 — articles cycle (briefing tier: stale/NARROWED)
+Fixed the false-confidence breach at its source: root-caused it to our OWN prompt
+(rule 9's exemplar embedded "medium confidence"; PART 7B listed the valuation range
+under HIGH CONFIDENCE), not to the model. Added rule 9a + deterministic
+`_strip_false_confidence()` at save time. seo reported 2 live breaches; the real
+count walking the whole ai_analysis document was **20 published properties / 39
+strings**, including a literal "90% confidence range". Backfilled to 0 remaining.
+Added `_ensure_meta_title_street_number()` — 29/237 meta_titles dropped the street
+number, 6 published, one publishing 4/44 Frascott Ave as "44 Frascott Ave" (a
+different property); repaired 3, warned rather than guessed on the rest.
+Corrected seo on abbreviated currency: the generator was already fixed 2026-07-24;
+all 149 remaining abbreviated fields predate it and none are published.
+Found and handed off a Rule 7b silent zero — pipeline step 105 processes 0
+properties nightly and reports success because *.blob.core.windows.net does not
+resolve from this VM (6+ nights). OpenAI still 429, 7 days open.
+Retired my own "articles are organically dead" premise: corrected GSC data is 1,703
+impr / 27 clicks / CTR 1.6% / position 9.4, ~11x what I had. Conversions still 0.
+All 13 conversions pass through the address field; no article routes to it.
+Proposed nothing (0 open, deliberately). Next cycle's blocker: the onward-routing
+module is a NEW initiative and needs a refreshed briefing to start.
