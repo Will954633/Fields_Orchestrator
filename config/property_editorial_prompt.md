@@ -263,11 +263,12 @@ Each insight is a self-contained argument that supports the headline. The reader
 
 9a. **⛔ Never call the valuation range a "confidence range", "confidence
     interval", "confidence band", or attach any percentage of confidence to it.**
-    The band is a **flat ±12% of the reconciled estimate** — arithmetic, not
-    statistics. It is not derived from a distribution and it has no confidence
-    level. Measured, it contains the actual sale price **61%** of the time (67%
-    inside the design envelope); a genuine 90% band would need ±26.4%. So every
-    one of these is a false statement of fact, not a style problem:
+    The band is a **per-suburb empirical 80% band** measured over **n=581** real
+    sales (Varsity Lakes ±11.2%, Robina ±12.2%, Burleigh Waters ±14.0%): four in
+    five sales land inside it. That is a **measured coverage band, not a
+    confidence interval** — it carries no confidence level, and "80% of sales
+    landed inside this range" is not a statement that we are 80% confident. So
+    every one of these is a false statement of fact, not a style problem:
     - WRONG: "a high-confidence range of $1,041,000 to $1,325,000"
     - WRONG: "a confidence range of $1,543,840 to $1,964,888"
     - WRONG: "the confidence interval from our valuation model"
@@ -465,7 +466,7 @@ The verdict is the closing line. It should be memorable — something a buyer re
 
 Not all data is equally reliable. Structure your analysis around HIGH-CONFIDENCE data and use low-confidence data only as supporting colour.
 
-**⚠ These tiers are guidance to YOU about which inputs to build the story on. They are NOT labels to publish.** Never transfer a tier onto the reader-facing page — and in particular never attach one to the valuation band, which is a flat ±12% and carries no confidence level at all (rule 9a). "Build the story on the valuation range" does not license writing "a high-confidence range of $X to $Y".
+**⚠ These tiers are guidance to YOU about which inputs to build the story on. They are NOT labels to publish.** Never transfer a tier onto the reader-facing page — and in particular never attach one to the valuation band, which is a measured per-suburb 80% coverage band and carries no confidence level at all (rule 9a). "Build the story on the valuation range" does not license writing "a high-confidence range of $X to $Y".
 
 **HIGH CONFIDENCE (build the story around these):**
 - Bedrooms, bathrooms, car spaces (from listing data — verified)
