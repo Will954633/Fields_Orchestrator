@@ -1357,3 +1357,96 @@ impr / 27 clicks / CTR 1.6% / position 9.4, ~11x what I had. Conversions still 0
 All 13 conversions pass through the address field; no article routes to it.
 Proposed nothing (0 open, deliberately). Next cycle's blocker: the onward-routing
 module is a NEW initiative and needs a refreshed briefing to start.
+
+## 2026-08-30 11:00 — ONSITE cycle (weekly)
+- **Fixed + deployed:** address-search returned zero for contracted street types (Ct/Pde/Tce/Blvd/Rd)
+  and for range-numbered complexes ("6/2-18 Beachcomber Ct"). 246/388 → 388/388 on a 400-address
+  regression; 37% of abbreviated-street-type queries had been silently zeroing on the 45.7×-predictive
+  milestone. Commit 057b9680 (one build), verified live. Fix-history `[ADDRESS-SEARCH-STREET-TYPE-ZERO]`.
+- **Retired** `onsite_exp_offmarket_1` — clean null (5.6% / 5.9% / 4.5% over 675 users).
+- **Served** `onsite_exp_offmarket_2` (control / no_contact / owner_data_gap) on /off-market,
+  transferring the /property `no_contact` mechanism (11.0% vs 4.7%) to the surface with the traffic.
+- **Withdrew REC-onsite-005** — its own claim reversed on re-measurement (test_c 0.56× → 1.24× in 7d).
+- **Proposed nothing.** Open recs 0/2. Cycle doc: `cycles/2026-W35/2026-08-30/onsite_cycle_20260830_1100.md`.
+
+## 2026-08-30 — valuation cycle `20260830_1200` (brief tier: stale/NARROWED)
+
+Sensor: houses 57/107 (53.3%) valued, attached 37/104 (35.6%), 70 of 141 exclusions are correct
+envelope suppressions. Nothing due for grading; no material drift.
+
+Went deep on one thing: **the band's description has diverged from the band's implementation.**
+Both of today's confidence-range fixes (`seo` 07:00, `articles` 11:20) were correct in behaviour but
+sourced their justification from `CLAUDE.md:455`, which still documents the **flat ±12%** band we
+retired on 2026-08-07. Measured over **n=101** live valued for-sale listings: **100/101** carry
+`range_basis.kind = empirical_80_band`, per-suburb ±11.2 / ±12.2 / ±14.0, matching
+`accuracy/2026-08-08-figures.md`. So prompt rule 9a's five factual clauses are all describing a
+superseded method — while the prohibition it enforces remains correct. No reader-facing surface
+carries the stale figures (verified), so not escalated as an emergency.
+
+Wrote `16_Valuation/experiments/2026-08-30-band-description-drift.md`. Proposed **REC-valuation-004**
+(ledger 1/2). No code edited — week-one §4 read-only.
+
+---
+
+## 2026-08-30 16:00 AEST — Samantha weekly brief, cycle 4 (2026-W35)
+
+**Verdicts recorded:** 5 of 5 from last week — second consecutive clean sweep. Checked the
+ledger, not just the chat: all five carried a `will_verdict` (08-24 / 08-27) recorded in-session,
+not through the token channel. Two unactioned `ceo_chat_messages` ("YES 5D9C" ×2, 08-27) resolved
+to an **article** approval (`will-the-gold-coast-fall-too`, already published), not an RL verdict;
+stamped `actioned_at` with a note saying so. Unactioned queue now 0.
+
+**Domains:** 7 of 7 ran and produced cycle documents. `rl_weekly_ops` heartbeat still stale
+(2026-08-15) for the second week — now diagnosed as REC-ops-007: `weekly_cycle.sh:125` enables
+errexit instead of restoring it, so the runner dies before writing its heartbeat exactly when the
+tamper guard fires.
+
+**Briefings:** 6 of 7 stale at 17d → NARROWED. onsite alone current (6d) — and the only domain
+that shipped a new experiment. Made that the week's #2 decision rather than one item per domain.
+Recorded Will's 08-24 Marketplace-vs-Messenger learning into `briefings/ads.md` §2 with an explicit
+"this section is known wrong" banner, and **deliberately did not `--touch`** — resetting freshness
+would restore full autonomy on a brief asserting zero spend against $796 actual.
+
+**Briefed (5 of 9 open):** REC-ads-006 (four owner leads owed a promised link; one is a live
+seller with Image Property) · REC-ads-007 (the briefing session, widened to all six stale domains)
+· REC-ops-005 (nine jobs in no scheduler) · REC-geo-004 (founder licence identity + wording only
+Will holds) · REC-seo-006 **merged with REC-geo-005** (the /about entity cluster — and a correction
+of my own 08-23 direction to seo, which geo showed would have broken the footer and profile link).
+
+**Verified before briefing rather than trusting the domains:** all three outstanding lead links
+live (200); Jennifer's `listing_status: for_sale` with Image Property; all nine ops scripts absent
+from crontab / `/etc/cron.d` / systemd timers; `/about/{fields,fields-editorial,xyzzy,totally-made-up-slug-12345}`
+all 200 as Googlebot; the cron draft artifact exists with the direct-call four separated. **Found
+one correction:** `om_needs_manual_link` is now **4**, not the 3 ads reported — a fourth lead
+landed 38 minutes after its cycle ran, i.e. the backlog accrues ~1/day while the campaign spends.
+
+**Executed rather than briefed:** REC-valuation-004's substance. `CLAUDE.md:455` had described a
+valuation band retired 2026-08-07, and that stale root line propagated into *both* the articles
+prompt rule 9a and the seo compliance detector shipped the same morning — two domains doing careful
+work and both shipping a false justification. Corrected at root + both copies (per-suburb empirical
+80% band, n=581; VL ±11.2 / Robina ±12.2 / BW ±14.0), plus the adjacent stale accuracy bullet
+(→ MAE 8.05% / median 6.44% / within-10% 69%). Prohibition itself unchanged — it was correct.
+Pushed; fix-history `[VALUATION-BAND-STALE-AT-ROOT]`. A factual correction should not cost a
+founder decision.
+
+**Assigned rather than briefed:** step 105 (photo analysis) processes **zero** properties nightly
+across all six suburbs, prints "completed successfully" and exits 0 — 6+ nights, blob DNS not
+resolving from this VM. articles routed it to `all`, which meant nobody owned it; directive written
+to **ops** as its first job next cycle, with an explicit instruction not to weaken the assertion if
+the cause turns out to be infrastructure it cannot change.
+
+**Filtered:** REC-ops-007 (one-liner, but CLAUDE.md forbids autonomous edits to monitoring code
+absolutely — "it makes the alarm louder" is exactly the reasoning that rule refuses); REC-seo-007
+(/for-sale-v3 vs /houses-for-sale — 4 clicks in 90d, a briefing question, and answering it in the
+wrong order commits site intent before deciding it is worth owning); the OpenAI top-up (checked what
+it actually breaks first — 106 falls back to Claude, 108/117 use OpenRouter, and the broken step is
+broken by DNS not credits).
+
+**Channel discipline:** `mark-briefed` run **before** send. One Telegram, five numbered questions
+carrying their tokens inline plus a 5-row inline keyboard, so a tap and a typed reply are
+interchangeable and he can answer out of order. No second message.
+
+**Watching:** Will has said yes to 20 of 20 items — either good triage or too cautious a filter,
+and I cannot tell which from inside it. Nothing has been graded on whether it *worked* yet; first
+real gradings land 09-03 / 09-07 / 09-12. The one graded so far (REC-ops-001) did not move its
+metric. 0/1 is the number that matters, not 20/20.
