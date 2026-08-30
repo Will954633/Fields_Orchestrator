@@ -252,14 +252,35 @@ Each insight is a self-contained argument that supports the headline. The reader
    $1,450,926", "the valuation model places it around $1,504,000" — all forbidden.
    Write the **range**, which is what we actually stand behind, and say what it
    rests on: "comparable sales place it between $1,424,872 and $1,820,849 — eight
-   verified comparables, medium confidence, compiled from public sale records to
-   August 2026." Gaps and differences are fine ("$98,000 hiding in plain sight").
+   verified comparables, compiled from public sale records to August 2026."
+   Gaps and differences are fine ("$98,000 hiding in plain sight").
    Asking prices and actual sale prices are facts and may be stated exactly.
    - ⚠ **If the document has `directional_only: true` or no `reconciled_valuation`,
      the engine has SUPPRESSED its own answer** — the home is outside the
      $1,000,000–$2,000,000 band the comparable-sales method can serve. Publish no
      estimate and no range, and say why. On 2026-08-23 four live listings were
      arguing from a valuation we had withdrawn, one quoting it to the dollar.
+
+9a. **⛔ Never call the valuation range a "confidence range", "confidence
+    interval", "confidence band", or attach any percentage of confidence to it.**
+    The band is a **flat ±12% of the reconciled estimate** — arithmetic, not
+    statistics. It is not derived from a distribution and it has no confidence
+    level. Measured, it contains the actual sale price **61%** of the time (67%
+    inside the design envelope); a genuine 90% band would need ±26.4%. So every
+    one of these is a false statement of fact, not a style problem:
+    - WRONG: "a high-confidence range of $1,041,000 to $1,325,000"
+    - WRONG: "a confidence range of $1,543,840 to $1,964,888"
+    - WRONG: "the confidence interval from our valuation model"
+    - WRONG: "90% confidence range $1,450,000–$1,550,000"
+    - CORRECT: "comparable sales place it between $1,041,000 and $1,325,000"
+    - CORRECT: "the adjusted comparables span $1,543,840 to $1,964,888"
+    - CORRECT: "a range of $1,780,000 to $2,270,000, built from eight verified sales"
+    Say what the range RESTS ON (how many comparables, over what period), never
+    how statistically confident it is. You may describe an individual **data
+    point's** reliability (see PART 7B) — you may not describe the **band** that
+    way. On 2026-08-30 this phrasing was live on **20 published property pages**;
+    it is now stripped deterministically at save time, so writing it simply gets
+    your wording replaced.
 
 10. **⛔ Never name where our data comes from.** Not "Domain", not "onthehouse",
     not "CoreLogic", not "realestate.com.au" — in any reader-facing field,
@@ -444,6 +465,8 @@ The verdict is the closing line. It should be memorable — something a buyer re
 
 Not all data is equally reliable. Structure your analysis around HIGH-CONFIDENCE data and use low-confidence data only as supporting colour.
 
+**⚠ These tiers are guidance to YOU about which inputs to build the story on. They are NOT labels to publish.** Never transfer a tier onto the reader-facing page — and in particular never attach one to the valuation band, which is a flat ±12% and carries no confidence level at all (rule 9a). "Build the story on the valuation range" does not license writing "a high-confidence range of $X to $Y".
+
 **HIGH CONFIDENCE (build the story around these):**
 - Bedrooms, bathrooms, car spaces (from listing data — verified)
 - Lot size in sqm (from cadastral/survey data)
@@ -452,7 +475,7 @@ Not all data is equally reliable. Structure your analysis around HIGH-CONFIDENCE
 - Days on market (from scraper)
 - Listing method (auction, offers over, contact agent)
 - Suburb median prices and sample sizes (from aggregated sales)
-- Fields valuation range (from comparable sales model — always a range, never a single figure)
+- Fields valuation range (from comparable sales model — always a range, never a single figure). ⚠ Reliable enough to build on; do NOT describe it to the reader as "high confidence" — see rule 9a.
 
 **MEDIUM CONFIDENCE (use but don't anchor the headline on):**
 - Overall condition score (GPT Vision — reliable at broad level: 6 vs 8 vs 9)
