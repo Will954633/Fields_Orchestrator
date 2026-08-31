@@ -52,9 +52,9 @@ AEST = timezone(timedelta(hours=10))
 LOOKAHEAD_DAYS = 14
 
 HEADERS = ["Done", "Due", "When", "Who", "Phone", "Email", "How", "Why — what to do",
-           "Last contact", "What we last sent", "Came from", "Preference", "CRM"]
-DONE_COL, PHONE_COL, EMAIL_COL = 0, 4, 5
-# Last column letter for range strings — grows with HEADERS (currently M = 13 cols).
+           "My notes", "Last contact", "What we last sent", "Came from", "Preference", "CRM"]
+DONE_COL, PHONE_COL, EMAIL_COL, NOTES_COL = 0, 4, 5, 8
+# Last column letter for range strings — grows with HEADERS (currently N = 14 cols).
 LAST_COL = chr(ord("A") + len(HEADERS) - 1)
 # A tick is anything a human would read as one; Sheets checkboxes serialise as "TRUE".
 DONE_VALUES = {"true", "yes", "y", "done", "x", "✓", "✔"}
@@ -142,6 +142,61 @@ def harvest_done(svc, db) -> list[str]:
     return cleared
 
 
+def harvest_notes(svc, db) -> int:
+    """Persist Will's own "My notes" cells back onto each contact BEFORE the rebuild.
+
+    The tab is rewritten (and re-sorted) every run, so a note is only durable if it is
+    stored against the CONTACT, not left sitting in a row that will hold someone else
+    tomorrow. Same match logic as harvest_done (email, else phone). The SHEET IS THE
+    SOURCE OF TRUTH (Will, 2026-09-01): a cleared cell clears the stored note; a changed
+    cell overwrites it. `will_note_at` only moves when the text actually changes, so an
+    untouched note doesn't look freshly edited every night. `will_note` is rendered back
+    into the My notes column by build_rows and shown on the CRM viewer page.
+    """
+    try:
+        grid = svc.spreadsheets().values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f"{TAB}!A1:{LAST_COL}").execute().get("values", [])
+    except Exception:
+        return 0
+    if not grid:
+        return 0
+    # Locate columns by HEADER NAME, not fixed index. On the first run after this column
+    # was added the LIVE sheet still has the OLD header (no "My notes"), so this returns
+    # -1 and we skip — otherwise we'd read whatever sat at that index (the old "Last
+    # contact") and store it as a note. It also survives any future column reorder.
+    header = grid[0]
+    def col(name, default=-1):
+        try:
+            return header.index(name)
+        except ValueError:
+            return default
+    ni, ei, pi = col("My notes"), col("Email", EMAIL_COL), col("Phone", PHONE_COL)
+    if ni < 0:
+        return 0
+    changed = 0
+    for r in grid[1:]:
+        note = (r[ni].strip() if len(r) > ni else "")
+        email = str(r[ei]).strip().lower() if ei >= 0 and len(r) > ei else ""
+        phone = str(r[pi]).strip().lstrip("'") if pi >= 0 and len(r) > pi else ""
+        key = {"email": email} if email else ({"phone": phone} if phone else None)
+        if key is None:
+            continue
+        c = db.crm_contacts.find_one(key, {"will_note": 1})
+        if c is None:
+            continue
+        existing = (c.get("will_note") or "").strip()
+        if note == existing:
+            continue
+        upd = {"will_note": note}
+        if note:
+            upd["will_note_at"] = datetime.now(AEST).isoformat(timespec="seconds")
+            upd["will_note_author"] = "will"
+        db.crm_contacts.update_one({"_id": c["_id"]}, {"$set": upd})
+        changed += 1
+    return changed
+
+
 def last_sent(c: dict) -> str:
     comms = c.get("communications") or []
     if not comms:
@@ -185,6 +240,9 @@ def build_rows(db, today: str) -> list[list[str]]:
             c.get("email") or "",
             (c.get("follow_up_channel") or "call").upper(),
             reason,
+            # Will's own notes, stored per-contact and round-tripped by harvest_notes
+            # so they follow the person, not the row position.
+            c.get("will_note") or "",
             f"{str(c.get('last_contact_at'))[:10]} — {c.get('contact_status') or ''}"
             if c.get("last_contact_at") else "Never contacted",
             last_sent(c), came_from,
@@ -212,6 +270,18 @@ def format_tab(svc, sid: int, n_rows: int) -> None:
         {"autoResizeDimensions": {"dimensions": {
             "sheetId": sid, "dimension": "COLUMNS",
             "startIndex": 1, "endIndex": len(HEADERS)}}},
+        # My notes is where Will types — autoResize would collapse an empty column to a
+        # sliver that's fiddly to click into, so pin it wide and wrap. Applied AFTER
+        # autoResize (later request wins) so it overrides the collapse.
+        {"updateDimensionProperties": {
+            "range": {"sheetId": sid, "dimension": "COLUMNS",
+                      "startIndex": NOTES_COL, "endIndex": NOTES_COL + 1},
+            "properties": {"pixelSize": 320}, "fields": "pixelSize"}},
+        {"repeatCell": {
+            "range": {"sheetId": sid, "startRowIndex": 1,
+                      "startColumnIndex": NOTES_COL, "endColumnIndex": NOTES_COL + 1},
+            "cell": {"userEnteredFormat": {"wrapStrategy": "WRAP"}},
+            "fields": "userEnteredFormat.wrapStrategy"}},
     ]
     if n_rows:
         reqs += [
@@ -260,6 +330,7 @@ def run(dry_run: bool) -> dict:
     svc = get_sheets()
     sid = ensure_tab_first(svc)
     cleared = harvest_done(svc, db)          # honour ticks BEFORE rebuilding
+    harvest_notes(svc, db)                    # persist Will's notes BEFORE rebuilding
     rows = build_rows(db, today)
 
     svc.spreadsheets().values().clear(
