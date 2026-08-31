@@ -86,15 +86,23 @@ def _resolve_ad_name(ad_id: Optional[str]) -> Optional[str]:
     return name
 
 
-def _notify_new_lead(report_doc: Dict[str, Any], occ: Optional[Dict[str, Any]]) -> None:
-    """Telegram alert for a new Analyse Your Home lead, with occupancy verdict."""
+def _notify_new_lead(report_doc: Dict[str, Any], occ: Optional[Dict[str, Any]]) -> bool:
+    """Telegram alert for a new Analyse Your Home lead, with occupancy verdict.
+
+    Returns True only if the alert was actually sent, so the caller can set
+    `lead_notified` on the doc and the resend sweep can recover a silent failure.
+    """
     import os
     import requests
 
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat = os.environ.get("TELEGRAM_CHAT_ID")
     if not (token and chat):
-        return
+        # Rule 7: never fail silently. A missing token means EVERY lead lands
+        # unalerted — surface it loudly (was a bare `return`, which hid it).
+        logger.error(f"  {report_doc.get('slug')}: lead notify SKIPPED — "
+                     f"TELEGRAM_BOT_TOKEN/CHAT_ID missing from env")
+        return False
 
     slug = report_doc.get("slug")
     address = report_doc.get("address", slug)
@@ -134,12 +142,22 @@ def _notify_new_lead(report_doc: Dict[str, Any], occ: Optional[Dict[str, Any]]) 
     lines.append("")
     lines.append(f"https://fieldsestate.com.au/your-home/{slug}")
 
-    requests.post(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        json={"chat_id": chat, "text": "\n".join(lines), "parse_mode": "Markdown",
-              "disable_web_page_preview": True},
-        timeout=20,
-    )
+    import time as _time
+    payload = {"chat_id": chat, "text": "\n".join(lines), "parse_mode": "Markdown",
+               "disable_web_page_preview": True}
+    for attempt in range(3):
+        try:
+            r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                              json=payload, timeout=20)
+            r.raise_for_status()
+            return True
+        except Exception as e:  # noqa: BLE001
+            if attempt == 2:
+                logger.warning(f"  {report_doc.get('slug')}: lead telegram send "
+                               f"failed after 3 tries: {e}")
+                return False
+            _time.sleep(2 * (attempt + 1))
+    return False
 
 
 def _find_live_listing(gc_db, report_doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -451,10 +469,26 @@ def resolve_one(report_doc: Dict[str, Any], force: bool = False) -> Dict[str, An
     # occupancy verdict is included so an investor/tenanted property is flagged
     # up front. Best-effort: never fails the build.
     if state == "stub":
+        sent = False
         try:
-            _notify_new_lead(report_doc, occ)
+            sent = _notify_new_lead(report_doc, occ)
         except Exception as e:  # noqa: BLE001
             logger.warning(f"  {slug}: lead telegram notify failed: {e}")
+        if sent:
+            try:
+                cosmos_retry(
+                    lambda: coll.update_one(
+                        {"slug": slug},
+                        {"$set": {"lead_notified": True, "lead_notified_at": now}},
+                    ),
+                    label=f"property_reports.notified.{slug}",
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"  {slug}: failed to set lead_notified flag: {e}")
+        else:
+            # No flag written -> the resend sweep will retry on a later run, so a
+            # transient failure means the alert arrives late, never silently lost.
+            logger.warning(f"  {slug}: lead NOT notified — resend sweep will retry")
 
     # Messages tab (Phase 3.1) — rebuild the advisory timeline from the now-current
     # doc (welcome + valuation state + market-change events), preserving any human
@@ -494,6 +528,47 @@ def fetch_one(slug: str) -> Optional[Dict[str, Any]]:
     return sm["property_reports"].find_one({"slug": slug})
 
 
+def resend_unnotified_leads(max_age_hours: int = 24) -> int:
+    """Self-heal for silently-lost lead alerts.
+
+    The stub->under_review Telegram notify is best-effort; a transient Telegram/
+    network error (or a missing token) used to lose the alert forever. Now every
+    successful notify stamps `lead_notified` on the doc, so this sweep finds recent
+    `under_review` leads that never got the flag and re-sends them — a transient
+    failure means the alert arrives a few minutes late instead of never.
+    Idempotent: the flag is set on success so a lead is never double-alerted.
+    Returns the number of alerts recovered.
+    """
+    sm = get_system_monitor_db()
+    coll = sm["property_reports"]
+    cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
+    query = {
+        "state": "under_review",
+        "created_at": {"$gte": cutoff},
+        "lead_notified": {"$exists": False},
+        "is_test": {"$ne": True},
+        "owner.is_internal": {"$ne": True},
+    }
+    recovered = 0
+    for doc in coll.find(query):
+        slug = doc.get("slug")
+        try:
+            if _notify_new_lead(doc, doc.get("occupancy")):
+                coll.update_one(
+                    {"slug": slug},
+                    {"$set": {"lead_notified": True,
+                              "lead_notified_at": datetime.utcnow(),
+                              "lead_notified_via": "resend_sweep"}},
+                )
+                recovered += 1
+                logger.info(f"  [resend] {slug}: late lead alert recovered")
+            else:
+                logger.warning(f"  [resend] {slug}: notify still failing — will retry next run")
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"  [resend] {slug}: resend failed: {e}")
+    return recovered
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     g = parser.add_mutually_exclusive_group(required=True)
@@ -508,8 +583,8 @@ def main():
     else:
         slugs = find_stub_slugs()
         logger.info(f"Found {len(slugs)} stub doc(s) to process")
-        if not slugs:
-            return 1
+        # NOTE: do not early-return on an empty stub list — the resend sweep below
+        # must still run to recover any lead whose alert failed on a prior cycle.
 
     processed = 0
     errors = 0
@@ -534,6 +609,16 @@ def main():
         except Exception as e:
             logger.exception(f"  → ERROR processing {slug}: {e}")
             errors += 1
+
+    # Self-heal: recover any recent lead whose stub->under_review notify failed
+    # silently (transient error / missing env). Poller mode only; idempotent.
+    if args.all_stubs:
+        try:
+            n = resend_unnotified_leads()
+            if n:
+                logger.info(f"resend sweep recovered {n} silently-lost lead alert(s)")
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"resend sweep failed: {e}")
 
     logger.info(f"Processed: {processed}, Errors: {errors}")
     return 0 if processed > 0 and errors == 0 else (2 if errors else 1)
