@@ -27,6 +27,9 @@ Usage:
 """
 from __future__ import annotations
 import argparse
+import base64
+import hashlib
+import hmac
 import os
 import sys
 import warnings
@@ -49,10 +52,30 @@ AEST = timezone(timedelta(hours=10))
 LOOKAHEAD_DAYS = 14
 
 HEADERS = ["Done", "Due", "When", "Who", "Phone", "Email", "How", "Why — what to do",
-           "Last contact", "What we last sent", "Came from", "Preference"]
+           "Last contact", "What we last sent", "Came from", "Preference", "CRM"]
 DONE_COL, PHONE_COL, EMAIL_COL = 0, 4, 5
+# Last column letter for range strings — grows with HEADERS (currently M = 13 cols).
+LAST_COL = chr(ord("A") + len(HEADERS) - 1)
 # A tick is anything a human would read as one; Sheets checkboxes serialise as "TRUE".
 DONE_VALUES = {"true", "yes", "y", "done", "x", "✓", "✔"}
+
+SITE = "https://fieldsestate.com.au"
+
+
+def crm_link(contact_id) -> str:
+    """A signed, self-authorising link to this contact's read-only CRM page
+    (netlify/functions/crm-contact.mjs). HMAC-SHA256(REPORT_LINK_SECRET, "crm:"+id)
+    base64url[:16] — the exact value the function recomputes and constant-time
+    compares. Namespaced with "crm:" so a report link key can't be replayed here.
+    Returns '' if the secret is unset (never emit an unsigned, therefore dead, link)."""
+    secret = os.environ.get("REPORT_LINK_SECRET", "")
+    if not secret:
+        return ""
+    cid = str(contact_id)
+    key = base64.urlsafe_b64encode(
+        hmac.new(secret.encode(), f"crm:{cid}".encode(), hashlib.sha256).digest()
+    ).decode().rstrip("=")[:16]
+    return f'{SITE}/api/v1/crm-contact?id={cid}&k={key}'
 
 
 def get_sheets():
@@ -88,7 +111,7 @@ def harvest_done(svc, db) -> list[str]:
     try:
         rows = svc.spreadsheets().values().get(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{TAB}!A2:L").execute().get("values", [])
+            range=f"{TAB}!A2:{LAST_COL}").execute().get("values", [])
     except Exception:
         return []
     cleared = []
@@ -166,6 +189,10 @@ def build_rows(db, today: str) -> list[list[str]]:
             if c.get("last_contact_at") else "Never contacted",
             last_sent(c), came_from,
             c.get("contact_preference") or "",
+            # Signed one-click link to this contact's full CRM record. A HYPERLINK
+            # formula so the long signed URL shows as a tidy "Open" (USER_ENTERED
+            # evaluates it). Blank if the secret is unset — never a dead link.
+            (f'=HYPERLINK("{crm_link(c["_id"])}","Open ↗")' if crm_link(c["_id"]) else ""),
         ])
     return rows
 
@@ -236,7 +263,7 @@ def run(dry_run: bool) -> dict:
     rows = build_rows(db, today)
 
     svc.spreadsheets().values().clear(
-        spreadsheetId=SPREADSHEET_ID, range=f"{TAB}!A1:L").execute()
+        spreadsheetId=SPREADSHEET_ID, range=f"{TAB}!A1:{LAST_COL}").execute()
     svc.spreadsheets().values().update(
         spreadsheetId=SPREADSHEET_ID, range=f"{TAB}!A1",
         valueInputOption="USER_ENTERED",
