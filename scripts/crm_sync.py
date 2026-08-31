@@ -500,6 +500,13 @@ def build_contact_doc(distinct_id: str, v: dict, existing: dict | None = None) -
         "home_confirmed": (existing or {}).get("home_confirmed") or {},
         # Physical scan reconciliation (written by minisite-visit.mjs).
         "physical_scan": (existing or {}).get("physical_scan") or {},
+        # Lead-link identity join (written by lead-link-visit.mjs when a lead clicks
+        # their tokenised SMS/email link) + the tokens that address it. Sub-doc, so
+        # carried as {} not None (dotted $set into a null raises WriteError 28). Must
+        # be here or crm_sync's hourly replace_one wipes the on-site journey we just
+        # bound to the lead. See [[parked_lead_token_identity_join]].
+        "lead_web": (existing or {}).get("lead_web") or {},
+        "link_token": (existing or {}).get("link_token"),
         "communications": (existing or {}).get("communications", []),
         "owner": (existing or {}).get("owner", "will"),
         "lead_quality": (existing or {}).get("lead_quality"),
