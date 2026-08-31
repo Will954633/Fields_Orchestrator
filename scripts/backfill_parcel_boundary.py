@@ -304,8 +304,11 @@ def main():
         ap.error("--id requires --suburb")
 
     db = get_gold_coast_db()
-    with job_run("backfill_parcel_boundary", cadence_hours=24,
-                 title="Parcel Boundary Backfill") as beat:
+    # On-demand tool: record a heartbeat but do NOT self-register a cadence — nothing
+    # schedules it yet, so a cadence would false-alarm STALE on the health board. When
+    # this is wired into the /property build stage (or a cron), add cadence_hours here.
+    with job_run("backfill_parcel_boundary",
+                 title="Parcel Boundary Backfill (on-demand)") as beat:
         targets = collect_targets(db, args)
         print(f"{len(targets)} target(s)")
         counts = {}
