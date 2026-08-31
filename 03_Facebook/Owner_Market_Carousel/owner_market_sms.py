@@ -179,6 +179,34 @@ def resolve_link(address, suburb_key, suburb_name):
         return "analysis", f"{SITE}/off-market/{d['slug']}", d.get("state", "")
     return "unresolved", None, "no slug returned"
 
+def get_or_create_link_token(db, phone=None, email=None):
+    """Find this lead's crm_contact (by email, else phone) and return a stable,
+    opaque link_token, minting one if absent. The token — never any PII — is what
+    we append to the SMS link so lead-link-visit.mjs can bind their on-site session
+    back to this contact. Returns None if no contact exists yet (link still works,
+    just no identity join)."""
+    import uuid
+    contact = None
+    if email:
+        contact = db.crm_contacts.find_one({"email": email.strip().lower()})
+    if not contact and phone:
+        contact = db.crm_contacts.find_one({"phone": phone})
+        if not contact:
+            digits = "".join(c for c in phone if c.isdigit())[-9:]
+            if digits:
+                for cand in db.crm_contacts.find({"phone": {"$ne": None}}):
+                    if "".join(c for c in (cand.get("phone") or "") if c.isdigit())[-9:] == digits:
+                        contact = cand
+                        break
+    if not contact:
+        return None
+    tok = contact.get("link_token")
+    if not tok:
+        tok = uuid.uuid4().hex
+        db.crm_contacts.update_one({"_id": contact["_id"]}, {"$set": {"link_token": tok}})
+    return tok
+
+
 def build_body(name, address, suburb_name, kind, url):
     first = first_name(name)
     if kind == "analysis":
@@ -219,6 +247,13 @@ def process(db, forms, send, limit):
             print(f"  locality: {address!r} -> {canonical!r} ({suburb_key})")
         kind, url, note = resolve_link(canonical, suburb_key, suburb_name)
         if kind == "unresolved": unresolved += 1
+        # Append the identity-join token to the /off-market analysis link (the page
+        # that runs phIdentifyLead). Binds their click-through to this lead. Only
+        # when actually sending — dry-run must not mint tokens / write to the CRM.
+        if send and kind == "analysis" and url:
+            tok = get_or_create_link_token(db, phone=phone, email=email)
+            if tok:
+                url = f"{url}?lead={tok}"
         body = build_body(name, address, suburb_name, kind, url)
         print(f"\n[{suburb_name}] {name} ph={phone} em={email}\n  addr: {address}\n  -> {kind} ({note}) {url or ''}\n  {body}")
         if not send:
