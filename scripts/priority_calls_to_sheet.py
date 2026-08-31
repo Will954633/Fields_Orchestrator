@@ -279,6 +279,17 @@ def format_tab(svc, sid: int, n_rows: int) -> None:
             "range": {"sheetId": sid, "dimension": "COLUMNS",
                       "startIndex": NOTES_COL, "endIndex": NOTES_COL + 1},
             "properties": {"pixelSize": 320}, "fields": "pixelSize"}},
+        # Give the CRM link (col G) and How (col I) a little more room than autoResize
+        # leaves them (Will asked, 2026-09-01) — indexed by header so a reorder can't
+        # widen the wrong column.
+        {"updateDimensionProperties": {
+            "range": {"sheetId": sid, "dimension": "COLUMNS",
+                      "startIndex": HEADERS.index("CRM"), "endIndex": HEADERS.index("CRM") + 1},
+            "properties": {"pixelSize": 120}, "fields": "pixelSize"}},
+        {"updateDimensionProperties": {
+            "range": {"sheetId": sid, "dimension": "COLUMNS",
+                      "startIndex": HEADERS.index("How"), "endIndex": HEADERS.index("How") + 1},
+            "properties": {"pixelSize": 100}, "fields": "pixelSize"}},
         {"repeatCell": {
             "range": {"sheetId": sid, "startRowIndex": 1,
                       "startColumnIndex": NOTES_COL, "endColumnIndex": NOTES_COL + 1},
