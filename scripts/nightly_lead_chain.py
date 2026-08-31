@@ -76,6 +76,13 @@ STEPS = [
          "PostHog site engagement -> crm_contacts. The hourly pass last ran at 23:07, "
          "so without this the final ~50 minutes of the day are missing from every "
          "downstream lead record."),
+    Step("lead_web_activity", [PY, f"{ROOT}/scripts/lead_web_activity.py"],
+         "Pull each identity-bound lead's on-site pageview journey onto their "
+         "crm_contact (lead_web.activity). Reads lead_web.posthog_distinct_id written "
+         "by lead-link-visit.mjs when a lead clicks their tokenised link, and stamps "
+         "the durable journey before the sheet/worklist steps render it. Needs "
+         "crm_sync only (it must not run mid-replace of the same doc).",
+         needs=["crm_sync"]),
     Step("lead_intelligence", [PY, f"{ROOT}/scripts/samantha/lead_intelligence.py"],
          "Unify + enrich + score every lead into lead_worklist. Reads crm_contacts "
          "and the Gold_Coast listing status the 23:30-23:55 syncs just refreshed.",
