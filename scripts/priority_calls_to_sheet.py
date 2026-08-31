@@ -147,6 +147,12 @@ def build_rows(db, today: str) -> list[list[str]]:
         due = c["follow_up_at"]
         attr = c.get("lead_attribution") or {}
         came_from = attr.get("campaign_name") or c.get("source") or ""
+        # Surface on-site activity (from lead_web_activity.py) inline in the reason,
+        # so "what to do" carries how engaged they are without a new column.
+        reason = c.get("follow_up_reason") or ""
+        web = ((c.get("lead_web") or {}).get("summary") or "").strip()
+        if web:
+            reason = (reason + f"  ·  🌐 {web}").strip()
         rows.append([
             "", due, when_label(due, today),
             c.get("name") or "(no name)",
@@ -155,7 +161,7 @@ def build_rows(db, today: str) -> list[list[str]]:
             ("'" + c["phone"]) if c.get("phone") else "",
             c.get("email") or "",
             (c.get("follow_up_channel") or "call").upper(),
-            c.get("follow_up_reason") or "",
+            reason,
             f"{str(c.get('last_contact_at'))[:10]} — {c.get('contact_status') or ''}"
             if c.get("last_contact_at") else "Never contacted",
             last_sent(c), came_from,
