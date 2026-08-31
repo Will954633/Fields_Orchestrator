@@ -37,63 +37,90 @@ def _slug(url):
 
 
 def upsert_lead(db, lead):
-    """Create/update an email-keyed crm_contacts record from an fb_leads doc."""
+    """Create/update a crm_contacts record from an fb_leads doc.
+
+    Keyed by email when present, else by phone. A phone-only lead used to get NO
+    record at all (`if not email: return None`) — which silently dropped every
+    name+phone seller lead (Owner Market / Narratives forms capture no email by
+    design). It now upserts on `{"phone": ...}` instead so those leads are captured.
+    Returns the match value used (email or phone) or None if neither exists / test.
+    """
     f = lead.get("fields", {}) or {}
     email = (f.get("email") or "").strip().lower()
-    if not email:
-        return None
+    phone = f.get("phone_number") or f.get("phone")
     # Out-of-market copy-test leads get NO CRM record at all — that is the design
     # (Will, 2026-07-28: they receive nothing post-submit). Guard added 2026-08-20;
     # without it --backfill happily manufactures contacts for Brisbane test leads.
     if lead.get("is_test") or lead.get("test_market"):
         return None
+    if not email and not phone:
+        return None
+    # A seller ad (Owner Market / SMS-link forms) collects the owner's own address.
+    # That is the single most valuable field a seller lead can give us and it was
+    # being dropped on the floor — capture it as the person's property_address.
+    home_address = (f.get("home_address") or f.get("property_address") or "").strip()
     brief = {k: f[k] for k in BRIEF_KEYS if f.get(k) not in (None, "")}
+    if home_address:
+        brief["home_address"] = home_address
     tags = ["fb_lead"]
     if lead.get("form_name"):
         tags.append(lead["form_name"])
     if str(f.get("owns_gc_home", "")).lower() == "yes":
         tags.append("owns_gc_home")
+    if home_address:
+        tags.append("gave_home_address")
     if f.get("timeframe"):
         tags.append(f"timeframe:{f['timeframe']}")
     if f.get("area"):
         tags.append(f"area:{f['area']}")
     qual = "FB lead — " + ", ".join(f"{k}={v}" for k, v in brief.items())
+    match = {"email": email} if email else {"phone": phone}
+    set_fields = {
+        # The Meta form field is `phone_number`; `phone` has NEVER existed on a
+        # single fb_leads doc. Reading the wrong key wrote None onto every FB
+        # contact for a year — and because this is $set, not $setOnInsert, it
+        # also wiped any phone the contact had from another source.
+        "phone": phone,
+        # Same class of omission as the phone: the form captures full_name and
+        # nothing ever wrote it, so every FB contact rendered as "(no name)".
+        **({"name": f["full_name"]} if f.get("full_name") else {}),
+        "updated_at": _now(),
+        "last_seen": lead.get("created_time"),
+        "lead_brief": brief,
+        "qualification_reason": qual,
+        "lead_attribution": {
+            "campaign_name": lead.get("campaign_name"),
+            # The SPECIFIC ad — the field Will needs to know which creative pulled
+            # the lead. Was never stored before; only the campaign was.
+            "ad_name": lead.get("ad_name"),
+            "adset_id": lead.get("adset_id"),
+            "adset_name": lead.get("adset_name"),
+            "ad_id": lead.get("ad_id"),
+            "form_name": lead.get("form_name"),
+            "platform": lead.get("platform"),
+            "is_organic": lead.get("is_organic"),
+        },
+    }
+    if home_address:
+        set_fields["property_address"] = home_address
     db["crm_contacts"].update_one(
-        {"email": email},
+        match,
         {
             "$setOnInsert": {
-                "email": email, "created_at": _now(),
+                # phone lives in $set (it must update existing records too), so it
+                # must NOT also appear here or Mongo rejects the conflicting path.
+                **({"email": email} if email else {}), "created_at": _now(),
                 "first_seen": lead.get("created_time"),
                 "status": "lead", "source": "fb_lead_ad",
                 "engagement_score": BASE_LEAD_SCORE,
             },
-            "$set": {
-                # The Meta form field is `phone_number`; `phone` has NEVER existed on a
-                # single fb_leads doc. Reading the wrong key wrote None onto every FB
-                # contact for a year — and because this is $set, not $setOnInsert, it
-                # also wiped any phone the contact had from another source.
-                "phone": f.get("phone_number") or f.get("phone"),
-                # Same class of omission as the phone: the form captures full_name and
-                # nothing ever wrote it, so every FB contact rendered as "(no name)".
-                **({"name": f["full_name"]} if f.get("full_name") else {}),
-                "updated_at": _now(),
-                "last_seen": lead.get("created_time"),
-                "lead_brief": brief,
-                "qualification_reason": qual,
-                "lead_attribution": {
-                    "campaign_name": lead.get("campaign_name"),
-                    "adset_id": lead.get("adset_id"),
-                    "ad_id": lead.get("ad_id"),
-                    "platform": lead.get("platform"),
-                    "is_organic": lead.get("is_organic"),
-                },
-            },
+            "$set": set_fields,
             "$addToSet": {"tags": {"$each": [t for t in tags if t]},
                           "fb_lead_ids": lead["_id"]},
         },
         upsert=True,
     )
-    return email
+    return email or phone
 
 
 def record_engagement(db, email, kind, target, at):
