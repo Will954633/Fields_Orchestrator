@@ -50,7 +50,7 @@ LOOKAHEAD_DAYS = 14
 
 HEADERS = ["Done", "Due", "When", "Who", "Phone", "Email", "How", "Why — what to do",
            "Last contact", "What we last sent", "Came from", "Preference"]
-DONE_COL, EMAIL_COL = 0, 5
+DONE_COL, PHONE_COL, EMAIL_COL = 0, 4, 5
 # A tick is anything a human would read as one; Sheets checkboxes serialise as "TRUE".
 DONE_VALUES = {"true", "yes", "y", "done", "x", "✓", "✔"}
 
@@ -93,19 +93,29 @@ def harvest_done(svc, db) -> list[str]:
         return []
     cleared = []
     for r in rows:
-        if len(r) <= EMAIL_COL:
+        if len(r) <= DONE_COL:
             continue
         if str(r[DONE_COL]).strip().lower() not in DONE_VALUES:
             continue
-        email = str(r[EMAIL_COL]).strip().lower()
-        if not email:
+        # Match on email when present, else phone — phone-only seller leads (Owner
+        # Market / Narratives forms give no email) would otherwise never clear and
+        # would resurface every day after being ticked done.
+        email = str(r[EMAIL_COL]).strip().lower() if len(r) > EMAIL_COL else ""
+        phone = str(r[PHONE_COL]).strip().lstrip("'") if len(r) > PHONE_COL else ""
+        if email:
+            key = {"email": email}
+            ident = email
+        elif phone:
+            key = {"phone": phone}
+            ident = phone
+        else:
             continue
         db.crm_contacts.update_one(
-            {"email": email},
+            key,
             {"$set": {"follow_up_at": None,
                       "follow_up_reason": "",
                       "follow_up_done_at": datetime.now(AEST).isoformat(timespec="seconds")}})
-        cleared.append(email)
+        cleared.append(ident)
     return cleared
 
 
