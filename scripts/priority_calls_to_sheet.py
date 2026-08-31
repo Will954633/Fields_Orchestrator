@@ -51,9 +51,10 @@ SA_KEY = os.environ.get("GOOGLE_VISION_SA_KEY", "/home/fields/.gcp-floor-plan-vi
 AEST = timezone(timedelta(hours=10))
 LOOKAHEAD_DAYS = 14
 
-HEADERS = ["Done", "Due", "When", "Who", "Phone", "Email", "How", "Why — what to do",
-           "My notes", "Last contact", "What we last sent", "Came from", "Preference", "CRM"]
-DONE_COL, PHONE_COL, EMAIL_COL, NOTES_COL = 0, 4, 5, 8
+HEADERS = ["Done", "Due", "When", "Who", "Phone", "Email", "CRM", "My notes",
+           "How", "Why — what to do", "Last contact", "What we last sent",
+           "Came from", "Preference"]
+DONE_COL, PHONE_COL, EMAIL_COL, NOTES_COL = 0, 4, 5, 7
 # Last column letter for range strings — grows with HEADERS (currently N = 14 cols).
 LAST_COL = chr(ord("A") + len(HEADERS) - 1)
 # A tick is anything a human would read as one; Sheets checkboxes serialise as "TRUE".
@@ -231,6 +232,7 @@ def build_rows(db, today: str) -> list[list[str]]:
         web = ((c.get("lead_web") or {}).get("summary") or "").strip()
         if web:
             reason = (reason + f"  ·  🌐 {web}").strip()
+        link = crm_link(c["_id"])
         rows.append([
             "", due, when_label(due, today),
             c.get("name") or "(no name)",
@@ -238,19 +240,19 @@ def build_rows(db, today: str) -> list[list[str]]:
             # +61422403596 and leaves a number nobody can tap to dial.
             ("'" + c["phone"]) if c.get("phone") else "",
             c.get("email") or "",
-            (c.get("follow_up_channel") or "call").upper(),
-            reason,
+            # Signed one-click link to this contact's full CRM record. A HYPERLINK
+            # formula so the long signed URL shows as a tidy "Open" (USER_ENTERED
+            # evaluates it). Blank if the secret is unset — never a dead link.
+            (f'=HYPERLINK("{link}","Open ↗")' if link else ""),
             # Will's own notes, stored per-contact and round-tripped by harvest_notes
             # so they follow the person, not the row position.
             c.get("will_note") or "",
+            (c.get("follow_up_channel") or "call").upper(),
+            reason,
             f"{str(c.get('last_contact_at'))[:10]} — {c.get('contact_status') or ''}"
             if c.get("last_contact_at") else "Never contacted",
             last_sent(c), came_from,
             c.get("contact_preference") or "",
-            # Signed one-click link to this contact's full CRM record. A HYPERLINK
-            # formula so the long signed URL shows as a tidy "Open" (USER_ENTERED
-            # evaluates it). Blank if the secret is unset — never a dead link.
-            (f'=HYPERLINK("{crm_link(c["_id"])}","Open ↗")' if crm_link(c["_id"]) else ""),
         ])
     return rows
 
