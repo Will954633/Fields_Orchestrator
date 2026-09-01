@@ -38,6 +38,150 @@ def _now():
     return datetime.now(timezone.utc).isoformat()
 
 
+def _parse_ts(s):
+    """PostHog timestamps -> aware datetime. Tolerates 'Z', '+00:00', and fractional secs."""
+    if not s or s == "None":
+        return None
+    s = str(s).strip().replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        try:
+            dt = datetime.fromisoformat(s.split(".")[0] + "+00:00")
+        except ValueError:
+            return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _num(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+# Events that build the reverse-chronological timeline + the article/CTA read signals.
+# All already emitted client-side (posthog.ts / ArticlePage / OffMarketV5) — no new
+# instrumentation. page_engagement carries the truth for "did they read it":
+# engaged_seconds + wall_seconds + max_depth_pct, fired on unmount.
+TIMELINE_EVENTS = ("$pageview", "page_engagement", "article_cta_click",
+                   "offmarket_market_article_open")
+
+
+def fetch_timeline(all_ids):
+    """Chronological events per distinct_id — the raw material for the timeline, per-page
+    dwell, and the article-read / market-update-CTA signals. One indexed query."""
+    if not all_ids:
+        return {}
+    idlist = "','".join(i.replace("'", "") for i in all_ids)
+    evs = ("'" + "','".join(TIMELINE_EVENTS) + "'")
+    rows = posthog_query(f"""
+        SELECT distinct_id, timestamp, event,
+               properties.$pathname       AS path,
+               properties.engaged_seconds  AS engaged,
+               properties.wall_seconds     AS wall,
+               properties.max_depth_pct    AS depth,
+               properties.article_title    AS atitle,
+               properties.source           AS src,
+               properties.destination      AS dest,
+               properties.page             AS pg
+        FROM events
+        WHERE distinct_id IN ('{idlist}') AND event IN ({evs})
+        ORDER BY distinct_id, timestamp
+    """)
+    by_id = {}
+    for r in rows:
+        by_id.setdefault(r[0], []).append({
+            "ts": _parse_ts(r[1]), "event": r[2], "path": r[3],
+            "engaged": _num(r[4]), "wall": _num(r[5]), "depth": _num(r[6]),
+            "atitle": r[7], "src": r[8], "dest": r[9], "pg": r[10],
+        })
+    return by_id
+
+
+def _is_market_update(path, title):
+    p = (path or "").lower()
+    t = (title or "").lower()
+    return "market-update" in p or "market update" in t
+
+
+def build_timeline(events, last_seen=None):
+    """From one lead's merged, time-sorted events build:
+      - timeline: reverse-chron page visits, each with dwell_minutes (wall time on page,
+        2dp) + engaged_minutes + max_depth_pct where a page_engagement fired;
+      - articles: every article page they opened, with how deeply they read it;
+      - cta_market_turned: did they click "The market has turned. Has your home? →".
+    """
+    evs = sorted((e for e in events if e["ts"]), key=lambda e: e["ts"])
+    if not evs:
+        return {"timeline": [], "articles": [], "cta_market_turned": None}
+    pvs = [e for e in evs if e["event"] == "$pageview"]
+    # The session's true end for the FINAL page's dwell: TIMELINE_EVENTS omit $web_vitals
+    # etc., so the last event here can BE the final pageview (=> 0 dwell). last_seen (from
+    # the full-event aggregate) is the real last activity — use whichever is later.
+    last_ts = evs[-1]["ts"]
+    ls = _parse_ts(last_seen)
+    if ls and (not last_ts or ls > last_ts):
+        last_ts = ls
+
+    timeline = []
+    for i, pv in enumerate(pvs):
+        start = pv["ts"]
+        end = pvs[i + 1]["ts"] if i + 1 < len(pvs) else last_ts
+        gap_s = max(0.0, (end - start).total_seconds())
+        # Attach page_engagement by TIME WINDOW, not $pathname: on SPA unmount the
+        # engagement event's $pathname is often already the NEXT route, but it fired
+        # while the visitor was on THIS page (before the next $pageview).
+        eng = [e for e in evs if e["event"] == "page_engagement"
+               and start <= e["ts"] <= end]
+        wall = max([e["wall"] for e in eng if e["wall"] is not None], default=None)
+        engaged = max([e["engaged"] for e in eng if e["engaged"] is not None], default=None)
+        depth = max([e["depth"] for e in eng if e["depth"] is not None], default=None)
+        # Wall time on the page: prefer page_engagement.wall_seconds (measured), else the
+        # gap to the next pageview. engaged_minutes is ACTIVE time (may be < dwell).
+        dwell_s = wall if wall is not None else gap_s
+        timeline.append({
+            "path": pv["path"],
+            "at": start.isoformat(),
+            "dwell_minutes": round(dwell_s / 60.0, 2),
+            "engaged_minutes": round(engaged / 60.0, 2) if engaged is not None else None,
+            "max_depth_pct": round(depth, 1) if depth is not None else None,
+        })
+    timeline.reverse()  # most recent first, most historical last
+
+    # Article reading — one row per article page, best depth/engagement seen.
+    articles = {}
+    for e in evs:
+        if e["event"] == "page_engagement" and (e["pg"] == "article_page"
+                                                or (e["path"] or "").startswith("/articles/")):
+            key = e["path"]
+            a = articles.setdefault(key, {"path": e["path"], "title": e["atitle"],
+                                          "engaged_seconds": None, "max_depth_pct": None,
+                                          "at": e["ts"].isoformat(),
+                                          "is_market_update": _is_market_update(e["path"], e["atitle"])})
+            if e["engaged"] is not None:
+                a["engaged_seconds"] = max(a["engaged_seconds"] or 0, e["engaged"])
+            if e["depth"] is not None:
+                a["max_depth_pct"] = max(a["max_depth_pct"] or 0, e["depth"])
+            if e["atitle"] and not a["title"]:
+                a["title"] = e["atitle"]
+    for a in articles.values():
+        es, dp = a["engaged_seconds"], a["max_depth_pct"]
+        a["read"] = bool(es and es >= 30 and dp and dp >= 50)  # meaningful read
+        a["engaged_minutes"] = round(es / 60.0, 2) if es is not None else None
+
+    # The specific "The market has turned. Has your home? →" banner button.
+    cta = None
+    for e in evs:
+        if e["event"] == "offmarket_market_article_open":
+            cta = {"at": e["ts"].isoformat(), "source": e["src"]}
+            break  # first click
+
+    return {"timeline": timeline,
+            "articles": sorted(articles.values(), key=lambda x: x["at"], reverse=True),
+            "cta_market_turned": cta}
+
+
 def bound_leads(sm):
     """Contacts that have clicked a tokenised link (have a bound distinct_id)."""
     return list(sm["crm_contacts"].find(
@@ -87,12 +231,14 @@ def fetch_activity(all_ids):
     return by_id, pages_by_id
 
 
-def merge_activity(contact, by_id, pages_by_id):
+def merge_activity(contact, by_id, pages_by_id, events_by_id=None):
     """Combine every distinct_id belonging to this lead into one activity doc."""
     ids = ids_for(contact)
     pv = days = 0
     firsts, lasts, page_counts = [], [], {}
+    merged_events = []
     for did in ids:
+        merged_events.extend((events_by_id or {}).get(did, []))
         a = by_id.get(did)
         if not a:
             continue
@@ -108,12 +254,16 @@ def merge_activity(contact, by_id, pages_by_id):
         return None
     top_pages = sorted(({"path": k, "count": v} for k, v in page_counts.items()),
                        key=lambda x: -x["count"])[:20]
+    tl = build_timeline(merged_events, last_seen=(max(lasts) if lasts else None))
     return {
         "total_pageviews": pv,
         "visit_days": days,
         "first_seen": min(firsts) if firsts else None,
         "last_seen": max(lasts) if lasts else None,
         "pages_visited": top_pages,
+        "timeline": tl["timeline"],
+        "articles": tl["articles"],
+        "cta_market_turned": tl["cta_market_turned"],
         "refreshed_at": _now(),
     }
 
@@ -123,8 +273,20 @@ def summarise(act):
         return ""
     top = act["pages_visited"][0]["path"] if act["pages_visited"] else "?"
     last = (act.get("last_seen") or "")[:10]
-    return (f"{act['total_pageviews']} pageviews over {act['visit_days']} day(s); "
+    base = (f"{act['total_pageviews']} pageviews over {act['visit_days']} day(s); "
             f"last {last}; top: {top}")
+    # Surface the two signals Will asked for inline in the one-line summary.
+    mkt = next((a for a in act.get("articles", []) if a.get("is_market_update")), None)
+    if act.get("cta_market_turned"):
+        base += "; clicked 'market has turned' CTA"
+    if mkt:
+        if mkt.get("read"):
+            base += (f"; READ the market-update article "
+                     f"({mkt.get('max_depth_pct')}% deep, {mkt.get('engaged_minutes')} min)")
+        else:
+            base += (f"; opened market-update article but skimmed "
+                     f"({mkt.get('max_depth_pct')}% deep, {mkt.get('engaged_minutes')} min)")
+    return base
 
 
 def run(dry_run=False):
@@ -132,10 +294,11 @@ def run(dry_run=False):
     leads = bound_leads(sm)
     all_ids = sorted({i for c in leads for i in ids_for(c)})
     by_id, pages_by_id = fetch_activity(all_ids)
+    events_by_id = fetch_timeline(all_ids)
 
     updated = with_activity = 0
     for c in leads:
-        act = merge_activity(c, by_id, pages_by_id)
+        act = merge_activity(c, by_id, pages_by_id, events_by_id)
         if not act:
             continue
         with_activity += 1
