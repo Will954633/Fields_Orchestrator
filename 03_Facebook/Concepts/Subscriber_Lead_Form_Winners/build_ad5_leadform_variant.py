@@ -43,9 +43,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 IDS_PATH = os.path.join(HERE, "ad5_leadform_variant_ids.json")
 
 SOURCE_AD = "120243619699320134"
-# Both arms hand off to the SAME final page after capture, so the post-conversion
-# experience matches the control's "continue to /for-sale-v4b".
-FINAL_DEST = "https://fieldsestate.com.au/for-sale-v4b"
+# Post-capture destination. Changed v4b -> v3 on 2026-09-01 (Will's call): leads now hand
+# off to the suburb/beds/baths + 5-property-Friday signup page, not the v4b variant.
+# NB the live form is immutable once it has leads, so this constant is only used when
+# building a fresh form/creative; the existing live ad was migrated by recreating both.
+FINAL_DEST = "https://fieldsestate.com.au/for-sale-v3"
 PRIVACY = "https://fieldsestate.com.au/privacy"
 FORM_HEADLINE = "Fields exclusive access for subscribers only"
 BASE = "Subscriber Lookalike LEADFORM — Houses for sale"
