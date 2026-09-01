@@ -65,7 +65,7 @@ def _num(v):
 # instrumentation. page_engagement carries the truth for "did they read it":
 # engaged_seconds + wall_seconds + max_depth_pct, fired on unmount.
 TIMELINE_EVENTS = ("$pageview", "page_engagement", "article_cta_click",
-                   "offmarket_market_article_open")
+                   "offmarket_market_article_open", "offmarket_market_article_read")
 
 
 def fetch_timeline(all_ids):
@@ -84,7 +84,8 @@ def fetch_timeline(all_ids):
                properties.article_title    AS atitle,
                properties.source           AS src,
                properties.destination      AS dest,
-               properties.page             AS pg
+               properties.page             AS pg,
+               properties.kind             AS kind
         FROM events
         WHERE distinct_id IN ('{idlist}') AND event IN ({evs})
         ORDER BY distinct_id, timestamp
@@ -94,7 +95,7 @@ def fetch_timeline(all_ids):
         by_id.setdefault(r[0], []).append({
             "ts": _parse_ts(r[1]), "event": r[2], "path": r[3],
             "engaged": _num(r[4]), "wall": _num(r[5]), "depth": _num(r[6]),
-            "atitle": r[7], "src": r[8], "dest": r[9], "pg": r[10],
+            "atitle": r[7], "src": r[8], "dest": r[9], "pg": r[10], "kind": r[11],
         })
     return by_id
 
@@ -177,9 +178,35 @@ def build_timeline(events, last_seen=None):
             cta = {"at": e["ts"].isoformat(), "source": e["src"]}
             break  # first click
 
+    # Unified "did they read the market-update article?" across BOTH paths:
+    #  (a) the full /articles/<...>-market-update-... route (page_engagement), and
+    #  (b) the in-modal report opened by the banner button (offmarket_market_article_read,
+    #      kind='market-update' — the same-origin iframe reader). Best depth/engagement wins.
+    reads = []
+    for a in articles.values():
+        if a["is_market_update"]:
+            reads.append({"depth": a["max_depth_pct"], "engaged": a["engaged_seconds"],
+                          "via": "article_page", "at": a["at"]})
+    for e in evs:
+        if e["event"] == "offmarket_market_article_read" and e.get("kind") == "market-update":
+            reads.append({"depth": e["depth"], "engaged": e["engaged"],
+                          "via": "report_modal", "at": e["ts"].isoformat()})
+    market_update = None
+    if reads:
+        best = max(reads, key=lambda r: ((r["depth"] or 0), (r["engaged"] or 0)))
+        d, es = best["depth"], best["engaged"]
+        market_update = {
+            "opened": True, "via": best["via"], "at": best["at"],
+            "max_depth_pct": round(d, 1) if d is not None else None,
+            "engaged_seconds": es,
+            "engaged_minutes": round(es / 60.0, 2) if es is not None else None,
+            "read": bool(es and es >= 30 and d and d >= 50),
+        }
+
     return {"timeline": timeline,
             "articles": sorted(articles.values(), key=lambda x: x["at"], reverse=True),
-            "cta_market_turned": cta}
+            "cta_market_turned": cta,
+            "market_update": market_update}
 
 
 def bound_leads(sm):
@@ -264,6 +291,7 @@ def merge_activity(contact, by_id, pages_by_id, events_by_id=None):
         "timeline": tl["timeline"],
         "articles": tl["articles"],
         "cta_market_turned": tl["cta_market_turned"],
+        "market_update": tl["market_update"],
         "refreshed_at": _now(),
     }
 
@@ -276,16 +304,14 @@ def summarise(act):
     base = (f"{act['total_pageviews']} pageviews over {act['visit_days']} day(s); "
             f"last {last}; top: {top}")
     # Surface the two signals Will asked for inline in the one-line summary.
-    mkt = next((a for a in act.get("articles", []) if a.get("is_market_update")), None)
+    mkt = act.get("market_update")
     if act.get("cta_market_turned"):
         base += "; clicked 'market has turned' CTA"
     if mkt:
-        if mkt.get("read"):
-            base += (f"; READ the market-update article "
-                     f"({mkt.get('max_depth_pct')}% deep, {mkt.get('engaged_minutes')} min)")
-        else:
-            base += (f"; opened market-update article but skimmed "
-                     f"({mkt.get('max_depth_pct')}% deep, {mkt.get('engaged_minutes')} min)")
+        verb = "READ" if mkt.get("read") else "opened but skimmed"
+        base += (f"; {verb} the market-update article "
+                 f"({mkt.get('max_depth_pct')}% deep, {mkt.get('engaged_minutes')} min, "
+                 f"via {mkt.get('via')})")
     return base
 
 
