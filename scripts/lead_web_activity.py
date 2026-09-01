@@ -171,12 +171,15 @@ def build_timeline(events, last_seen=None):
         a["read"] = bool(es and es >= 30 and dp and dp >= 50)  # meaningful read
         a["engaged_minutes"] = round(es / 60.0, 2) if es is not None else None
 
-    # The specific "The market has turned. Has your home? →" banner button.
+    # The specific "The market has turned. Has your home? →" banner button — a DELIBERATE
+    # click only. Exclude source='find_autoopen' (the /find landing auto-opens the article
+    # for them), so "did they click the CTA?" stays truthful and isn't inflated by our own
+    # auto-open. The read signal below still captures reading regardless of how it opened.
     cta = None
     for e in evs:
-        if e["event"] == "offmarket_market_article_open":
+        if e["event"] == "offmarket_market_article_open" and e["src"] != "find_autoopen":
             cta = {"at": e["ts"].isoformat(), "source": e["src"]}
-            break  # first click
+            break  # first deliberate click
 
     # Unified "did they read the market-update article?" across BOTH paths:
     #  (a) the full /articles/<...>-market-update-... route (page_engagement), and
