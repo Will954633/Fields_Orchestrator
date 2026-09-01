@@ -511,6 +511,10 @@ def build_contact_doc(distinct_id: str, v: dict, existing: dict | None = None) -
         # buyer_link_gen.py and surfaced in the leads sheet. Must survive the
         # hourly replace_one alongside link_token. See [[personalised_buyer_link]].
         "buyer_link": (existing or {}).get("buyer_link"),
+        # FB-lead / leadpage attribution (campaign/ad/adset/form) rendered on the
+        # crm-contact page. Written by fb-lead-puller + bind_report_leads_to_crm; must
+        # survive the hourly replace_one or the contact page's Attribution block blanks.
+        "lead_attribution": (existing or {}).get("lead_attribution"),
         "communications": (existing or {}).get("communications", []),
         "owner": (existing or {}).get("owner", "will"),
         "lead_quality": (existing or {}).get("lead_quality"),
