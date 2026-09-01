@@ -50,8 +50,55 @@
   var closingTimer = null;
   var t0 = performance.now();
 
+  /* Durable device id. Every fridge_* event is logged against it server-side so
+     Will has a complete ledger of who scanned the magnet and what they did —
+     independent of PostHog's distinct_id, which rotates (FB in-app browser resets
+     storage). Shared key with the rest of the site (analyse-your-home, off-market
+     ownership), so a fridge scan and a later AYH submit resolve to one device. */
+  var DEVICE_KEY = 'fields_device_token';
+  var deviceToken = '';
+  try {
+    deviceToken = localStorage.getItem(DEVICE_KEY) || '';
+    if (!deviceToken) {
+      deviceToken = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+                    : 'fd_' + Math.abs((Date.now() ^ (performance.now() * 1000)) | 0).toString(36);
+      localStorage.setItem(DEVICE_KEY, deviceToken);
+    }
+  } catch (e) { /* private mode: no durable token, events still land keyed by a per-load id */ }
+
+  /* Absolute so it works from the concepts workbench (a different host, CORS *)
+     and from /fridge in production alike. */
+  var EVENT_API = 'https://fieldsestate.com.au/api/v1/fridge-event';
+
+  /* Mirror the fridge PostHog event to the durable MongoDB ledger. sendBeacon so
+     it survives the tab closing / the navigation away on an option tap — the same
+     reason the deck uses it for deck_exit. Fire-and-forget: a logging failure must
+     never affect the page. */
+  function logEvent(name, props) {
+    if (!deviceToken) return;
+    var body = {
+      device_token: deviceToken,
+      distinct_id: (window.posthog && window.posthog.get_distinct_id) ? (function () {
+        try { return window.posthog.get_distinct_id(); } catch (e) { return null; }
+      })() : null,
+      event: name,
+      props: props || {},
+      referrer: document.referrer || null,
+      utm_source: 'fridge_magnet', utm_medium: 'print', utm_campaign: 'fridge_magnet_bizcard'
+    };
+    try {
+      var blob = new Blob([JSON.stringify(body)], { type: 'application/json' });
+      if (navigator.sendBeacon && navigator.sendBeacon(EVENT_API, blob)) return;
+    } catch (e) { /* fall through to fetch */ }
+    try {
+      fetch(EVENT_API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body), keepalive: true }).catch(function () {});
+    } catch (e) { /* nothing more we can do; never throw from logging */ }
+  }
+
   function emit(name, props) {
     if (window.posthog && window.posthog.capture) window.posthog.capture(name, props);
+    logEvent(name, props);
     if (DEBUG) console.log('[fridge]', name, JSON.stringify(props), audio ? JSON.stringify(audio.state()) : '');
   }
 
@@ -111,7 +158,7 @@
   function onTap(e) {
     var t = e.target;
     if (t && t.closest && t.closest('.shelf a')) return;   // let the link work
-    if (t && t.closest && t.closest('.srToggle, .muteBtn, .secret, .who')) return;  // own handlers
+    if (t && t.closest && t.closest('.srToggle, .muteBtn, .secret, .who, .addrSheet')) return;  // own handlers
 
     interacted = true;
     clearTimeout(autoTimer); clearTimeout(nudgeTimer);
@@ -142,7 +189,8 @@
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     if (document.activeElement && document.activeElement.closest &&
-        document.activeElement.closest('.shelf a, .srToggle')) return;
+        document.activeElement.closest('.shelf a, .srToggle, .addrSheet')) return;
+    if (addrSheet && !addrSheet.hidden) return;   // sheet owns the keyboard while open
     interacted = true; clearTimeout(autoTimer); clearTimeout(nudgeTimer);
     setOpen(!isOpen, 'pulled');
   });
@@ -190,21 +238,35 @@
   ];
   var PICK_KEY = 'fields_fridge_suburb';
   var picker = document.getElementById('suburbPick');
+  var optMarket = document.getElementById('optMarket');
+
+  /* True once we know the visitor's suburb (they chose it, chose it last time, or
+     my-home recognised them). Until then the market option must ASK — never fall
+     through to /market-intelligence, which 301s to Robina, i.e. somebody else's
+     suburb. */
+  var suburbResolved = false;
+  /* Set when the market option was tapped with no suburb yet: picking one then
+     navigates straight away, instead of making them tap the shelf a second time. */
+  var pendingMarketNav = false;
 
   function findSuburb(key) {
     for (var i = 0; i < SUBURBS.length; i++) if (SUBURBS[i].key === key) return SUBURBS[i];
     return null;
   }
 
+  function marketUrl(sub) { return 'https://fieldsestate.com.au/market-intelligence/' + sub.slug; }
+
   function setSuburb(key, source) {
     var sub = findSuburb(key);
     if (!sub) return false;
-    var a  = document.getElementById('optMarket');
     var lb = document.getElementById('optMarketLabel');
-    if (a)  a.href = 'https://fieldsestate.com.au/market-intelligence/' + sub.slug;
+    if (optMarket) optMarket.href = marketUrl(sub);
     if (lb) lb.childNodes[0].nodeValue = "What's happening in " + sub.name + ' ';
     if (picker && picker.value !== key) picker.value = key;
+    suburbResolved = true;
+    if (picker) picker.classList.remove('is-asking');
     emit('fridge_suburb', { suburb: key, source: source });
+    if (pendingMarketNav) { pendingMarketNav = false; location.href = marketUrl(sub); }
     return true;
   }
 
@@ -287,6 +349,171 @@
       setTimeout(function () { window.location.href = HOME; }, VAULT_MS);
     });
   }
+
+  /* ── The four options ─────────────────────────────────────────────────
+     Every shelf link is a real <a> with a working fallback href, so with this
+     file deleted the page still goes somewhere sensible. Here we UPGRADE them:
+
+       market   — needs a suburb. If we already know it (chosen / remembered /
+                  recognised) the link is live and we let it through. If we do
+                  NOT, we intercept and open the picker rather than let the href
+                  fall through to /market-intelligence, which 301s to Robina.
+
+       address  — sold / for-sale / worth all live on ONE page: the visitor's own
+                  /off-market/<slug>. We intercept, ask for the address, and send
+                  them there jumped to the rail named by data-anchor. The generic
+                  fallback href only fires with JS off. */
+  var OFFMARKET = 'https://fieldsestate.com.au/off-market/';
+  var ADDR_API  = 'https://fieldsestate.com.au/api/v1/address-search';
+
+  /* Mirror of slugifyAddress() in netlify/functions/analyse-your-home-submit.mjs
+     and components/PropertyBridgeV2. Keep the three in step — the server keys the
+     /off-market page off the same transform.
+       "14 Fern Street, Burleigh Waters QLD 4226" -> "14-fern-street-burleigh-waters" */
+  function slugifyAddress(address) {
+    if (!address || typeof address !== 'string') return null;
+    var cleaned = address
+      .replace(/\s+QLD\s+\d{4}.*$/i, '')
+      .replace(/\s+\d{4}\s*$/, '')
+      .replace(/,/g, ' ')
+      .replace(/[^a-zA-Z0-9\s\/-]/g, '')
+      .replace(/[\s\/]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .toLowerCase();
+    return cleaned || null;
+  }
+
+  var addrSheet   = document.getElementById('addrSheet');
+  var addrScrim   = document.getElementById('addrScrim');
+  var addrClose   = document.getElementById('addrClose');
+  var addrInput   = document.getElementById('addrInput');
+  var addrList    = document.getElementById('addrList');
+  var addrForm    = document.getElementById('addrForm');
+  var addrTitle   = document.getElementById('addrTitle');
+  var addrEyebrow = document.getElementById('addrEyebrow');
+  var addrHint    = document.getElementById('addrHint');
+  var addrAnchor  = '';     // #v5-near | #v5-new | #v5-valuation for the current flow
+  var addrContext = '';     // the shelf's data-context, for events
+  var addrTimer   = null;
+  var addrSeq     = 0;      // discards out-of-order autocomplete responses
+
+  function openAddrSheet(anchor, context) {
+    if (!addrSheet) return;
+    addrAnchor = anchor || '';
+    addrContext = context || '';
+    if (addrEyebrow) addrEyebrow.textContent = 'Your home';
+    if (addrTitle)   addrTitle.textContent = 'Which home is yours?';
+    if (addrHint)    addrHint.textContent = context
+      ? 'We’ll show you ' + context + ', on your own page.'
+      : 'Robina, Varsity Lakes and Burleigh Waters — one page for every home.';
+    addrInput.value = '';
+    addrList.innerHTML = '';
+    addrList.classList.remove('has');
+    addrSheet.hidden = false;
+    /* let layout settle before the open class so the transition actually runs */
+    requestAnimationFrame(function () { addrSheet.classList.add('is-open'); });
+    setTimeout(function () { try { addrInput.focus({ preventScroll: true }); } catch (e) { addrInput.focus(); } }, 60);
+    emit('fridge_address_open', { anchor: addrAnchor, context: addrContext });
+  }
+
+  function closeAddrSheet() {
+    if (!addrSheet || addrSheet.hidden) return;
+    addrSheet.classList.remove('is-open');
+    clearTimeout(addrTimer); addrSeq++;
+    setTimeout(function () { addrSheet.hidden = true; }, 220);
+  }
+
+  function goToHome(address, via) {
+    var slug = slugifyAddress(address);
+    if (!slug) return;
+    /* address is included ON PURPOSE — the server recomputes the slug from it and
+       find-or-creates the CRM record for this household, back-attributing this
+       device's whole fridge history to the address. */
+    emit('fridge_address_go', { slug: slug, address: address, anchor: addrAnchor, context: addrContext, via: via });
+    /* give the beacon a beat to leave before we navigate away */
+    setTimeout(function () { location.href = OFFMARKET + slug + addrAnchor; }, 60);
+  }
+
+  function renderSuggest(items) {
+    addrList.innerHTML = '';
+    if (!items || !items.length) { addrList.classList.remove('has'); return; }
+    items.forEach(function (it) {
+      var full = it.address || it.address_raw || '';
+      if (!full) return;
+      var li = document.createElement('li');
+      var b  = document.createElement('button');
+      b.type = 'button';
+      b.className = 'addrOpt';
+      b.textContent = full;
+      b.addEventListener('click', function (e) { e.stopPropagation(); goToHome(full, 'suggestion'); });
+      li.appendChild(b);
+      addrList.appendChild(li);
+    });
+    addrList.classList.add('has');
+  }
+
+  function fetchSuggest(q) {
+    var seq = ++addrSeq;
+    fetch(ADDR_API + '?q=' + encodeURIComponent(q) + '&limit=6')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (seq !== addrSeq) return;                 // a newer keystroke superseded this
+        renderSuggest((d && d.results) || []);
+        emit('fridge_address_suggest', { q_len: q.length, n: ((d && d.results) || []).length });
+      })
+      .catch(function () { if (seq === addrSeq) renderSuggest([]); });
+  }
+
+  if (addrInput) {
+    addrInput.addEventListener('input', function () {
+      var v = addrInput.value.trim();
+      clearTimeout(addrTimer);
+      if (v.length < 3) { addrSeq++; renderSuggest([]); return; }
+      addrTimer = setTimeout(function () { fetchSuggest(v); }, 220);
+    });
+  }
+  if (addrForm) {
+    /* Enter with no pick: take the top suggestion if there is one, else slugify
+       what they typed. A slightly-off address still lands on a self-healing
+       /off-market page rather than nothing. */
+    addrForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var first = addrList.querySelector('.addrOpt');
+      if (first) { goToHome(first.textContent, 'typed_enter_top'); return; }
+      var v = addrInput.value.trim();
+      if (v.length >= 4) goToHome(v, 'typed_raw');
+    });
+  }
+  if (addrScrim) addrScrim.addEventListener('click', function (e) { e.stopPropagation(); closeAddrSheet(); });
+  if (addrClose) addrClose.addEventListener('click', function (e) { e.stopPropagation(); closeAddrSheet(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && addrSheet && !addrSheet.hidden) closeAddrSheet();
+  });
+
+  /* Intercept the shelf links. Bound on each <a> so preventDefault reliably
+     stops navigation before the fallback href fires. */
+  Array.prototype.forEach.call(document.querySelectorAll('.shelf a'), function (a) {
+    a.addEventListener('click', function (e) {
+      var flow = a.getAttribute('data-flow');
+      if (flow === 'address') {
+        e.preventDefault();
+        openAddrSheet(a.getAttribute('data-anchor') || '', a.getAttribute('data-context') || '');
+        return;
+      }
+      if (flow === 'market') {
+        if (suburbResolved) return;               // href is already the right suburb — let it go
+        e.preventDefault();
+        pendingMarketNav = true;                  // picking a suburb now navigates
+        if (picker) {
+          picker.classList.add('is-asking');
+          try { picker.focus({ preventScroll: true }); } catch (err) { picker.focus(); }
+          if (typeof picker.showPicker === 'function') { try { picker.showPicker(); } catch (err) {} }
+        }
+        emit('fridge_market_needs_suburb', {});
+      }
+    });
+  });
 
   /* ── The door WAITS for a tap. It does not auto-open. ─────────────────
      It used to open itself at 0.8s, and that made the single most important
