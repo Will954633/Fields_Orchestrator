@@ -500,6 +500,12 @@ def build_contact_doc(distinct_id: str, v: dict, existing: dict | None = None) -
         "home_confirmed": (existing or {}).get("home_confirmed") or {},
         # Physical scan reconciliation (written by minisite-visit.mjs).
         "physical_scan": (existing or {}).get("physical_scan") or {},
+        # Fridge-magnet engagement ledger for this household (written by
+        # fridge-event.mjs when a device enters its address on /fridge). Sub-doc,
+        # so carried as {} not None (dotted $set into a null raises WriteError 28).
+        # Must be here or the hourly replace_one wipes the whole fridge history we
+        # just back-attributed to the address. See [[fridge_magnet_landing_concept]].
+        "fridge_engagement": (existing or {}).get("fridge_engagement") or {},
         # Lead-link identity join (written by lead-link-visit.mjs when a lead clicks
         # their tokenised SMS/email link) + the tokens that address it. Sub-doc, so
         # carried as {} not None (dotted $set into a null raises WriteError 28). Must
