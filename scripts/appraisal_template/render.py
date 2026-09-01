@@ -1488,7 +1488,7 @@ def _default_satellite_src(subject_id: str) -> str:
     """Path-relative satellite image src for the V4 preview. Subjects that
     have a working satellite_analysis.satellite_image_url should use that
     instead — this is the fallback for the asset Will manually placed."""
-    return f"assets/satellite_{subject_id}.png"
+    return f"assets/sat/satellite_{subject_id}.png"
 
 
 def _n_word(n: int) -> str:
