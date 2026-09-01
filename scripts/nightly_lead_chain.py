@@ -76,13 +76,20 @@ STEPS = [
          "PostHog site engagement -> crm_contacts. The hourly pass last ran at 23:07, "
          "so without this the final ~50 minutes of the day are missing from every "
          "downstream lead record."),
+    Step("bind_report_leads_to_crm", [PY, f"{ROOT}/scripts/bind_report_leads_to_crm.py"],
+         "Join leadpage property-report leads (Owner-Market carousel + other AYH-leadpage "
+         "ads) to their CRM contact: stamp owner.posthog_distinct_id into lead_web + the "
+         "address/source/attribution, so lead_web_activity harvests their behaviour and "
+         "the crm-contact page renders it. Must run AFTER crm_sync (contact must exist / "
+         "not mid-replace) and BEFORE lead_web_activity (which reads what this writes).",
+         needs=["crm_sync"]),
     Step("lead_web_activity", [PY, f"{ROOT}/scripts/lead_web_activity.py"],
          "Pull each identity-bound lead's on-site pageview journey onto their "
          "crm_contact (lead_web.activity). Reads lead_web.posthog_distinct_id written "
-         "by lead-link-visit.mjs when a lead clicks their tokenised link, and stamps "
-         "the durable journey before the sheet/worklist steps render it. Needs "
-         "crm_sync only (it must not run mid-replace of the same doc).",
-         needs=["crm_sync"]),
+         "by lead-link-visit.mjs (tokenised click-through) AND by bind_report_leads_to_crm "
+         "(leadpage report leads), and stamps the durable journey before the sheet/worklist "
+         "steps render it. Needs crm_sync (must not run mid-replace) + the bind step.",
+         needs=["crm_sync", "bind_report_leads_to_crm"]),
     Step("lead_intelligence", [PY, f"{ROOT}/scripts/samantha/lead_intelligence.py"],
          "Unify + enrich + score every lead into lead_worklist. Reads crm_contacts "
          "and the Gold_Coast listing status the 23:30-23:55 syncs just refreshed.",
