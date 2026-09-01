@@ -27,6 +27,7 @@ load_dotenv("/home/fields/Fields_Orchestrator/.env")
 from shared.db import get_client  # noqa: E402
 import crm_lead_sync  # noqa: E402
 import fpf_send  # noqa: E402
+import leadform_ph_match  # noqa: E402
 from job_status import job_run  # noqa: E402
 
 PAGE_ID = "889412530933297"
@@ -426,6 +427,25 @@ def run(args):
                     crm_lead_sync.upsert_lead(coll.database, doc)
                 except Exception as e:
                     print(f"    CRM upsert failed: {e}", file=sys.stderr)
+                # Leadform leads are captured inside Facebook (invisible in PostHog);
+                # if they tapped the completion button through to the site, join that
+                # anonymous session by timestamp NOW. A first miss stays `pending` and
+                # is retried by sweep_pending below (the landing can arrive after this
+                # poll saw the lead). Best-effort — never fail the pull on a match.
+                try:
+                    leadform_ph_match.match_lead(coll.database, doc)
+                except Exception as e:
+                    print(f"    ph timestamp-match failed: {e}", file=sys.stderr)
+
+    # Retry recent leads whose landing hadn't ingested when first seen.
+    ph_matched = ph_pending = 0
+    if not args.dry_run:
+        try:
+            ph_matched, ph_pending = leadform_ph_match.sweep_pending(coll.database)
+            if ph_matched or ph_pending:
+                print(f"  ph sweep: {ph_matched} matched, {ph_pending} still pending")
+        except Exception as e:
+            print(f"    ph sweep failed: {e}", file=sys.stderr)
 
     print(f"done — {new_count} new lead(s)")
     return new_count, len(forms)
