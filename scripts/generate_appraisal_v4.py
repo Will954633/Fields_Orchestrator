@@ -759,7 +759,26 @@ def render_appraisal(
     # placeholder: the correct last resort is the boundary aerial, which is
     # always the subject property.
     expected_hero = OUTPUT_DIR / "assets" / "img" / f"cover_hero_{subject_id}.jpg"
-    expected_sat = OUTPUT_DIR / "assets" / f"satellite_{subject_id}.png"
+    # Satellite tiles are per-render scratch (the PDF embeds them at print time and
+    # the source is always re-fetchable from satellite_analysis.*_image_url). They
+    # used to write straight into assets/ on the 97G root disk and never got evicted
+    # — 8,469 files / 7.25G accumulated from two full-catchment pre-warm bursts and
+    # filled the disk (see logs/fix-history 2026-09-01 [SAT-SCRATCH-ROOT-DISK]).
+    # Route them into assets/sat/, symlinked onto the 738G /data/blobs disk exactly
+    # like assets/img/. Self-heals the symlink so a fresh checkout can't regrow root.
+    _sat_dir = OUTPUT_DIR / "assets" / "sat"
+    _sat_blob = Path("/data/blobs/appraisal_assets/sat")
+    if not _sat_dir.is_symlink() and _sat_blob.parent.is_dir():
+        try:
+            _sat_blob.mkdir(parents=True, exist_ok=True)
+            if _sat_dir.is_dir():
+                for _f in _sat_dir.iterdir():
+                    _f.replace(_sat_blob / _f.name)
+                _sat_dir.rmdir()
+            _sat_dir.symlink_to(_sat_blob)
+        except OSError as _e:
+            print(f"  [WARN] could not symlink sat cache to blob ({_e}); using root")
+    expected_sat = _sat_dir / f"satellite_{subject_id}.png"
     expected_hero.parent.mkdir(parents=True, exist_ok=True)
     expected_sat.parent.mkdir(parents=True, exist_ok=True)
 
