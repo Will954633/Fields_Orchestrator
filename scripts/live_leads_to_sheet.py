@@ -42,6 +42,9 @@ Usage:
 """
 from __future__ import annotations
 import argparse
+import base64
+import hashlib
+import hmac
 import os
 import sys
 import warnings
@@ -138,6 +141,25 @@ HEADERS = ["Date", "Source", "Name", "Email", "Phone", "City", "Country",
 # and so no distinct_id; those cells stay blank rather than linking somewhere useless.
 POSTHOG_PROJECT_ID = "348370"
 POSTHOG_PERSON_URL = "https://us.posthog.com/project/" + POSTHOG_PROJECT_ID + "/person/{did}"
+
+# For AYH / property-report leads that have a bound CRM contact, the same column links
+# instead to the friendly read-only CRM page (crm-contact.mjs) — address + full on-site
+# behaviour + attribution on one page — which is more useful than the raw PostHog feed
+# (and the distinct_id is still shown inside that page). Signed link, same HMAC scheme as
+# priority_calls_to_sheet.crm_link. See fix-history [REPORT-LEAD-CRM-BIND].
+CRM_SITE = "https://fieldsestate.com.au"
+
+
+def crm_contact_link(contact_id) -> str:
+    """Signed /api/v1/crm-contact URL. '' if the secret is unset (never a dead link)."""
+    secret = os.environ.get("REPORT_LINK_SECRET", "")
+    if not secret or not contact_id:
+        return ""
+    cid = str(contact_id)
+    key = base64.urlsafe_b64encode(
+        hmac.new(secret.encode(), f"crm:{cid}".encode(), hashlib.sha256).digest()
+    ).decode().rstrip("=")[:16]
+    return f"{CRM_SITE}/api/v1/crm-contact?id={cid}&k={key}"
 # Selling Plan (col L, 0-indexed 11) and Lead ID (col M, 0-indexed 12) are the
 # only two auto-refreshed-in-place columns (see LIVE-LEADS-SHEET-AUTOUPDATE
 # fix-history, 2026-07-21) -- everything else is written once, at first add,
@@ -269,6 +291,7 @@ def ayh_rows(db):
             "email": owner.get("email") or "",
             "phone": owner.get("phone") or "",
             "posthog_distinct_id": attribution.get("posthog_distinct_id") or owner.get("posthog_distinct_id"),
+            "crm_contact_id": owner.get("crm_contact_id"),
             "suburb_address": address or "",
             "details": "; ".join(details_parts),
             "campaign": ft.get("utm_campaign", "") or ft.get("referrer", "") or "",
@@ -728,12 +751,22 @@ def refresh_posthog_links(svc, ssid, all_leads, dry_run=False):
     updates = []
     for lead in all_leads:
         did = lead.get("posthog_distinct_id")
-        if not did:
+        crm_url = crm_contact_link(lead.get("crm_contact_id"))
+        if not did and not crm_url:
             continue  # e.g. Facebook Lead Ads -- no on-site session, nothing to link to
         hit = row_by_lead_id.get(lead["lead_id"])
         if hit is None:
             continue
         row_num, existing = hit
+        # A bound CRM contact wins: link to the friendly CRM page (address + behaviour +
+        # attribution). We OVERWRITE an existing PostHog link here so rows written before
+        # the report-lead bind get upgraded -- but skip if already showing "CRM ↗".
+        if crm_url:
+            if existing == "CRM ↗":
+                continue
+            updates.append({"range": f"'{TAB}'!O{row_num}",
+                            "values": [[f'=HYPERLINK("{crm_url}","CRM ↗")']]})
+            continue
         if existing:
             continue  # already linked; the person page URL never changes
         url = POSTHOG_PERSON_URL.format(did=did)
