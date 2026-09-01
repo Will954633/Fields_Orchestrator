@@ -507,6 +507,10 @@ def build_contact_doc(distinct_id: str, v: dict, existing: dict | None = None) -
         # bound to the lead. See [[parked_lead_token_identity_join]].
         "lead_web": (existing or {}).get("lead_web") or {},
         "link_token": (existing or {}).get("link_token"),
+        # Personalised buyer link (/for-sale-v3?lead=<link_token>) minted by
+        # buyer_link_gen.py and surfaced in the leads sheet. Must survive the
+        # hourly replace_one alongside link_token. See [[personalised_buyer_link]].
+        "buyer_link": (existing or {}).get("buyer_link"),
         "communications": (existing or {}).get("communications", []),
         "owner": (existing or {}).get("owner", "will"),
         "lead_quality": (existing or {}).get("lead_quality"),
