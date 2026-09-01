@@ -73,30 +73,43 @@
             <option value="gold-coast">Elsewhere on the Gold Coast</option>
           </select>
         </div>
+        <!-- All four options are real <a> links in the initial HTML with a
+             working fallback href — that is the SSR contract (verify/prod.mjs)
+             and the no-JS path. JS then PROGRESSIVELY ENHANCES them:
+               • data-flow="market"  — gated on a suburb choice (never a silent
+                 Robina default). No suburb known → the tap opens the picker.
+               • data-flow="address" — the tap opens the address sheet; picking
+                 an address sends them to THEIR /off-market/<slug> page, jumped
+                 to the section named by data-anchor (all three sold/for-sale/
+                 worth answers live on that one page as separate rails).
+             If JS never runs, every link still goes somewhere sensible. -->
         <ul class="shelves" id="shelves">
           <li class="shelf">
-            <a href="https://fieldsestate.com.au/market-intelligence" id="optMarket">
+            <a href="https://fieldsestate.com.au/market-intelligence" id="optMarket" data-flow="market">
               <span class="label" id="optMarketLabel">What's happening in your market
                 <span class="sub">Prices, supply and days on market</span></span>
               <span class="go" aria-hidden="true">→</span>
             </a>
           </li>
           <li class="shelf">
-            <a href="https://fieldsestate.com.au/recently-sold">
+            <a href="https://fieldsestate.com.au/recently-sold"
+               data-flow="address" data-anchor="#v5-new" data-context="what sold near you">
               <span class="label">What sold near you recently
                 <span class="sub">Every settled sale, with the actual price</span></span>
               <span class="go" aria-hidden="true">→</span>
             </a>
           </li>
           <li class="shelf">
-            <a href="https://fieldsestate.com.au/for-sale">
+            <a href="https://fieldsestate.com.au/for-sale"
+               data-flow="address" data-anchor="#v5-near" data-context="what's for sale near you">
               <span class="label">What's for sale nearby
                 <span class="sub">Everything currently on the market</span></span>
               <span class="go" aria-hidden="true">→</span>
             </a>
           </li>
           <li class="shelf">
-            <a href="https://fieldsestate.com.au/analyse-your-home">
+            <a href="https://fieldsestate.com.au/analyse-your-home"
+               data-flow="address" data-anchor="#v5-valuation" data-context="what your home is worth">
               <span class="label">What's my home worth
                 <span class="sub">A comparable range, and how we got there</span></span>
               <span class="go" aria-hidden="true">→</span>
@@ -138,6 +151,30 @@
 
     </div>
     <p class="prompt" aria-hidden="true">Tap to open</p>
+  </div>
+
+  <!-- Address sheet. Hidden in the raw HTML (the no-JS path never sees it) and
+       driven entirely by fridge.js: it needs a live lookup + a computed slug, so
+       there is no static URL it could degrade to — which is exactly why the four
+       shelf links keep their own working fallback hrefs above. Lives OUTSIDE the
+       .cavity so it can cover the whole viewport; fridge.js adds it to the "don't
+       treat this tap as a door pull" ignore list. -->
+  <div class="addrSheet" id="addrSheet" hidden>
+    <div class="addrScrim" id="addrScrim"></div>
+    <div class="addrPanel" role="dialog" aria-modal="true" aria-labelledby="addrTitle">
+      <button type="button" class="addrClose" id="addrClose" aria-label="Close">&times;</button>
+      <p class="addrEyebrow" id="addrEyebrow">Your home</p>
+      <h2 class="addrTitle" id="addrTitle">Which home is yours?</h2>
+      <form class="addrForm" id="addrForm" autocomplete="off">
+        <input type="search" class="addrInput" id="addrInput"
+               placeholder="Start typing your street address…"
+               autocomplete="off" autocapitalize="words" autocorrect="off"
+               spellcheck="false" enterkeyhint="go" inputmode="text"
+               aria-label="Your street address">
+      </form>
+      <ul class="addrList" id="addrList" aria-live="polite"></ul>
+      <p class="addrHint" id="addrHint">Robina, Varsity Lakes and Burleigh Waters — one page for every home.</p>
+    </div>
   </div>
 </main>
 
