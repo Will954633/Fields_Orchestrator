@@ -125,6 +125,11 @@ STEPS = [
          "are hand-set by log_contact_touch.py, so this tab is still correct on a night "
          "when behavioural enrichment fails.",
          needs=["crm_sync"]),
+    Step("mail_log_to_sheet", [PY, f"{ROOT}/scripts/mail_log_to_sheet.py"],
+         "The Mail Log tab — every physical mail piece sent (system_monitor.mail_log), "
+         "so posted_date updates and any new batch reach the tab nightly. Independent of "
+         "the digital-lead steps; a full-rewrite mirror of an authoritative Mongo record.",
+         needs=(), supports_dry_run=False),
 ]
 
 
