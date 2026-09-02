@@ -408,6 +408,74 @@ def aggregate_monthly_to_quarterly(timeseries: list[dict]) -> list[dict]:
     return result
 
 
+# --- Leading-indicator chart series (for the /market-intelligence sell-now page) ---
+#
+# These are the same two "leading indicators that predate price moves" the
+# Owner_Subject_Article renders (14_Articles/Owner_Subject_Article, from
+# labour_context.json): QLD Wage Price Index and QLD Household Spending, BOTH as
+# annual growth %. They are macro (state-level), identical across suburbs, and
+# deliberately kept SEPARATE from the per-suburb `raw_indicators`/`suburbs` panel
+# so this block can't disturb the existing "Current Market Signals" panel.
+#
+# NOTE ON "Retail Turnover": the old ABS Retail Trade (RT) series that the panel
+# still labels "Consumer Spending" is FROZEN at 2025-06 — ABS replaced it with the
+# Monthly Household Spending Indicator (HSI). So the living leading indicator here
+# is Household Spending, not Retail Turnover.
+LEADING_INDICATOR_SERIES = {
+    "wpi": {
+        "dataflow": "WPI",
+        "key": "3.THRPEB.7.TOT.10.3.Q",   # QLD, total, YoY %, quarterly
+        "start": "2023-Q3",
+        "keep": 11,
+        "title": "Wage growth, Queensland",
+        "subtitle": "Wage Price Index, annual growth (%). A leading indicator of Gold Coast prices in our analysis.",
+        "source": "ABS Wage Price Index",
+    },
+    "household_spending": {
+        "dataflow": "HSI_M",
+        "key": "9.TOT.CUR.20.3.M",        # QLD, total, current prices, YoY %, monthly
+        "start": "2023-06",
+        "keep": 14,
+        "title": "Household spending, Queensland",
+        "subtitle": "Monthly Household Spending Indicator, annual growth (%). Our strongest gauge of market strength.",
+        "source": "ABS Monthly Household Spending Indicator",
+    },
+}
+
+
+def build_leading_indicators() -> dict:
+    """Fetch the two leading-indicator YoY series and return a chart-ready block.
+
+    Mirrors the structure of labour_context.json's `leading_indicators` so the
+    website can render them as clean single-line % charts. Raises if either
+    series comes back too short to plot (Rule 7b: an empty result must assert an
+    outcome, not merely fail to throw)."""
+    out = {}
+    for skey, cfg in LEADING_INDICATOR_SERIES.items():
+        print(f"  Fetching leading indicator: {cfg['title']}...")
+        series = parse_abs_timeseries(
+            fetch_abs_data(cfg["dataflow"], cfg["key"], start_period=cfg["start"])
+        )
+        if len(series) < 4:
+            raise RuntimeError(
+                f"leading indicator '{skey}' returned {len(series)} points "
+                f"(need >=4) — ABS series {cfg['dataflow']}/{cfg['key']} is "
+                f"broken or discontinued, not empty"
+            )
+        series = series[-cfg["keep"]:]
+        latest = series[-1]
+        out[skey] = {
+            "title": cfg["title"],
+            "subtitle": cfg["subtitle"],
+            "series": series,
+            "latest": latest["value"],
+            "period": quarter_label(latest["period"]),
+            "source": cfg["source"],
+        }
+        print(f"    {latest['period']} = {latest['value']}% ({len(series)} pts)")
+    return out
+
+
 def build_market_signals(dry_run: bool = False):
     """Fetch all ABS data and build market signals documents."""
 
@@ -588,6 +656,14 @@ def build_market_signals(dry_run: bool = False):
         } for k, v in indicator_data.items()},
         "suburbs": suburb_docs,
     }
+
+    # Leading-indicator chart series (WPI + Household Spending, YoY %). Kept in its
+    # own top-level block so a failure here can't corrupt the panel data above.
+    try:
+        doc["leading_indicators"] = build_leading_indicators()
+    except Exception as e:
+        print(f"    ERROR building leading indicators: {e}", file=sys.stderr)
+        doc["leading_indicators"] = {}
 
     if dry_run:
         print("\n=== DRY RUN — would write to system_monitor.market_signals ===")
