@@ -9,13 +9,13 @@ import csv, json, os, shutil, subprocess, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 BATCH = sys.argv[1]                       # dir with <slug>.teaser.pdf + _built_slugs.json
 N = int(sys.argv[2]) if len(sys.argv) > 2 else 50
-FLOW = "OT.1"                             # Owner Teaser, batch 1 (no underscore: slug_of splits on _)
+FLOW = os.environ.get("TEASER_FLOW", "OT.1")  # e.g. OTN.1 = Owner Teaser No-note (no underscore: slug_of splits on _)
 LAYUP = os.path.join(BATCH, "layup")
 os.makedirs(LAYUP, exist_ok=True)
 
 import re
 built = json.load(open(os.path.join(BATCH, "_built_slugs.json")))   # rank order, successes only
-addr_by_slug = {e["slug"]: e["address"] for e in json.load(open("/tmp/teaser_build_list_all98.json"))}
+addr_by_slug = {e["slug"]: e["address"] for e in json.load(open(os.environ.get("TEASER_BUILD_LIST", "/tmp/teaser_build_list_all98.json")))}
 
 def resolve_pdf(slug):
     """The built filename can drop a trailing duplicate-doc suffix (-NNNN)."""
