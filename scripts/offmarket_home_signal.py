@@ -25,9 +25,11 @@ Systems Health → Process Registry board via job_run(cadence_hours=24).
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
+import urllib.request
 from collections import defaultdict
 from datetime import datetime, timezone
 
@@ -36,6 +38,41 @@ from ceo_agent_lib import get_client, load_env_file  # noqa: E402
 from job_status import job_run  # noqa: E402
 
 OFFMARKET_RE = re.compile(r"^/off-market/([a-z0-9][a-z0-9-]{2,80})/?$", re.I)
+
+# PostHog capture endpoint + public ingest key (the same phc_ token root.tsx / lead-
+# link-visit.mjs use — safe to embed; it can only WRITE events). Used to tag the PERSON
+# for a device with their inferred home address, so device/person->address is queryable
+# inside PostHog, not just Mongo. Best-effort: a PostHog failure never fails the CRM bind.
+PH_CAPTURE_URL = "https://us.i.posthog.com/capture/"
+PH_INGEST_KEY = (os.environ.get("POSTHOG_INGEST_KEY")
+                 or "phc_RQ68rG9adv6NYtoZS4JzmJVzVyOWUfprV9ceHb0nLEs")
+
+
+def tag_person_home(distinct_id: str, address: str, slug: str) -> bool:
+    """Set home_address/home_address_slug/home_confidence on the PostHog PERSON for this
+    device. Idempotent ($set). Returns True on a 2xx, False on any error (non-fatal)."""
+    try:
+        body = json.dumps({
+            "api_key": PH_INGEST_KEY,
+            "event": "$identify",
+            "distinct_id": distinct_id,
+            "properties": {
+                "$set": {
+                    "home_address": address,
+                    "home_address_slug": slug,
+                    "home_confidence": "medium_high",
+                    "home_source": "offmarket_google_lookup",
+                },
+                "$set_once": {"home_first_inferred_at": datetime.now(timezone.utc).isoformat()},
+            },
+        }).encode()
+        req = urllib.request.Request(
+            PH_CAPTURE_URL, data=body, headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=10).read()
+        return True
+    except Exception as e:  # noqa: BLE001 — best-effort, never break the bind
+        print(f"  posthog person-tag failed for {distinct_id[:12]} (non-fatal): {e}")
+        return False
 
 
 def offmarket_slug(path: str | None) -> str | None:
@@ -109,6 +146,8 @@ def main() -> None:
         )
 
         contacts_updated = 0
+        bound = 0
+        tagged = 0
         for did, slug_set in all_slugs.items():
             primary_slug = latest.get(did, (sorted(slug_set)[0], ""))[0]
             primary_addr = addr_map.get(primary_slug) or pretty_address(primary_slug)
@@ -121,6 +160,17 @@ def main() -> None:
                         "offmarket_home.source": "offmarket_google",
                         "offmarket_home.at": now,
                         "offmarket_home.referrer": "google",
+                        # Bind the device for on-site behaviour logging: lead_web_activity.py
+                        # harvests every contact with lead_web.posthog_distinct_id set, so
+                        # this makes the organic owner's full journey (timeline, dwell, CTA,
+                        # article read) appear on their crm-contact page — the same CRM the
+                        # FB leads get. distinct_id goes into lead_web ONLY (never posthog_ids
+                        # — crm_sync would fork on that). See [[parked_lead_token_identity_join]].
+                        "lead_web.posthog_distinct_id": did,
+                        "lead_web.source": "offmarket_organic",
+                        "lead_web.landing": "offmarket",
+                        "lead_web.bound_from": "offmarket_home_signal",
+                        "lead_web.bound_at": now.isoformat(),
                         "updated_at": now,
                         "last_seen": now.date().isoformat(),
                     },
@@ -130,6 +180,7 @@ def main() -> None:
                     "$addToSet": {
                         "tags": "offmarket_google_lookup",
                         "offmarket_home.slugs": {"$each": sorted(slug_set)},
+                        "lead_web.distinct_ids": did,
                     },
                     "$setOnInsert": {
                         "posthog_ids": [did],
@@ -149,14 +200,44 @@ def main() -> None:
                 upsert=True,
             )
             contacts_updated += 1
+            bound += 1
 
-        beat.detail = (f"{contacts_updated} contacts flagged from "
+            # Sticky home address for the crm-contact page — only where absent, so a
+            # contact with a CONFIRMED address (home_confirmed / minisite) is never
+            # clobbered by this weaker inferred one.
+            db["crm_contacts"].update_one(
+                {"posthog_ids": did,
+                 "$or": [{"property_address": None}, {"property_address": {"$exists": False}}]},
+                {"$set": {"property_address": primary_addr}},
+            )
+
+            # Tag the PostHog PERSON with the home address — but only when it changed,
+            # so a nightly re-run doesn't re-POST all ~500 unchanged persons every time.
+            existing = db["crm_contacts"].find_one(
+                {"posthog_ids": did}, {"offmarket_home.ph_tagged_slug": 1})
+            already = ((existing or {}).get("offmarket_home") or {}).get("ph_tagged_slug")
+            if already != primary_slug and tag_person_home(did, primary_addr, primary_slug):
+                db["crm_contacts"].update_one(
+                    {"posthog_ids": did},
+                    {"$set": {"offmarket_home.ph_tagged_slug": primary_slug}})
+                tagged += 1
+
+        beat.detail = (f"{contacts_updated} contacts flagged / {bound} bound for behaviour / "
+                       f"{tagged} newly PostHog-tagged, from "
                        f"{journeys_scanned} google→off-market sessions")
         beat.metrics = {
             "contacts_updated": contacts_updated,
+            "bound_for_behaviour": bound,
+            "posthog_tagged": tagged,
             "journeys_scanned": journeys_scanned,
             "distinct_addresses": len(wanted),
         }
+        # Rule 7b — google→off-market sessions exist but produced 0 contacts => the
+        # organic_journeys read or the slug extraction is broken, not "no owners looked up".
+        if journeys_scanned > 0 and contacts_updated == 0:
+            raise RuntimeError(
+                f"{journeys_scanned} google→off-market sessions scanned but 0 CRM contacts "
+                f"written — the address→CRM bind is broken, not idle.")
         print(f"offmarket_home_signal: {beat.detail}")
 
 
