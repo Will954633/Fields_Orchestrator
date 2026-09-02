@@ -76,6 +76,16 @@ components:
     pages: 2
     # ⚠ VDP: artwork is per-recipient, never a single file for the run.
     artwork: one PDF per piece, named in the work-order manifest
+  owner_teaser:
+    source: 17_Direct_Letterbox/Owner_Subject_Article
+    description: Per-address A4 double-sided "teaser" with aerial + QR to the off-market page
+    format: A4 double-sided (bled 216 x 303 mm)
+    stock: 170 gsm satin
+    pages: 2
+    artwork: one PDF per piece, named in the work-order manifest (VDP)
+  hand_written_note:
+    description: Per-address hand-written note, hand-delivered to Pronto, matched to the teaser by address
+    note: Physical inserts held at Pronto; present in Fields_OT only, NOT Fields_OTN.
   fridge_magnet:
     source: 00_Run_Commands/Logo_Files/fridge_magnet
     description: Green business-card magnet, QR to /fridge
@@ -149,6 +159,69 @@ flows:
         utm: utm_source=mailer&utm_medium=print&utm_campaign=home_report_v2
         first_dispatched: 2026-08-17
         pieces: 12
+
+  # ── Owner-teaser A/B (hand-written note vs none) ──────────────────────────
+  # Same per-address "teaser" artwork + identical QR (/off-market/<slug>?from=mailer)
+  # in BOTH arms. The ONLY manipulated variable is the hand-written note, so the two
+  # arms are held byte-identical on the printed teaser. Attribution is by DISJOINT
+  # address sets: every slug belongs to exactly one arm, so an off-market page scan
+  # maps to its arm via the batch manifest (no utm_term needed — see gap note below).
+
+  Fields_OT:
+    name: Owner teaser — WITH hand-written note (A/B arm A)
+    status: live
+    audience: >
+      Homeowner who viewed their own /off-market/<slug> page arriving ORGANICALLY
+      from Google (source system_monitor.organic_journeys, is_offmarket + google;
+      organic by construction). Ownership inferred from the self-address lookup.
+    trigger:
+      source: organic_journeys {is_offmarket:true, referring_domain:/google/i}, target suburbs
+      condition: resolves to a detached House, not currently for_sale, passes the teaser copy guard
+    planned_touches: 6
+    pack_out:
+      envelope: envelope_c4_branded
+      contents:
+        - component: owner_teaser
+          qty: 1
+        - component: hand_written_note
+          qty: 1
+        - component: fridge_magnet
+          qty: 2
+    touches:
+      "1":
+        code: Fields_OT.1
+        name: First owner teaser + hand-written note
+        artwork: owner_teaser (per-address)
+        qr_destination: https://fieldsestate.com.au/off-market/<slug>?from=mailer
+        first_dispatched: 2026-08-26     # order PD-0002 (John's paperwork read "Fields_OT.1")
+        pieces: 50
+
+  Fields_OTN:
+    name: Owner teaser — NO note (A/B arm B)
+    status: live
+    audience: >
+      Same audience and selection as Fields_OT, drawn from a DISJOINT set of
+      addresses (excludes everyone already mailed) so scans are separable by slug.
+    trigger:
+      source: same as Fields_OT
+      condition: same as Fields_OT
+    planned_touches: 6
+    pack_out: &pack_teaser_no_note
+      envelope: envelope_c4_branded
+      contents:
+        - component: owner_teaser
+          qty: 1
+        - component: fridge_magnet
+          qty: 2
+    touches:
+      "1":
+        code: Fields_OTN.1
+        name: First owner teaser, no note (A/B control for the note)
+        artwork: owner_teaser (per-address) — identical to Fields_OT.1
+        pack_out: *pack_teaser_no_note
+        qr_destination: https://fieldsestate.com.au/off-market/<slug>?from=mailer
+        first_dispatched: 2026-09-02     # order PD-0003
+        pieces: 50
 
 # ⚠ MEASUREMENT GAP, open as of 2026-08-17.
 # Fields_01.1 and Fields_02.1 currently carry the SAME utm_campaign and the same QR
