@@ -22,13 +22,47 @@ load_dotenv("/home/fields/Fields_Orchestrator/.env")
 from shared.db import get_client
 
 BRIEF_KEYS = ["area", "bedrooms", "bathrooms", "timeframe", "owns_gc_home",
-              "property_address", "suburb", "selling_timeframe"]
+              "property_address", "suburb", "selling_timeframe", "selling_intent"]
+# The buyer price-band question. Meta slugifies the form label into the field
+# key, so the exact key depends on the question wording — match any key that
+# looks like a "price range you're looking in" question rather than pinning one
+# literal string (a reworded form would silently drop the band again otherwise).
+PRICE_KEY_RE = re.compile(r"price.*(range|looking|budget)|budget", re.I)
 BASE_LEAD_SCORE = 25   # a form submission is a strong intent signal
 OPEN_PTS, CLICK_PTS = 3, 10
 
 
 def _now():
     return datetime.now(timezone.utc).isoformat()
+
+
+def parse_price_range(val):
+    """Parse an FB price-band answer into (min, max) whole dollars, either bound
+    None when open-ended. Handles the slugified shapes Meta emits, e.g.
+    '1.3_-_1.6m' -> (1300000, 1600000), 'under_$1m' -> (None, 1000000),
+    'over_$2m' -> (2000000, None). Returns (None, None) on anything unparseable."""
+    if not val:
+        return None, None
+    s = str(val).lower().replace("_", " ").replace(",", "")
+    # Capture each number with its own trailing unit so mixed bands like
+    # "800k - 1m" parse correctly; a unit-less number inherits the last unit seen
+    # in the string (e.g. "1.3 - 1.6m" -> both millions).
+    matches = re.findall(r"(\d+(?:\.\d+)?)\s*([mk]?)", s)
+    matches = [(n, u) for n, u in matches if n]
+    if not matches:
+        return None, None
+    fallback = next((u for _, u in reversed(matches) if u), "")
+    def to_dollars(n, u):
+        u = u or fallback
+        return int(round(float(n) * (1_000_000 if u == "m" else 1_000 if u == "k" else 1)))
+    dollars = [to_dollars(n, u) for n, u in matches]
+    if any(w in s for w in ("under", "below", "less than", "up to")):
+        return None, max(dollars)
+    if any(w in s for w in ("over", "above", "more than", "plus", "+")):
+        return min(dollars), None
+    if len(dollars) >= 2:
+        return min(dollars), max(dollars)
+    return dollars[0], dollars[0]
 
 
 def _slug(url):
@@ -62,6 +96,18 @@ def upsert_lead(db, lead):
     brief = {k: f[k] for k in BRIEF_KEYS if f.get(k) not in (None, "")}
     if home_address:
         brief["home_address"] = home_address
+    # Buyer price band. The form key is a slug of the question label; find it by
+    # shape, keep the raw answer, and derive structured min/max dollars so the
+    # personalised link can filter the feed to their budget.
+    price_raw = next((f[k] for k in f
+                      if PRICE_KEY_RE.search(k) and f.get(k) not in (None, "")), None)
+    if price_raw:
+        pmin, pmax = parse_price_range(price_raw)
+        brief["price_range"] = price_raw
+        if pmin is not None:
+            brief["price_min"] = pmin
+        if pmax is not None:
+            brief["price_max"] = pmax
     tags = ["fb_lead"]
     if lead.get("form_name"):
         tags.append(lead["form_name"])
