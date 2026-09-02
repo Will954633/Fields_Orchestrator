@@ -64,8 +64,17 @@ def _num(v):
 # All already emitted client-side (posthog.ts / ArticlePage / OffMarketV5) — no new
 # instrumentation. page_engagement carries the truth for "did they read it":
 # engaged_seconds + wall_seconds + max_depth_pct, fired on unmount.
+# $pageview + the engagement events. page_engagement (V5 off-market + article route) carries
+# wall/engaged_seconds + max_depth_pct. The DECK renderers (Discovery/V3/V4/OffMarketDeck) fire a
+# DIFFERENT schema — time_on_page.duration (total seconds), deck_exit.reached_pct (how far through
+# the deck), scroll_depth.max_depth — so a deck view has no page_engagement. We fold all of them in
+# so deck dwell/depth is as precise as V5's, not just page-gap timing. See [ORGANIC-OFFMARKET-CRM-BIND].
+# (scroll_depth is deliberately NOT included: it is the highest-volume event and its depth
+# is already covered by page_engagement.max_depth_pct (V5/article) + deck_exit.reached_pct
+# (deck). Adding it made the cohort query 504 on weight for marginal gain.)
 TIMELINE_EVENTS = ("$pageview", "page_engagement", "article_cta_click",
-                   "offmarket_market_article_open", "offmarket_market_article_read")
+                   "offmarket_market_article_open", "offmarket_market_article_read",
+                   "time_on_page", "deck_exit")
 
 
 def fetch_timeline(all_ids):
@@ -85,7 +94,10 @@ def fetch_timeline(all_ids):
                properties.source           AS src,
                properties.destination      AS dest,
                properties.page             AS pg,
-               properties.kind             AS kind
+               properties.kind             AS kind,
+               properties.duration         AS duration,
+               properties.reached_pct      AS reached_pct,
+               properties.max_depth        AS max_depth
         FROM events
         WHERE distinct_id IN ('{idlist}') AND event IN ({evs})
         ORDER BY distinct_id, timestamp
@@ -96,8 +108,15 @@ def fetch_timeline(all_ids):
             "ts": _parse_ts(r[1]), "event": r[2], "path": r[3],
             "engaged": _num(r[4]), "wall": _num(r[5]), "depth": _num(r[6]),
             "atitle": r[7], "src": r[8], "dest": r[9], "pg": r[10], "kind": r[11],
+            "duration": _num(r[12]), "reached_pct": _num(r[13]), "max_depth": _num(r[14]),
         })
     return by_id
+
+
+# A page dwell inferred from the gap to the next $pageview is capped here: beyond this the
+# visitor had left (the "next" pageview is a later return visit), so an uncapped gap would
+# report a multi-day dwell. Measured page_engagement/time_on_page seconds are NOT capped.
+DWELL_GAP_CAP_S = 1800  # 30 min
 
 
 def _is_market_update(path, title):
@@ -130,17 +149,34 @@ def build_timeline(events, last_seen=None):
         start = pv["ts"]
         end = pvs[i + 1]["ts"] if i + 1 < len(pvs) else last_ts
         gap_s = max(0.0, (end - start).total_seconds())
-        # Attach page_engagement by TIME WINDOW, not $pathname: on SPA unmount the
-        # engagement event's $pathname is often already the NEXT route, but it fired
-        # while the visitor was on THIS page (before the next $pageview).
-        eng = [e for e in evs if e["event"] == "page_engagement"
+        # Attach engagement by TIME WINDOW, not $pathname: on SPA unmount the engagement
+        # event's $pathname is often already the NEXT route, but it fired while the visitor
+        # was on THIS page (before the next $pageview). Fold BOTH schemas:
+        #   V5/article  -> page_engagement.wall_seconds / engaged_seconds / max_depth_pct
+        #   deck         -> time_on_page.duration / deck_exit.reached_pct / scroll_depth.max_depth
+        win = [e for e in evs if e["event"] in
+               ("page_engagement", "time_on_page", "deck_exit", "scroll_depth")
                and start <= e["ts"] <= end]
-        wall = max([e["wall"] for e in eng if e["wall"] is not None], default=None)
-        engaged = max([e["engaged"] for e in eng if e["engaged"] is not None], default=None)
-        depth = max([e["depth"] for e in eng if e["depth"] is not None], default=None)
-        # Wall time on the page: prefer page_engagement.wall_seconds (measured), else the
-        # gap to the next pageview. engaged_minutes is ACTIVE time (may be < dwell).
-        dwell_s = wall if wall is not None else gap_s
+        # Wall/measured seconds on the page: page_engagement.wall_seconds OR the deck's
+        # cumulative time_on_page.duration (both are total-time-on-page).
+        secs = [e["wall"] for e in win if e["wall"] is not None] + \
+               [e["duration"] for e in win if e["duration"] is not None]
+        wall = max(secs) if secs else None
+        # Active engaged time: page_engagement.engaged_seconds; fall back to time_on_page.
+        engaged_vals = [e["engaged"] for e in win if e["engaged"] is not None] or \
+                       [e["duration"] for e in win if e["duration"] is not None]
+        engaged = max(engaged_vals) if engaged_vals else None
+        # Scroll/read depth %: page_engagement.max_depth_pct, deck_exit.reached_pct,
+        # scroll_depth.max_depth — all 0-100, take the deepest.
+        depth_vals = [e["depth"] for e in win if e["depth"] is not None] + \
+                     [e["reached_pct"] for e in win if e["reached_pct"] is not None] + \
+                     [e["max_depth"] for e in win if e["max_depth"] is not None]
+        depth = max(depth_vals) if depth_vals else None
+        # Wall time on the page: prefer the MEASURED seconds; else the gap to the next
+        # pageview, but CAPPED — a gap that spans a return visit days later is not a
+        # 3-week dwell, it's "they left". 30 min is the standard session-inactivity cap.
+        # A measured value is trusted as-is (a genuinely long read is real).
+        dwell_s = wall if wall is not None else min(gap_s, DWELL_GAP_CAP_S)
         timeline.append({
             "path": pv["path"],
             "at": start.isoformat(),
