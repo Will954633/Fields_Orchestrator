@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 HERE = os.path.dirname(os.path.abspath(__file__))
 BATCH = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "pronto_batch_2026-08-26")
 os.makedirs(BATCH, exist_ok=True)
-LIST = json.load(open("/tmp/teaser_build_list_all98.json"))
+LIST = json.load(open(os.environ.get("TEASER_BUILD_LIST", "/tmp/teaser_build_list_all98.json")))
 WORKERS = 2  # keep VM load in check (4 cores; each build spawns article + chrome)
 VENV = "/home/fields/venv/bin/python3"
 GEN = os.path.join(HERE, "build_owner_mailer.py")
