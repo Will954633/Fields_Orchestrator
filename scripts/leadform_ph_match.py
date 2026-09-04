@@ -143,21 +143,30 @@ def _identify(distinct_id, email, name, phone):
     """Server-side $identify — mirrors identifyPerson() in lead-link-visit.mjs.
     Best-effort: a PostHog 5xx must not fail the match (the join key is stored
     on the CRM doc regardless)."""
-    set_props = {"is_lead": True, "lead_source": "fb_lead_ad",
-                 "lead_match_method": "timestamp_inferred"}
+    # Identity fields ($set: always win) — name/phone/email are the whole point of
+    # the enrichment; they must overwrite whatever a thinner prior identify (e.g. a
+    # Netlify landing that set only email) left behind, so the person is searchable
+    # by name in PostHog.
+    set_props = {"is_lead": True}
     if email:
         set_props["email"] = email
     if name:
         set_props["name"] = name
     if phone:
         set_props["phone"] = phone
+    # Provenance fields ($set_once: first-writer-wins) — never clobber a richer or
+    # higher-certainty source already on the person (a token match is a certain
+    # identity; a specific lead_source like "five_property_friday" is more useful
+    # than our generic "fb_lead_ad"). Downgrading those would be wrong.
+    set_once = {"first_lead_link_at": datetime.now(timezone.utc).isoformat(),
+                "lead_source": "fb_lead_ad",
+                "lead_match_method": "timestamp_inferred"}
     try:
         r = requests.post(PH_INGEST_URL, headers={"Content-Type": "application/json"},
                           json={"api_key": PH_INGEST_KEY, "event": "$identify",
                                 "distinct_id": distinct_id,
                                 "properties": {"$set": set_props,
-                                               "$set_once": {"first_lead_link_at":
-                                                             datetime.now(timezone.utc).isoformat()}}},
+                                               "$set_once": set_once}},
                           timeout=20)
         return r.status_code == 200
     except Exception as e:
@@ -233,9 +242,13 @@ def match_lead(db, lead_doc, mark_state=True):
                 "status": "ambiguous", "reason": "candidate_identified_other",
                 "last_attempt": now}}})
         return "ambiguous"
-    already_ours = bool(cur and email and cur == email.strip().lower())
-
-    ok = True if already_ours else _identify(distinct_id, email, name, phone)
+    # `already_ours` (person already carries OUR email) only means "not a conflict"
+    # — it does NOT mean nothing to do. A prior thin identify (e.g. a Netlify
+    # landing that set email but no name/phone) leaves the person unsearchable by
+    # name, so we ALWAYS enrich with name/phone here. _identify is idempotent
+    # ($set overwrites, provenance is $set_once). Skipping it was the bug that left
+    # matched leads showing only an email in PostHog.
+    ok = _identify(distinct_id, email, name, phone)
     modified = _stamp_crm(db, email, phone, distinct_id, created_dt, land_ts, gap)
     if mark_state and lid is not None:
         db["fb_leads"].update_one({"_id": lid}, {"$set": {"posthog_match": {
