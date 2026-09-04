@@ -261,21 +261,42 @@ def _mlabel(ym):
 
 def chart_robina_dom(gc):
     d = gc["precomputed_market_charts"].find_one({"_id": "robina_days_on_market"})
-    tl = [t for t in d["timeline"] if _qkey(t["period"].replace("-Q", "-Q")) >= _qkey("2025-Q1")]
+    tl = [t for t in d["timeline"] if _qkey(t["period"]) >= _qkey("2025-Q1")]
     fig, ax = plt.subplots(figsize=(8, 4.6))
     _style(ax)
     x = list(range(len(tl)))
     med = [t["median_days_on_market"] for t in tl]
-    ax.plot(x, med, color=COPPER, linewidth=3.0, marker="o", markersize=6,
-            markerfacecolor=COPPER, markeredgecolor=SURFACE, markeredgewidth=1.4, zorder=3)
+    inc = [bool(t.get("incomplete")) for t in tl]
+    # last completed quarter is the honest headline; the in-progress quarter is
+    # drawn dotted with a hollow marker so a small, still-filling sample can never
+    # read as a settled jump (2026-Q3 was 22 sales when this was built).
+    comp = [i for i in x if not inc[i]]
+    last_comp = comp[-1] if comp else x[-1]
+    ax.plot(x[:last_comp + 1], med[:last_comp + 1], color=COPPER, linewidth=3.0,
+            marker="o", markersize=6, markerfacecolor=COPPER, markeredgecolor=SURFACE,
+            markeredgewidth=1.4, zorder=3)
+    if last_comp < x[-1]:
+        ax.plot(x[last_comp:], med[last_comp:], color=COPPER, linewidth=2.2,
+                linestyle=(0, (2, 2)), marker="o", markersize=7, markerfacecolor=SURFACE,
+                markeredgecolor=COPPER, markeredgewidth=2.0, zorder=3)
     for xi, yi in zip(x, med):
         ax.annotate(f"{yi:.0f}", (xi, yi), xytext=(0, 9), textcoords="offset points",
                     ha="center", color=INK, fontsize=10, fontweight="bold")
+    # typical (10-year) reference line
+    hist = d.get("historical_median")
+    if hist:
+        ax.axhline(hist, color=MUTED, linewidth=1.4, linestyle=(0, (4, 3)), zorder=1)
+        ax.annotate(f"typical {hist:.0f} days", (x[0], hist), xytext=(2, 5),
+                    textcoords="offset points", ha="left", color=MUTED, fontsize=9)
+    if last_comp < x[-1]:
+        ax.annotate("current quarter\nstill in progress", (x[-1], med[-1]),
+                    xytext=(0, -34), textcoords="offset points", ha="center",
+                    color=MUTED, fontsize=8.5)
     ax.set_xticks(x)
     ax.set_xticklabels([_qlabel(t["period"]) for t in tl], fontsize=10)
     ax.set_ylabel("Median days on market")
-    ax.set_ylim(0, max(med) * 1.25)
-    ax.set_title("Robina: houses are taking longer to sell",
+    ax.set_ylim(0, max(med) * 1.28)
+    ax.set_title("Robina: median days for a house to sell, by quarter",
                  color=INK, fontsize=13, fontweight="bold", loc="left", pad=12)
     return _save(fig, "robina_dom.png")
 
