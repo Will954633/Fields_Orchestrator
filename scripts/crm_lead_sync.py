@@ -215,9 +215,19 @@ def backfill(db):
         if a["clicks"]:
             tags.append("email_clicked")
         tags += [f"clicked:{_slug(t)}" for t in a["targets"] if _slug(t)]
+        # engagement_score must stay idempotent across reruns (this used to $inc the full
+        # email points every run, double-counting on each backfill). Track the score we've
+        # already applied for this contact's email engagement and $inc only the delta.
+        email_score = a["opens"] * OPEN_PTS + a["clicks"] * CLICK_PTS
+        prior = db["crm_contacts"].find_one(
+            {"email": email}, {"email_engagement.score_applied": 1}) or {}
+        already = (prior.get("email_engagement") or {}).get("score_applied", 0)
         upd = {"$set": {"email_engagement": {"opens": a["opens"], "clicks": a["clicks"],
-                                             "last_activity": a["last"]}, "last_seen": a["last"]},
-               "$inc": {"engagement_score": a["opens"] * OPEN_PTS + a["clicks"] * CLICK_PTS}}
+                                             "last_activity": a["last"],
+                                             "score_applied": email_score},
+                        "last_seen": a["last"]}}
+        if email_score != already:
+            upd["$inc"] = {"engagement_score": email_score - already}
         if tags:
             upd["$addToSet"] = {"tags": {"$each": tags}}
         db["crm_contacts"].update_one({"email": email}, upd, upsert=False)
