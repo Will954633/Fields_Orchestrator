@@ -276,15 +276,30 @@ def fetch_all_data(gc_db, sm_db, suburb):
     dom_doc = gc_db["precomputed_market_charts"].find_one({"_id": f"{suburb}_days_on_market"})
     if dom_doc:
         timeline = dom_doc.get("dom_timeline", dom_doc.get("timeline", []))
-        if timeline:
-            latest_dom = timeline[-1]
+        # HEADLINE = trailing-12-month median (the chart's stable headline), NOT timeline[-1].
+        # timeline[-1] is the IN-PROGRESS quarter (`incomplete: True`) — same trap already
+        # fixed for sales volume below. For Robina it put a 22-sale Q3 (median 62) into
+        # dom_median, which the sell-now page then rendered as the headline "62 days".
+        t12 = (dom_doc.get("trailing_12m") or {})
+        if t12.get("median_days_on_market") is not None:
+            data["dom_median"] = t12.get("median_days_on_market")
+            data["dom_avg"] = t12.get("avg_days_on_market")
+            data["dom_quick_sales_pct"] = t12.get("quick_sales_pct")
+            we = t12.get("window_end")
+            data["dom_period"] = f"12 months to {we}" if we else "trailing 12 months"
+        elif timeline:
+            # Fall back to the last COMPLETE quarter, never the incomplete tail.
+            complete = [q for q in timeline if not q.get("incomplete")] or timeline
+            latest_dom = complete[-1]
             data["dom_median"] = latest_dom.get("median_days_on_market")
             data["dom_avg"] = latest_dom.get("avg_days_on_market")
             data["dom_period"] = latest_dom.get("period", "")
             data["dom_quick_sales_pct"] = latest_dom.get("quick_sales_pct")
-            if len(timeline) >= 5:
-                prev_dom = timeline[-5]
-                data["dom_yoy_prev"] = prev_dom.get("median_days_on_market")
+        # Year-earlier comparison: the same quarter one year back (4 complete quarters
+        # before the latest COMPLETE one), so the incomplete tail never shifts the offset.
+        complete_q = [q for q in timeline if not q.get("incomplete")]
+        if len(complete_q) >= 5:
+            data["dom_yoy_prev"] = complete_q[-5].get("median_days_on_market")
 
     # 3. Sales Volume
     # Complete quarters only. timeline[-1] is the IN-PROGRESS quarter — for Robina that put
