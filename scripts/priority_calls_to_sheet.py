@@ -57,6 +57,9 @@ HEADERS = ["Done", "Due", "When", "Who", "Phone", "Email", "CRM", "My notes",
            "How", "Why — what to do", "Last contact", "What we last sent",
            "Came from", "Preference"]
 DONE_COL, PHONE_COL, EMAIL_COL, NOTES_COL = 0, 4, 5, 7
+# Divider row text separating the "follow-ups due" section from the reachable-but-
+# never-scheduled leads below it. build_rows emits it; the run() 7b check ignores it.
+NEW_SECTION_LABEL = "── NEW — reachable leads, no follow-up set ──"
 # Last column letter for range strings — grows with HEADERS (currently N = 14 cols).
 LAST_COL = chr(ord("A") + len(HEADERS) - 1)
 # A tick is anything a human would read as one; Sheets checkboxes serialise as "TRUE".
@@ -175,10 +178,14 @@ def harvest_done(svc, db) -> list[str]:
         key, ident = contact_filter(r, cols)
         if key is None:
             continue
+        # Clear any follow-up (drops it from the top section) AND stamp priority_dismissed_at
+        # (drops it from the "New — reachable" section, which has no follow_up_at to clear).
+        # One tick handles both kinds of row.
         db.crm_contacts.update_one(
             key,
             {"$set": {"follow_up_at": None,
                       "follow_up_reason": "",
+                      "priority_dismissed_at": datetime.now(AEST).isoformat(timespec="seconds"),
                       "follow_up_done_at": datetime.now(AEST).isoformat(timespec="seconds")}})
         cleared.append(ident)
     return cleared
@@ -259,40 +266,94 @@ def build_rows(db, today: str) -> list[list[str]]:
     horizon = (datetime.strptime(today, "%Y-%m-%d").date()
                + timedelta(days=LOOKAHEAD_DAYS)).isoformat()
     cur = db.crm_contacts.find({"follow_up_at": {"$ne": None, "$lte": horizon}})
-    rows = []
-    for c in sorted(cur, key=lambda d: d.get("follow_up_at") or ""):
-        due = c["follow_up_at"]
-        attr = c.get("lead_attribution") or {}
-        came_from = attr.get("campaign_name") or c.get("source") or ""
-        # Surface on-site activity (from lead_web_activity.py) inline in the reason,
-        # so "what to do" carries how engaged they are without a new column.
-        reason = c.get("follow_up_reason") or ""
-        web = ((c.get("lead_web") or {}).get("summary") or "").strip()
-        if web:
-            reason = (reason + f"  ·  🌐 {web}").strip()
-        link = crm_link(c["_id"])
-        rows.append([
-            "", due, when_label(due, today),
-            c.get("name") or "(no name)",
-            # Leading apostrophe forces text: USER_ENTERED otherwise strips the "+" off
-            # +61422403596 and leaves a number nobody can tap to dial.
-            ("'" + c["phone"]) if c.get("phone") else "",
-            c.get("email") or "",
-            # Signed one-click link to this contact's full CRM record. A HYPERLINK
-            # formula so the long signed URL shows as a tidy "Open" (USER_ENTERED
-            # evaluates it). Blank if the secret is unset — never a dead link.
-            (f'=HYPERLINK("{link}","Open ↗")' if link else ""),
-            # Will's own notes, stored per-contact and round-tripped by harvest_notes
-            # so they follow the person, not the row position.
-            c.get("will_note") or "",
-            (c.get("follow_up_channel") or "call").upper(),
-            reason,
-            f"{str(c.get('last_contact_at'))[:10]} — {c.get('contact_status') or ''}"
-            if c.get("last_contact_at") else "Never contacted",
-            last_sent(c), came_from,
-            c.get("contact_preference") or "",
-        ])
+    rows = [_render(c, when_label(c["follow_up_at"], today), c["follow_up_at"], today)
+            for c in sorted(cur, key=lambda d: d.get("follow_up_at") or "")]
+
+    # Second section: every REACHABLE lead that has no follow-up scheduled and hasn't been
+    # dismissed. "Reachable" = we can actually contact them — a phone, an email, OR a
+    # Messenger thread (Messenger leads have neither phone nor email, only a PSID). This is
+    # what turns the tab from "who's due today" into "no contactable lead is invisible"
+    # (Will, 2026-09-04). A divider row separates it so today's calls still stand out.
+    new_cur = db.crm_contacts.find({
+        "follow_up_at": None,
+        "priority_dismissed_at": {"$in": [None, ""]},
+        "$or": [{"email": {"$nin": [None, ""]}},
+                {"phone": {"$nin": [None, ""]}},
+                {"messenger_psid": {"$nin": [None, ""]}}],
+    })
+    new_leads = [c for c in new_cur if not _is_internal(c)]
+    # Hottest first: most recent activity at the top of the new section.
+    new_leads.sort(key=lambda d: str(d.get("last_seen") or d.get("created_at") or ""),
+                   reverse=True)
+    if new_leads:
+        divider = [""] * len(HEADERS)
+        divider[2] = NEW_SECTION_LABEL
+        rows.append(divider)
+        rows += [_render(c, "NEW", "", today) for c in new_leads]
     return rows
+
+
+def _is_internal(c: dict) -> bool:
+    email = (c.get("email") or "").lower()
+    name = (c.get("name") or "").lower()
+    if email in {"will@fieldsestate.com.au", "test@tester.com.au",
+                 "will.simpson@blueoceans.com.au"}:
+        return True
+    return "test" in name or "test" in email
+
+
+def _render(c: dict, when: str, due: str, today: str) -> list[str]:
+    """One tab row for a contact. Shared by both sections so they never drift apart."""
+    attr = c.get("lead_attribution") or {}
+    came_from = attr.get("campaign_name") or c.get("source") or ""
+    # Surface on-site activity (from lead_web_activity.py) inline in the reason, so
+    # "what to do" carries how engaged they are without a new column.
+    reason = c.get("follow_up_reason") or c.get("qualification_reason") or ""
+    web = ((c.get("lead_web") or {}).get("summary") or "").strip()
+    if web:
+        reason = (reason + f"  ·  🌐 {web}").strip()
+    link = crm_link(c["_id"])
+
+    # "How" is the channel. For a Messenger lead make it a one-click link straight to the
+    # thread in the Page inbox so Will can reply without hunting for it.
+    msgr = c.get("messenger") or {}
+    thread = msgr.get("thread_link")
+    if thread:
+        how = f'=HYPERLINK("{thread}","MESSENGER ↗")'
+    else:
+        how = (c.get("follow_up_channel") or "call").upper()
+
+    # Last-contact / last-inbound text. Messenger leads have no communications[]; their
+    # most recent inbound message is the meaningful "last heard from them".
+    if c.get("last_contact_at"):
+        last_contact = f"{str(c.get('last_contact_at'))[:10]} — {c.get('contact_status') or ''}"
+    elif msgr.get("last_inbound_at"):
+        last_contact = f"{str(msgr['last_inbound_at'])[:10]} — they messaged us"
+    else:
+        last_contact = "Never contacted"
+    last_snt = (msgr.get("last_inbound_text") or "")[:80] if msgr else ""
+    if not last_snt:
+        last_snt = last_sent(c)
+
+    return [
+        "", due, when,
+        c.get("name") or "(no name)",
+        # Leading apostrophe forces text: USER_ENTERED otherwise strips the "+" off
+        # +61422403596 and leaves a number nobody can tap to dial.
+        ("'" + c["phone"]) if c.get("phone") else "",
+        c.get("email") or "",
+        # Signed one-click link to this contact's full CRM record. A HYPERLINK formula so
+        # the long signed URL shows as a tidy "Open" (USER_ENTERED evaluates it). Blank if
+        # the secret is unset — never a dead link.
+        (f'=HYPERLINK("{link}","Open ↗")' if link else ""),
+        # Will's own notes, round-tripped by harvest_notes so they follow the person.
+        c.get("will_note") or "",
+        how,
+        reason,
+        last_contact,
+        last_snt, came_from,
+        c.get("contact_preference") or "",
+    ]
 
 
 def format_tab(svc, sid: int, n_rows: int) -> None:
@@ -371,12 +432,20 @@ def run(dry_run: bool) -> dict:
     # How many follow-ups exist AT ALL — the denominator the 7b assertion needs, so an
     # empty tab caused by a broken query is never mistaken for an empty diary.
     total_pending = db.crm_contacts.count_documents({"follow_up_at": {"$ne": None}})
+    # How many reachable leads there are in total (both sections should cover them). Used
+    # by the 7b assertion below: reachable leads exist but nothing rendered = broken query.
+    reachable_total = db.crm_contacts.count_documents({
+        "priority_dismissed_at": {"$in": [None, ""]},
+        "$or": [{"email": {"$nin": [None, ""]}},
+                {"phone": {"$nin": [None, ""]}},
+                {"messenger_psid": {"$nin": [None, ""]}}]})
 
     if dry_run:
         rows = build_rows(db, today)
         for r in rows:
             print(" | ".join(str(x)[:40] for x in r[1:8]))
-        return {"rows": len(rows), "pending_total": total_pending, "cleared": 0}
+        return {"rows": len(rows), "pending_total": total_pending,
+                "reachable_total": reachable_total, "cleared": 0}
 
     svc = get_sheets()
     sid = ensure_tab_first(svc)
@@ -392,7 +461,8 @@ def run(dry_run: bool) -> dict:
         body={"values": [HEADERS] + rows}).execute()
     format_tab(svc, sid, len(rows))
 
-    return {"rows": len(rows), "pending_total": total_pending, "cleared": len(cleared)}
+    return {"rows": len(rows), "pending_total": total_pending,
+            "reachable_total": reachable_total, "cleared": len(cleared)}
 
 
 def main() -> int:
@@ -408,14 +478,15 @@ def main() -> int:
                  title="Priority Calls tab (Live Leads Tracker)") as beat:
         res = run(False)
         beat.metrics = res
-        # Rule 7b: follow-ups exist but none rendered = the query or the sheet write is
-        # broken, not an empty diary. An empty diary is total_pending == 0.
-        if res["pending_total"] > 0 and res["rows"] == 0:
+        # Rule 7b: reachable leads exist but nothing rendered = the query or the sheet
+        # write is broken, not an empty diary. An empty diary is reachable_total == 0.
+        if res["reachable_total"] > 0 and res["rows"] == 0:
             raise RuntimeError(
-                f"{res['pending_total']} contacts have follow_up_at set but 0 rows "
-                f"rendered — the Priority tab is silently empty.")
-        beat.detail = (f"{res['rows']} follow-ups due (of {res['pending_total']} pending); "
-                       f"{res['cleared']} marked done and cleared")
+                f"{res['reachable_total']} reachable leads exist but 0 rows rendered — "
+                f"the Priority tab is silently empty.")
+        beat.detail = (f"{res['rows']} rows: {res['pending_total']} follow-ups due + "
+                       f"reachable leads (of {res['reachable_total']} reachable); "
+                       f"{res['cleared']} marked done")
         print(beat.detail)
     return 0
 
