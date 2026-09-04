@@ -31,6 +31,7 @@ import base64
 import hashlib
 import hmac
 import os
+import re
 import sys
 import warnings
 from datetime import datetime, timedelta, timezone
@@ -39,6 +40,7 @@ warnings.filterwarnings("ignore")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from bson import ObjectId                          # noqa: E402
 from google.oauth2 import service_account          # noqa: E402
 from googleapiclient.discovery import build        # noqa: E402
 
@@ -85,6 +87,42 @@ def get_sheets():
     return build("sheets", "v4", credentials=creds)
 
 
+# A 24-hex Mongo ObjectId carried in the CRM column's HYPERLINK(...) formula, e.g.
+# =HYPERLINK("…/crm-contact?id=6a598c41ad73e69e9d44bd9c&k=…","Open ↗"). Only visible
+# when the grid is read with valueRenderOption=FORMULA (FORMATTED_VALUE shows "Open ↗").
+_CRM_ID_RE = re.compile(r"[?&]id=([0-9a-fA-F]{24})\b")
+
+
+def _col_index(header: list, name: str, default: int = -1) -> int:
+    """Column index by HEADER NAME, so a reorder can never point us at the wrong field."""
+    try:
+        return header.index(name)
+    except ValueError:
+        return default
+
+
+def contact_filter(row: list, cols: dict):
+    """The crm_contacts match filter for one sheet row, preferring the stable contact
+    _id embedded in the CRM link, then email, then phone. Returns (filter, ident) or
+    (None, None) when the row carries no identifier at all.
+
+    ⚠ The _id path is why a row with NO email and NO phone (AYH / off-market leads capture
+    no contact details by design) can still round-trip its note. Matching on email/phone
+    alone silently dropped those rows, so their note was wiped on the nightly rebuild."""
+    ci, ei, pi = cols.get("id", -1), cols.get("email", -1), cols.get("phone", -1)
+    if ci >= 0 and len(row) > ci:
+        m = _CRM_ID_RE.search(str(row[ci] or ""))
+        if m:
+            return {"_id": ObjectId(m.group(1))}, m.group(1)
+    email = str(row[ei]).strip().lower() if ei >= 0 and len(row) > ei else ""
+    if email:
+        return {"email": email}, email
+    phone = str(row[pi]).strip().lstrip("'") if pi >= 0 and len(row) > pi else ""
+    if phone:
+        return {"phone": phone}, phone
+    return None, None
+
+
 def ensure_tab_first(svc) -> int:
     """Return the Priority tab's sheetId, creating it if absent, and force it to index 0."""
     meta = svc.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
@@ -108,31 +146,34 @@ def ensure_tab_first(svc) -> int:
 
 
 def harvest_done(svc, db) -> list[str]:
-    """Clear follow_up_at for every row Will ticked Done. Returns the emails cleared."""
+    """Clear follow_up_at for every row Will ticked Done. Returns the idents cleared.
+
+    Reads with valueRenderOption=FORMULA so the CRM column exposes the contact _id, which
+    contact_filter prefers over email/phone (matches contactless rows, and is unambiguous
+    when two contacts share an email)."""
     try:
-        rows = svc.spreadsheets().values().get(
+        grid = svc.spreadsheets().values().get(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{TAB}!A2:{LAST_COL}").execute().get("values", [])
+            range=f"{TAB}!A1:{LAST_COL}",
+            valueRenderOption="FORMULA").execute().get("values", [])
     except Exception:
         return []
+    if not grid:
+        return []
+    header = grid[0]
+    di = _col_index(header, "Done", DONE_COL)
+    cols = {"id": _col_index(header, "CRM"),
+            "email": _col_index(header, "Email", EMAIL_COL),
+            "phone": _col_index(header, "Phone", PHONE_COL)}
     cleared = []
-    for r in rows:
-        if len(r) <= DONE_COL:
+    for r in grid[1:]:
+        if di < 0 or len(r) <= di:
             continue
-        if str(r[DONE_COL]).strip().lower() not in DONE_VALUES:
+        # FORMULA render returns the checkbox as boolean True/False -> str() -> "true".
+        if str(r[di]).strip().lower() not in DONE_VALUES:
             continue
-        # Match on email when present, else phone — phone-only seller leads (Owner
-        # Market / Narratives forms give no email) would otherwise never clear and
-        # would resurface every day after being ticked done.
-        email = str(r[EMAIL_COL]).strip().lower() if len(r) > EMAIL_COL else ""
-        phone = str(r[PHONE_COL]).strip().lstrip("'") if len(r) > PHONE_COL else ""
-        if email:
-            key = {"email": email}
-            ident = email
-        elif phone:
-            key = {"phone": phone}
-            ident = phone
-        else:
+        key, ident = contact_filter(r, cols)
+        if key is None:
             continue
         db.crm_contacts.update_one(
             key,
@@ -157,7 +198,8 @@ def harvest_notes(svc, db) -> int:
     try:
         grid = svc.spreadsheets().values().get(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{TAB}!A1:{LAST_COL}").execute().get("values", [])
+            range=f"{TAB}!A1:{LAST_COL}",
+            valueRenderOption="FORMULA").execute().get("values", [])
     except Exception:
         return 0
     if not grid:
@@ -167,20 +209,16 @@ def harvest_notes(svc, db) -> int:
     # -1 and we skip — otherwise we'd read whatever sat at that index (the old "Last
     # contact") and store it as a note. It also survives any future column reorder.
     header = grid[0]
-    def col(name, default=-1):
-        try:
-            return header.index(name)
-        except ValueError:
-            return default
-    ni, ei, pi = col("My notes"), col("Email", EMAIL_COL), col("Phone", PHONE_COL)
+    ni = _col_index(header, "My notes")
+    cols = {"id": _col_index(header, "CRM"),
+            "email": _col_index(header, "Email", EMAIL_COL),
+            "phone": _col_index(header, "Phone", PHONE_COL)}
     if ni < 0:
         return 0
     changed = 0
     for r in grid[1:]:
-        note = (r[ni].strip() if len(r) > ni else "")
-        email = str(r[ei]).strip().lower() if ei >= 0 and len(r) > ei else ""
-        phone = str(r[pi]).strip().lstrip("'") if pi >= 0 and len(r) > pi else ""
-        key = {"email": email} if email else ({"phone": phone} if phone else None)
+        note = (str(r[ni]).strip() if len(r) > ni else "")
+        key, _ident = contact_filter(r, cols)
         if key is None:
             continue
         c = db.crm_contacts.find_one(key, {"will_note": 1})
