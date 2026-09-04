@@ -76,6 +76,18 @@ STEPS = [
          "PostHog site engagement -> crm_contacts. The hourly pass last ran at 23:07, "
          "so without this the final ~50 minutes of the day are missing from every "
          "downstream lead record."),
+    Step("messenger_leads_sync", [PY, f"{ROOT}/scripts/messenger_leads_sync.py"],
+         "Pull the Facebook Page Messenger inbox into crm_contacts. People who message "
+         "the Page directly were captured nowhere; this makes them reachable leads on the "
+         "Priority tab. Runs AFTER crm_sync so it can merge a thread onto an existing "
+         "form-lead contact rather than duplicate the person.",
+         needs=["crm_sync"]),
+    Step("source_leads_sync", [PY, f"{ROOT}/scripts/source_leads_sync.py"],
+         "Funnel contactable leads from the scattered source collections (leads, "
+         "campaign_leads, lead_signups, subscribers, five_property_friday_subscribers, "
+         "analyse_leads, launch_leads) into crm_contacts so nothing with a phone/email is "
+         "invisible to the Priority tab. AFTER crm_sync (must not run mid-replace).",
+         needs=["crm_sync"]),
     Step("bind_report_leads_to_crm", [PY, f"{ROOT}/scripts/bind_report_leads_to_crm.py"],
          "Join leadpage property-report leads (Owner-Market carousel + other AYH-leadpage "
          "ads) to their CRM contact: stamp owner.posthog_distinct_id into lead_web + the "
@@ -123,8 +135,9 @@ STEPS = [
          "Runs last because it harvests the Done ticks off the tab and clears them in the "
          "CRM, so it must see the day's final state. Needs crm_sync only: the follow-ups "
          "are hand-set by log_contact_touch.py, so this tab is still correct on a night "
-         "when behavioural enrichment fails.",
-         needs=["crm_sync"]),
+         "when behavioural enrichment fails. Also needs the messenger/source syncs so the "
+         "'New — reachable leads' section reflects the night's newly-captured leads.",
+         needs=["crm_sync", "messenger_leads_sync", "source_leads_sync"]),
     Step("mail_log_to_sheet", [PY, f"{ROOT}/scripts/mail_log_to_sheet.py"],
          "The Mail Log tab — every physical mail piece sent (system_monitor.mail_log), "
          "so posted_date updates and any new batch reach the tab nightly. Independent of "
