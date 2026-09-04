@@ -496,6 +496,11 @@ def build_contact_doc(distinct_id: str, v: dict, existing: dict | None = None) -
         # fields behaves identically.
         # Off-market google owner-lookup signal (written by offmarket_home_signal.py).
         "offmarket_home": (existing or {}).get("offmarket_home") or {},
+        # Analyse-Your-Home self-typed address signal (written by ayh_home_signal.py).
+        # Strongest inferred home signal short of confirmation — the person typed
+        # their own address into AYH. Sub-doc, carried as {} not None (dotted $set
+        # into a null raises WriteError 28). See [[home_recognition_personalization]].
+        "ayh_home": (existing or {}).get("ayh_home") or {},
         # User-confirmed home from the recognition modal (written by my-home-confirm.mjs).
         "home_confirmed": (existing or {}).get("home_confirmed") or {},
         # Physical scan reconciliation (written by minisite-visit.mjs).
