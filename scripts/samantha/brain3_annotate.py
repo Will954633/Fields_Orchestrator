@@ -193,6 +193,11 @@ def main():
         aligned = len(recs) == len(units)
         with open(OUT, "a") as f:
             for idx, rec in enumerate(recs):
+                if not isinstance(rec, dict):
+                    # model occasionally emits a bare string/None inside the JSON array;
+                    # it can't carry an annotation, so skip it rather than crash the whole
+                    # run (one lost chunk vs. losing every remaining batch).
+                    continue
                 u = units[idx] if aligned else umap.get(rec.get("unit_id"))
                 if u:
                     rec["unit_id"] = u["unit_id"]  # force batch-truth id (model drifts it)
