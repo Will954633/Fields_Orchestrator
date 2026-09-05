@@ -95,6 +95,7 @@ def main():
             "/home/fields/brain1_yt/annotations.jsonl",    # u9##### YouTube channels
             "/home/fields/brain1_books/annotations.jsonl",  # k9#### raw-.txt books
             "/home/fields/brain1_build/Spotify/annotations.jsonl",  # u8##### podcasts
+            "/home/fields/brain1_downturn/annotations_downturn.jsonl",  # d##### AU housing-downturn studies (KB financial, 2026-09-05)
         ]
         merges = [p for p in BRAIN1_SOURCES if os.path.exists(p)]
         missing = [p for p in BRAIN1_SOURCES if not os.path.exists(p)]
