@@ -10,6 +10,10 @@ OK=0; FAIL=0
 : > 14_Articles/Market_Research/downturn_studies/kb_save_failures.txt
 for f in "$DIR"/*.pdf; do
   [ -e "$f" ] || continue
+  stem=$(basename "$f" .pdf)
+  if ls /home/fields/knowledge-base/financial/ 2>/dev/null | grep -qF "$stem"; then
+    echo "=== SKIP (already in KB): $stem ==="; OK=$((OK+1)); continue
+  fi
   echo "=== saving: $(basename "$f") ==="
   if python3 scripts/save-to-kb.py --file "$f" --category financial --tags "$TAGS"; then
     OK=$((OK+1))
