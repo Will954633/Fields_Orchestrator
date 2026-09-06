@@ -158,3 +158,52 @@ python3 market_forecasting_model.py
 - **ASX All Ordinaries & cash rate** — internal leading-indicators snapshot
   (quarterly), 2006-Q1 onward.
 - Investigation & build date: **2026-09-06**.
+
+---
+
+## 8. Does it work for Robina specifically? (and local-signal follow-ups)
+
+The panel model is validated on **capital-city** indices. Applying it to **Robina**
+(a Gold Coast suburb) was tested directly and **does not work** — and the reason is
+data, not a missing signal:
+
+- **The combined model does NOT predict Robina.** Robina decline-AUC ≈ **0.51
+  (chance)**; it fired "decline" through Robina's entire 2022–25 boom (predicted
+  −0.3% to −4.4% while Robina rose +6% to +20%). Robina **decoupled** from the
+  national credit cycle (migration/lifestyle-driven, not credit-driven).
+- **Is the signal absent, or is there too little data? → too little data (proven).**
+  Robina's own decline-AUC 95% CI is **[0.37, 0.85]** — it contains both chance
+  (0.5) and "strong" (0.85), so the data *cannot distinguish them*. Robina has only
+  **7 decline quarters in ~18 years** (Varsity 4, Burleigh **1**), from essentially
+  the GFC + a couple of 2019 blips. You need ~40+ decline cases to pin an AUC to
+  ±0.10. **You cannot build or validate a decline predictor for a market that
+  barely declines** — its greatest strength (rarely falling) is what makes one
+  unfittable. For contrast, the capital-city panel (80 declines) gives AUC 0.90 with
+  a tight [0.85, 0.95] CI — declines *are* predictable in aggregate.
+
+**Local signals tested (to find something Robina-native):**
+- **Neighbouring suburbs (Varsity, Burleigh, Nerang, Merrimac, Mudgeeraba, Carrara)**
+  — the **best Robina signal found.** They co-move tightly (r 0.77–0.92); the
+  *basket* beats persistence at predicting Robina (**OOS R² +0.35 @ +2q**, bootstrap
+  CI **[+0.03, +0.55]**, permutation **p = 0.056**). It **partially survives
+  de-risking** (unlike the macro model), but is **borderline, not conclusive**, and
+  is mechanically just "Robina rides its neighbours' denoised regional cycle."
+- **"Expensive homes move down first" (top price quartile vs affordable tier)** —
+  **mildly supported.** Top-tier momentum leads the affordable tier by ~1 quarter
+  (r 0.85); in the GFC the top tier fell first and hardest (−10.5% in 2009-Q2) while
+  the affordable tier lagged (−1.4%) and kept falling into 2012 after the top
+  recovered. But the lead is small (mostly co-moving), rests on the one GFC downturn,
+  and **Robina is mid-market** so it doesn't sit in the lagging tier — top-tier →
+  Robina is only coincident-to-weak (+0.28 @ +2q).
+- **Waterfront tier (`is_waterfront`)** — **not supported / too thin.** Only 328
+  waterfront sold events over 20 years; the series is noisy and shows no lead over
+  Robina (peaks at lag −1, i.e. slightly lags). No evidence for the hypothesis on
+  usable data.
+
+**Bottom line for Robina:** short-term moves are **weakly predictable via the
+neighbouring-suburb regional cycle** (borderline +0.35 @6mo), marginally better than
+national macro (~0). "Expensive leads affordable" is real but mild and Robina
+doesn't benefit. **Robina *declines* remain unpredictable from its own history** —
+not because no signal exists, but because Robina has hardly ever declined. Scripts
+for these follow-ups live in session scratchpad (not persisted — modest/borderline
+results not worth productionising).
