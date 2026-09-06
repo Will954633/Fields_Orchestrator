@@ -25,10 +25,16 @@ import yaml
 from curl_cffi import requests
 from pymongo import MongoClient
 
-# Postcode → suburb mapping (primary suburb for each postcode)
+from job_status import job_run
+
+# Postcode → suburb mapping (primary suburb for each postcode).
+# Corrected 2026-09-07 [SQM-POSTCODE-MISMAP]: the previous map had robina→4216
+# (a northern-GC postcode: Labrador/Runaway Bay) and burleigh_waters→4226
+# (which is actually ROBINA). Postcodes verified against our own live listings:
+# Robina 4226, Burleigh Waters 4220, Varsity Lakes 4227 (matches CLAUDE.md).
 POSTCODE_MAP = {
-    "4216": "robina",
-    "4226": "burleigh_waters",
+    "4226": "robina",
+    "4220": "burleigh_waters",
     "4227": "varsity_lakes",
 }
 
@@ -39,10 +45,10 @@ DISPLAY_NAMES = {
     "varsity_lakes": "Varsity Lakes",
 }
 
-# SQM postcodes cover wider areas — note this for transparency
+# SQM postcodes cover wider areas than the primary suburb — note for transparency.
 POSTCODE_COVERAGE = {
-    "4216": "Robina, Merrimac, Clear Island Waters",
-    "4226": "Burleigh Waters, Burleigh Heads, Miami",
+    "4226": "Robina, Merrimac, Clear Island Waters",
+    "4220": "Burleigh Waters, Burleigh Heads, Miami",
     "4227": "Varsity Lakes, Reedy Creek",
 }
 
@@ -96,50 +102,73 @@ def main():
     db = client["Gold_Coast"]
     collection = db["sqm_asking_prices"]
 
-    results = {}
-    for postcode, suburb_id in POSTCODE_MAP.items():
-        print(f"Scraping {suburb_id} (postcode {postcode})...")
-        try:
-            raw = scrape_postcode(postcode)
-            points = transform_data(raw)
-            results[suburb_id] = {
-                "postcode": postcode,
-                "count": len(points),
-                "first": points[0]["date"],
-                "last": points[-1]["date"],
-            }
-            print(f"  → {len(points)} weekly data points ({points[0]['date']} to {points[-1]['date']})")
-
-            if not args.dry_run:
-                doc = {
-                    "_id": suburb_id,
-                    "suburb": DISPLAY_NAMES[suburb_id],
+    # Self-monitoring (Rule 7 + 7b). Weekly cadence; the assertion below turns a
+    # heartbeat that "didn't throw" into one that asserts every target was
+    # actually captured — a partial/empty scrape is a failure, not a silent OK.
+    with job_run("scrape_sqm_asking_prices", cadence_hours=168,
+                 title="SQM Asking Prices Scrape") as beat:
+        results = {}
+        for postcode, suburb_id in POSTCODE_MAP.items():
+            print(f"Scraping {suburb_id} (postcode {postcode})...")
+            try:
+                raw = scrape_postcode(postcode)
+                points = transform_data(raw)
+                results[suburb_id] = {
                     "postcode": postcode,
-                    "postcode_coverage": POSTCODE_COVERAGE[postcode],
-                    "source": "sqmresearch.com.au",
-                    "metric": "asking_prices",
-                    "frequency": "weekly",
-                    "series": points,
-                    "data_points": len(points),
-                    "date_range_start": points[0]["date"],
-                    "date_range_end": points[-1]["date"],
-                    "last_updated": datetime.now(timezone.utc).isoformat(),
+                    "count": len(points),
+                    "first": points[0]["date"],
+                    "last": points[-1]["date"],
                 }
-                collection.replace_one({"_id": suburb_id}, doc, upsert=True)
-                print(f"  → Stored in Gold_Coast.sqm_asking_prices")
+                print(f"  → {len(points)} weekly data points ({points[0]['date']} to {points[-1]['date']})")
 
-        except Exception as e:
-            print(f"  ✗ Error: {e}", file=sys.stderr)
-            results[suburb_id] = {"error": str(e)}
+                if not args.dry_run:
+                    doc = {
+                        "_id": suburb_id,
+                        "suburb": DISPLAY_NAMES[suburb_id],
+                        "postcode": postcode,
+                        "postcode_coverage": POSTCODE_COVERAGE[postcode],
+                        "source": "sqmresearch.com.au",
+                        "metric": "asking_prices",
+                        "frequency": "weekly",
+                        "series": points,
+                        "data_points": len(points),
+                        "date_range_start": points[0]["date"],
+                        "date_range_end": points[-1]["date"],
+                        "last_updated": datetime.now(timezone.utc).isoformat(),
+                    }
+                    collection.replace_one({"_id": suburb_id}, doc, upsert=True)
+                    print(f"  → Stored in Gold_Coast.sqm_asking_prices")
 
-    print(f"\nDone. {'(dry run — no DB writes)' if args.dry_run else ''}")
-    for suburb, info in results.items():
-        if "error" in info:
-            print(f"  {suburb}: FAILED — {info['error']}")
-        else:
-            print(f"  {suburb}: {info['count']} points, {info['first']} → {info['last']}")
+            except Exception as e:
+                print(f"  ✗ Error: {e}", file=sys.stderr)
+                results[suburb_id] = {"error": str(e)}
 
-    client.close()
+        print(f"\nDone. {'(dry run — no DB writes)' if args.dry_run else ''}")
+        for suburb, info in results.items():
+            if "error" in info:
+                print(f"  {suburb}: FAILED — {info['error']}")
+            else:
+                print(f"  {suburb}: {info['count']} points, {info['first']} → {info['last']}")
+
+        client.close()
+
+        # Rule 7b: assert the outcome. Every target is expected to carry data, so
+        # a missing target OR a zero-length series is a broken scrape (SQM layout
+        # changed / postcode rejected), NOT "nothing to do".
+        ok = {s: i for s, i in results.items() if "error" not in i and i.get("count", 0) > 0}
+        failed = [s for s in POSTCODE_MAP.values() if s not in ok]
+        beat.metrics = {
+            "targets": len(POSTCODE_MAP),
+            "succeeded": len(ok),
+            "failed": len(failed),
+            "total_points": sum(i["count"] for i in ok.values()),
+        }
+        beat.detail = ", ".join(f"{s}={results[s].get('count', 'ERR')}" for s in POSTCODE_MAP.values())
+        if failed:
+            raise RuntimeError(
+                f"SQM scrape captured {len(ok)}/{len(POSTCODE_MAP)} targets; "
+                f"missing/empty: {failed}"
+            )
 
 
 if __name__ == "__main__":
