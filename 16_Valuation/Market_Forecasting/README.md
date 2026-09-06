@@ -281,3 +281,44 @@ rate-of-sale in one quarter is positively related to the price change in the nex
   with de Wit's own note that out-of-sample the short lead doesn't beat naive
   persistence. (See also [[news_split_prototype_spec]] — the /news "rate of sale"
   indicator is framed exactly this way: "reads the market now, not ahead.")
+
+## 12. Supply-side (new-listings flow / stock-on-market / months-of-supply) — looked strong, failed the null
+
+Motivation: everything else is on the price/liquidity/credit axes; **supply** (inventory
+build) is a classic orthogonal leading indicator. Reconstructed from DOM campaigns
+(start = terminal − DOM; stock = open intervals), pooled GC houses, 2006–2025-Q1.
+- **Directionally correct & behaves sensibly:** months-of-supply (stock÷sales) is
+  *negatively* related to future momentum (high inventory → weaker prices), −0.56
+  coincident, −0.44 @+1q. It **rose ahead of the GFC turn** (2.2 in 2007 → 3.1 in 2008)
+  and sat low through the 2021–22 boom / now (1.4–1.6). Pure new-listings flow is weak
+  (~−0.1) — the signal is really the **liquidity axis re-expressed** (months-of-supply
+  = inverse of absorption/rate-of-sale), not an independent supply axis.
+- **Looked like an improvement:** OOS R² vs persistence **+0.42 @+3q** (ex-GFC +0.38) —
+  *better* than lending+spending's +0.31, and *local* (works from our own data).
+- **But it fails de-risking.** (i) Adding lending+spending *hurts* it (+0.42 → +0.26)
+  because LS doesn't work locally (LS alone on GC = −0.20; it only worked on the
+  capital-city panel). (ii) **Permutation null: LS+MOS @+3q real +0.26 vs null 95th
+  +0.44 → p = 0.16** (not significant); even MOS-alone's +0.42 is only borderline. The
+  +3q edge is within what autocorrelation manufactures by chance — the same trap as the
+  macro +0.82 / composition 0.79 / stale-DOM 0.90.
+- **Verdict:** no robust improvement over lending+spending. A sound, orthogonal,
+  theory-backed signal that still can't clear the single-market autocorrelation +
+  few-downturns wall.
+
+---
+
+## Overall conclusion (as of 2026-09)
+
+The **only** signal that survives *proper* validation (multi-market panel + permutation)
+is the **aggregate capital-city macro-demand regime model** (§1–7: lending + spending +
+cash/ASX, ~0.90 AUC for up/down regimes at the *city* level, 9-month horizon). **Every
+local / suburb-level / single-market signal tested** — sell-through, stale-DOM (§10 note),
+DOM composition, neighbour-suburb basket (§8), price-tier lead (§8), SQM asking (§9),
+ABM price-dispersion (§10), rate-of-sale (§11), and supply/months-of-supply (§12) —
+**looks predictive in-sample but fails the permutation null**, because a smooth
+autocorrelated target on a single market manufactures large R²s by chance. This is a
+**fundamental data ceiling**, not a modelling failure: one market + a smooth target +
+~1–2 downturns cannot statistically distinguish a real short-term local edge from noise,
+regardless of the signal's economic logic. Genuine progress requires *more independent
+downturn episodes* — i.e. listing-level data for markets that actually crashed
+(parked: Perth/Darwin scrape), not a cleverer model.
