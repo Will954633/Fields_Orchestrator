@@ -1,0 +1,134 @@
+{
+  "RPPI": {
+    "dataflow": "RPPI",
+    "url": "https://data.api.abs.gov.au/rest/data/RPPI/1.2.1GSYD+2GMEL+3GBRI+4GADE+5GPER+6GHOB+7GDAR+8ACTE.Q?startPeriod=2003-Q1&format=csv",
+    "key": "1.2.1GSYD+2GMEL+3GBRI+4GADE+5GPER+6GHOB+7GDAR+8ACTE.Q",
+    "codes": {
+      "MEASURE": "1 (Index Numbers)",
+      "PROPERTY_TYPE": "2 (Established houses)",
+      "REGION": "8 capital-city GCCSA codes",
+      "FREQ": "Q"
+    },
+    "min": "2003-Q1",
+    "max": "2021-Q4",
+    "rows": 608,
+    "nonnull": 608
+  },
+  "LEND_HOUSING": {
+    "dataflow": "LEND_HOUSING",
+    "url": "https://data.api.abs.gov.au/rest/data/LEND_HOUSING/FIN_VAL.NEWCOMMITS.DV8368.TOTDWELL.TOT.DV5167+DV5168.20.1+2+3+4+5+6+7+8.Q?startPeriod=2003-Q1&format=csv",
+    "key": "FIN_VAL.NEWCOMMITS.DV8368.TOTDWELL.TOT.DV5167+DV5168.20.1+2+3+4+5+6+7+8.Q",
+    "codes": {
+      "MEASURE": "FIN_VAL (Value)",
+      "DATA_ITEM": "NEWCOMMITS (New loan commitments)",
+      "LOAN_TYPE": "DV8368 (Total fixed term loans and revolving credit)",
+      "LOAN_PURPOSE": "TOTDWELL (Total dwellings excl refinancing)",
+      "LENDER_TYPE": "TOT",
+      "HOUSING_PURPOSE": "DV5167+DV5168 (owner-occupier + investor, summed)",
+      "TSEST": "20 (Seas Adj)",
+      "REGION": "states 1-8",
+      "FREQ": "Q (natively quarterly)"
+    },
+    "min": "2003-Q1",
+    "max": "2026-Q2",
+    "rows": 752,
+    "nonnull": 752
+  },
+  "RT": {
+    "dataflow": "RT",
+    "url": "https://data.api.abs.gov.au/rest/data/RT/M1.20.20.1+2+3+4+5+6+7+8.M?startPeriod=2002-01&format=csv",
+    "key": "M1.20.20.1+2+3+4+5+6+7+8.M",
+    "codes": {
+      "MEASURE": "M1 (Current Prices)",
+      "INDUSTRY": "20 (Total)",
+      "TSEST": "20 (Seas Adj)",
+      "REGION": "states 1-8",
+      "FREQ": "M -> summed to quarter"
+    },
+    "min": "2002-Q1",
+    "max": "2025-Q2",
+    "rows": 752,
+    "nonnull": 752
+  },
+  "LF": {
+    "dataflow": "LF",
+    "url": "https://data.api.abs.gov.au/rest/data/LF/M13.3.1599.10.1+2+3+4+5+6+7+8.M?startPeriod=2002-01&format=csv",
+    "key": "M13.3.1599.10.1+2+3+4+5+6+7+8.M",
+    "codes": {
+      "MEASURE": "M13 (Unemployment rate)",
+      "SEX": "3 (Persons)",
+      "AGE": "1599 (Total)",
+      "TSEST": "10 (Original \u2014 ACT/NT lack a seas-adj series; Original used for all 8 for consistency)",
+      "REGION": "states 1-8",
+      "FREQ": "M -> quarter average"
+    },
+    "min": "2002-Q1",
+    "max": "2026-Q3",
+    "rows": 792,
+    "nonnull": 792
+  },
+  "CPI_Q": {
+    "dataflow": "CPI_Q",
+    "url": "https://data.api.abs.gov.au/rest/data/CPI_Q/1.999901.20.50.Q?startPeriod=2003-Q1&format=csv",
+    "key": "1.999901.20.50.Q",
+    "codes": {
+      "MEASURE": "1 (Index Numbers)",
+      "INDEX": "999901 (All groups CPI, seasonally adjusted)",
+      "TSEST": "20 (Seas Adj)",
+      "REGION": "50 (Weighted avg 8 capital cities)",
+      "FREQ": "Q"
+    },
+    "min": "2003-Q1",
+    "max": "2026-Q2",
+    "rows": 94,
+    "nonnull": 94
+  },
+  "_panel": {
+    "shape": [
+      608,
+      8
+    ],
+    "cities": [
+      "Adelaide",
+      "Brisbane",
+      "Canberra",
+      "Darwin",
+      "Hobart",
+      "Melbourne",
+      "Perth",
+      "Sydney"
+    ],
+    "quarter_min": "2003-Q1",
+    "quarter_max": "2021-Q4"
+  },
+  "_verify": {
+    "n_cities": 8,
+    "quarters_per_city": {
+      "Adelaide": 76,
+      "Brisbane": 76,
+      "Canberra": 76,
+      "Darwin": 76,
+      "Hobart": 76,
+      "Melbourne": 76,
+      "Perth": 76,
+      "Sydney": 76
+    },
+    "min_quarters_per_city": 76,
+    "price_nonnull_pct_2004_2025": 100.0,
+    "nonnull_by_col": {
+      "price_index": 608,
+      "lending": 608,
+      "retail": 608,
+      "unemployment": 608,
+      "cpi": 608
+    },
+    "perth_2014Q1": 115.5,
+    "perth_2019Q4": 101.2,
+    "perth_peak_2014_2019": null,
+    "perth_decline_pct_2014_2019": -12.4,
+    "sydney_2017Q4": 180.5,
+    "sydney_2019Q2": 158.1,
+    "sydney_2022Q1": null,
+    "sydney_2023Q1": null
+  }
+}
