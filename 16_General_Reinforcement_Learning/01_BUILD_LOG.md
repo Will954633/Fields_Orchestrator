@@ -1450,3 +1450,125 @@ interchangeable and he can answer out of order. No second message.
 and I cannot tell which from inside it. Nothing has been graded on whether it *worked* yet; first
 real gradings land 09-03 / 09-07 / 09-12. The one graded so far (REC-ops-001) did not move its
 metric. 0/1 is the number that matters, not 20/20.
+
+## 2026-09-06 06:00 — OPS weekly cycle
+Board: 43 actionable (ERROR=19, STALE=23). Briefing tier `expired` (24d) → recommend-only;
+no Tier 1 repairs performed, nothing proposed (also at 2-rec cap).
+- Proved three red credential-liveness rows (gmail / google_ads / google_indexing) are ONE
+  dead OAuth client — id `6178359532-...`, GCP project `fields-estate-ads`. Ads and Indexing
+  refresh tokens are byte-identical; both tokens return HTTP 400 invalid_grant on direct probe.
+- Identified `cred_liveness_google_indexing` as a FALSE red: google_indexing.py uses the
+  service account, and submitted 72/72 URLs at 2026-09-06 01:01. Probe watches a retired
+  credential. Monitoring code untouched (off-limits) → Tier 3 draft T3-a.
+- Real damage: Five Property Friday sent zero emails 2026-09-03; Google Ads metrics blind.
+  This is REC-ops-006 recurring — durable fix approved 2026-08-24, never landed. Not
+  re-proposed; routed to Samantha via the cycle doc.
+- New gap found: the 2026-09-04 Gmail→Resend migration did NOT cover Five Property Friday,
+  now the last Gmail consumer.
+- Graded REC-ops-004 `worked` (step 101 >0 URLs on 6/6 nights; drift_services=[]).
+Doc: cycles/2026-W36/2026-09-06/ops_cycle_20260906_0600.md
+
+## 2026-09-06 07:00 — SEO cycle (tier: expired / recommend-only)
+
+No site change shipped: brief 24d stale (`expired` -> recommend-only) and ledger at 2/2 cap.
+Cycle was measurement + routing findings to their owner.
+
+- **08-23 title deploy read out on a fortnight of GSC data: NOT MEASURABLE.** Every cut favourable
+  (path CTR 1.35%->1.93%; migration-controlled 0.96%->1.76%, z=1.94 p=0.053 on 41 clicks) but rank
+  moved too (Robina/overview pos 9.0->7.5) and mix shift flatters the blend. Not graded a win.
+  Conclusion: on this cluster the lever is **rank, not snippet** — `articles` called this correctly
+  on 08-23 and I did not.
+- **Three live editorial defects found and handed to `articles`:** (1) the retired flat ±12% / 61% /
+  ±26.4% figures — which I propagated on 08-30 — are now in `generate_property_ai_analysis.py:3469-70`
+  as the rule's justification; behaviour correct, justification false. (2) `_strip_false_confidence()`
+  misses tiers attached to a comparables clause — **21 published properties** render a bare
+  confidence tier, live on `/for-sale-v3`. (3) **71 documents (31 published)** state an exactly
+  ±12.0% band from the method retired 2026-08-07; 10 Belmore Close publishes a $1,183,000 point
+  estimate that `valuation_data.reconciled_valuation` no longer contains at all.
+- Verified last cycle's GSC collector rewrite ran clean (2026-09-05 23:50, all three `dims`,
+  64,677 impr / 1,352 clicks site total, no zero-row trip).
+- 2 peer directives sent, 5 conductor directives closed, 7 actions logged to `rl_seo_actions`.
+- Proposed nothing (at cap, recommend-only). Graded nothing (nothing due; REC-seo-001/-002 due 09-12).
+
+## 2026-09-06 08:00 — geo cycle (`geo_cycle_20260906_0800.md`)
+
+Briefing tier **expired** (24d) — sensors and analysis only, **nothing shipped**. At cap 2/2,
+proposed nothing, graded nothing (REC-geo-002/003 both due 09-19).
+
+- **Bing index +52% in 8 days** — `InIndex` 2,104 → 3,191, monotonic from 09-03, above the
+  pre-cliff 2,247. This is the mechanism that clears the ~3-week stale cache which made
+  REC-geo-003 look ineffective last cycle. Reason to wait for 09-19, not to grade early.
+- **AI channel: 11 users, 0 conversions.** ChatGPT 5 users last week — best on record and 4th
+  consecutive non-zero — but that is five people; reported as a series, not a trend.
+- **NEW defect, not fixed:** every `/property` page (1,545 in sitemap) serves the retired
+  `| Fields Estate` title. 15/15 sampled vs 0/15 on `/off-market`. One line —
+  `src/lib/propertyTitle.ts:28` — plus breadcrumb JSON-LD at `property.$id.tsx:510`. Missed in
+  the 2026-08-13 rename. Left for seo: expired brief + Will's 08-27 deferral of the brand
+  sweep. `brand_serp_signal.py` reports "1 name in use" and is wrong because it never samples
+  `/property`.
+- REC-geo-005 re-probed: 4/4 arbitrary `/about/<slug>` still 200 + self-canonical.
+- GEO-018 not comparable this cycle — the available surface is US-indexed and cannot see our
+  domain; recorded as an instrument limit rather than a false negative. Scoped to our domain it
+  finds our pages and volunteers that it has nothing on Will Simpson, reconfirming REC-geo-004.
+- `personalization_policy.py` (mandate step 1) does not exist in this folder.
+
+## 2026-09-06 09:00 — ADS cycle (20260906_0900)
+
+Tier: `expired` (24d) → RECOMMEND-ONLY. Shipped no code, touched no campaign.
+
+**Finding:** both decisions Will approved on 2026-08-18 exist only in the ledger.
+REC-ads-001 (optimise seller arms to the on-site address submit) — 0 of 26 paid leads has a
+`probable_address`; every live arm is still an Instant Form. REC-ads-004 (one buyer arm
+carrying `owns_gc_home`) — 0 of 52 rows in `fb_leads` has ever carried it. $1,152.12 ran in
+14 days on the design those decisions were meant to replace.
+
+Third, downstream: the 5 leads that gave their own home address — the strongest seller
+signal paid has bought — are ranked `worklist_priority` None/low, at or below name-only
+subscribers, while a stated buyer got a personalised link the same week.
+
+**Numbers (14d):** $1,152.12 · 28 form conv · 26 unique people. Cost per identified owner
+$168/5 = $33.57. Cost per identified SELLER: undefined — zero. Cheapest arm 'Subscriber
+Lookalike LEADFORM' $197/14 = **$14.08** — this is the ~$15/lead form the brief §1.2 asked
+me to find; its form asks name+email+phone only, so all 14 are unclassifiable.
+
+**Graded:** REC-ads-005 → `worked` ($0 spend on the Messenger carousel since 08-24;
+causation not claimed — Will stopped all ads himself).
+
+**Proposed:** REC-ads-008, superseding REC-ads-007. One form question + one destination test
++ a worklist scoring fix. Open 2/2.
+
+**Missed date:** REC-ads-006 expected `om_needs_manual_link` 3 → 0 today; it is **4**. The
+resolver fix from 08-30 resolves 4 of 5 pending addresses correctly but has never run in
+production, because the arm is paused and nothing re-ran the backlog.
+
+## 2026-09-06 10:00 AEST — articles cycle (tier: expired, recommend-only)
+- Graded REC-articles-005 `worked`: GH Actions cancellations 5 (n=25, pre) → 0 (n=21, 13d post).
+- REC-articles-006 raised: 14 LIVE property pages state a valuation contradicting the one the
+  same page's module serves, up to 23.2% (14 Manakin: $1,945,573 in copy vs $1,642,348 served,
+  verified in one live API response). 30 published pages quote a bare point estimate, which the
+  generator's own prompt forbids. Root cause: editorial generated once, never revalidated.
+- REC-articles-007 raised: 0 of 100 published articles link to /analyse-your-home or
+  /what-the-comps-say. Corpus 53→100, conversions still 0 over 37 sessions.
+- ⚠ Discarded SEO's ±12% band discriminator — it cannot separate the retired flat 12% from
+  Robina's CURRENT 12.2% empirical band after prose rounding. Sent the correction + a
+  method-independent replacement test back to seo. Do not act on the 71/31 figure.
+- Two Rule 8 errors self-caught: wrong valuation path (top-level vs .confidence.), and scanning
+  `_`-prefixed fields the API strips plus competing-listing prices.
+- Nothing shipped — brief 24 days stale (expired tier). Cap now 2/2.
+
+## 2026-09-06 11:00 — onsite cycle
+Address search index found to have been built exactly once (2026-03-07) and never rebuilt:
+**1,843 of 25,177 addresses (7.3%) held in the three core suburbs were absent from it** (1,002 units).
+Missing addresses resolved via an ~11s collection fallback, or — where the loose regex matched some
+other row — were silently replaced by a different property ("159 Varsity Parade" returned only
+"159/251 Varsity Parade"). Found via a HIGH friction incident: a visitor from the Owner-Market
+carousel searched one Varsity Lakes unit 38 times, 0 submits.
+Shipped: `scripts/topup_address_search_index.py` (additive, 1,843 rows inserted, 0 duplicates) and a
+reachable zero-result state in `AddressSearch.tsx` — `setIsOpen(results.length>0)` had made the
+"no match" branch unreachable, so a failed search rendered nothing at all (commit `431c18a0`,
+verified live headless, 0 console errors).
+Experiments: first read of `onsite_exp_offmarket_2` — `no_contact` 7.3% (10/136) vs control 4.9%
+(6/122). Same framing leads on `/property` too (9.5% 25/263 vs 5.1% 13/256). Mechanism replicating
+across two surfaces; nothing scaled — read 1 of 2 on the deck, and z≈1.9 on the property page.
+Proposed REC-onsite-006 (schedule + heartbeat the index rebuild; crontab is prohibited to domains).
+Doc: `cycles/2026-W36/2026-09-06/onsite_cycle_20260906_1100.md`
