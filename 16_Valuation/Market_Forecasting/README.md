@@ -207,3 +207,34 @@ doesn't benefit. **Robina *declines* remain unpredictable from its own history**
 not because no signal exists, but because Robina has hardly ever declined. Scripts
 for these follow-ups live in session scratchpad (not persisted — modest/borderline
 results not worth productionising).
+
+---
+
+## 9. SQM asking prices — tested, does NOT lead (sold leads asking)
+
+Hypothesis: asking (list) prices are set at listing and observable in real time, so
+they might *lead* sold medians. **Tested and rejected — the relationship runs
+backwards.**
+
+- **Data:** `Gold_Coast.sqm_asking_prices` — 3 postcodes, **weekly 2009-05 → 2026-08
+  (885 points)**, fields `houses_all / houses_3bed / units_all / units_2bed /
+  combined`, via SQM Research.
+- **Result (all three suburbs, monthly YoY momentum):** asking-vs-sold correlation
+  **peaks at lag −3 months (r ≈ 0.51–0.54)** and decays toward zero at positive lags
+  (+1mo 0.35, +6mo 0.08). **+lag = asking leads; the peak at −3 means SOLD prices
+  lead ASKING by ~3 months.** Out-of-sample, predicting sold from asking scores
+  **negative R² vs persistence** at every horizon (−2.3 / −0.8 / −1.6 @ +2mo) —
+  worse than doing nothing.
+- **Why the intuition fails:** (1) agents/vendors set asking off *recent comparable
+  sales*, so asking mechanically *follows* sold with a lag; (2) SQM's asking median
+  is the median of *currently-listed* stock, contaminated by **stale unsold listings**
+  clinging to outdated prices → sticky and laggy by construction. Real-time
+  observability doesn't rescue a backward-pointing signal.
+- **⚠ Data-quality bug found:** the `sqm_asking_prices` **postcodes are mislabeled** —
+  postcode 4226 is tagged "Burleigh Waters" but its asking ($1.50M) is *below*
+  Burleigh's sold median ($1.925M), which is impossible. Match by the `coverage`
+  field, not `postcode`. `scripts/sqm_rigorous_analysis.py`'s `POSTCODE_MAP` uses the
+  same scrambled mapping — any per-suburb conclusions from it need re-checking.
+- **Verdict:** SQM asking prices are a **lagging** reflection of the market (~3 months
+  behind sold), with **negative** out-of-sample predictive value. Not a leading
+  indicator.
