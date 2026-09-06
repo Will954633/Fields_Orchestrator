@@ -305,6 +305,21 @@ build) is a classic orthogonal leading indicator. Reconstructed from DOM campaig
   theory-backed signal that still can't clear the single-market autocorrelation +
   few-downturns wall.
 
+## 13. Search-intent (Google Trends) — the last axis, also fails
+
+The one genuinely orthogonal, forward, real-time axis untested: buyer search interest
+(demand *before* it reaches prices). Pulled monthly 2006–2026 (pytrends), terms "houses
+for sale gold coast", "Gold Coast real estate", "Robina real estate".
+- **Search *momentum* is weakly *negatively* related to future prices** (−0.20 to −0.28
+  at +1..+3q) — opposite of the hypothesis; "houses for sale" search spikes with stock /
+  browsing / uncertainty, not committed buying.
+- **Search *level* peaks at lag −1** (price *leads* search) — coincident-to-lagging.
+- **OOS vs persistence: −5.3 @+1q, −0.9 @+2q, +0.0 @+3q; permutation @+2q real −0.91 vs
+  null 95th +0.38 → p = 0.977 (worse than chance).** No signal.
+- **Why:** Gold Coast search is contaminated by tourists / renters / out-of-area
+  interest (a holiday destination), so it's a poor proxy for local buyer demand; any real
+  demand signal is already captured by price persistence.
+
 ---
 
 ## Overall conclusion (as of 2026-09)
@@ -314,8 +329,9 @@ is the **aggregate capital-city macro-demand regime model** (§1–7: lending + 
 cash/ASX, ~0.90 AUC for up/down regimes at the *city* level, 9-month horizon). **Every
 local / suburb-level / single-market signal tested** — sell-through, stale-DOM (§10 note),
 DOM composition, neighbour-suburb basket (§8), price-tier lead (§8), SQM asking (§9),
-ABM price-dispersion (§10), rate-of-sale (§11), and supply/months-of-supply (§12) —
-**looks predictive in-sample but fails the permutation null**, because a smooth
+ABM price-dispersion (§10), rate-of-sale (§11), supply/months-of-supply (§12), and
+search-intent / Google Trends (§13) — **looks predictive in-sample but fails the
+permutation null**, because a smooth
 autocorrelated target on a single market manufactures large R²s by chance. This is a
 **fundamental data ceiling**, not a modelling failure: one market + a smooth target +
 ~1–2 downturns cannot statistically distinguish a real short-term local edge from noise,
