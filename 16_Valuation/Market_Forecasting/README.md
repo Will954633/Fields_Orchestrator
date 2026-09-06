@@ -238,3 +238,46 @@ backwards.**
 - **Verdict:** SQM asking prices are a **lagging** reflection of the market (~3 months
   behind sold), with **negative** out-of-sample predictive value. Not a leading
   indicator.
+
+---
+
+## 10. Agent-based model / price-dispersion signal (Glavatskiy et al. 2021) — doesn't transfer to suburb scale
+
+Paper: a ~200k-agent ABM of Greater Sydney (herding × credit → boom-bust). Its novel
+empirical claim: **price *variability/volatility* spikes just before the market peak**
+(Sydney 2017). Two parts assessed:
+- **The ABM itself: not applicable.** It needs metropolitan-scale population (~2M
+  households) for herding statistics to be meaningful; our suburbs (a few hundred
+  sales/quarter) are far too small, and rebuilding a calibrated ABM for 3 suburbs has
+  no statistical payoff.
+- **The dispersion signal: tested, does NOT hold at our scale.** Rolling monthly price
+  volatility + cross-sectional dispersion (IQR/median), pooled GC + Robina, 2006–2026:
+  the **2007 pre-GFC peak had NO warning** (volatility was at a *low*); volatility
+  *rose during* the decline, not before. Cross-correlation of volatility → future
+  momentum is **positive** (+0.21 to +0.30), the *opposite* of the hypothesis —
+  because in our data volatility is a **boom** phenomenon (highest across the 2020–24
+  hot years), not a pre-crash one. Only partial match: the 2021 COVID peak had the
+  highest cross-sectional dispersion (44%), but it *stayed* elevated through the 2023
+  flattening rather than spiking-then-topping. Today (2025–26): dispersion normal /
+  falling — no warning. **Reason it fails:** at suburb scale, price "variability" is
+  dominated by sample noise + home-mix, not herding; metro ensemble-variability ≠
+  small-suburb transaction scatter. The transferable core (turns = herding × loose
+  credit) is real but we can only observe the *credit* half (our lending channel).
+
+## 11. Rate-of-sale → next-quarter price change (de Wit et al. 2010) — relationship real, not actionable
+
+The search-model literature (de Wit, Englund & Francke 2010; r≈0.71) holds that
+rate-of-sale in one quarter is positively related to the price change in the next.
+**Confirmed directionally in our data** (pooled GC houses):
+- sell-through[Q] vs momentum[Q+1] **r 0.43** (coincident +0q 0.58); vs price-*change*[Q+1] r 0.30.
+- **sales volume[Q] vs price-change[Q+1] r 0.32** (peaks at +1q) — and volume/absorption
+  IS observable at quarter-end (the observation-lag objection applies only to *cohort*
+  sell-through, not this).
+- **But it does NOT beat persistence:** OOS R² vs persistence = **−2.4 at +1q**, +0.07
+  (ex-GFC) at +2q. The relationship is real *co-movement*, but what it correlates with
+  (current momentum) is already the best cheap forecast of next quarter — rate-of-sale
+  adds no independent *forward* information. It's a **coincident market-heat gauge, not
+  a forecast** — the same conclusion reached for the /news explorer, and consistent
+  with de Wit's own note that out-of-sample the short lead doesn't beat naive
+  persistence. (See also [[news_split_prototype_spec]] — the /news "rate of sale"
+  indicator is framed exactly this way: "reads the market now, not ahead.")
