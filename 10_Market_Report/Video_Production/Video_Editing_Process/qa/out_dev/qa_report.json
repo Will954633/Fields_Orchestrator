@@ -1,0 +1,474 @@
+{
+  "generatedAt": "dev",
+  "baseUrl": "http://localhost:5173/news/robina?walkthrough=1",
+  "findings": [
+    {
+      "viewport": "desktop",
+      "t": 27,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=216)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "desktop",
+      "t": 27,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=259)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "desktop",
+      "t": 27,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=302)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "desktop",
+      "t": 190,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=252)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "desktop",
+      "t": 190,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=295)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "desktop",
+      "t": 190,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=338)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "desktop",
+      "t": 190,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=381)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "desktop",
+      "t": 268,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=9758",
+      "elementText": "sellers adjusting"
+    },
+    {
+      "viewport": "desktop",
+      "t": 283,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=9758",
+      "elementText": "sellers adjusting"
+    },
+    {
+      "viewport": "desktop",
+      "t": 330,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=267",
+      "elementText": "23"
+    },
+    {
+      "viewport": "desktop",
+      "t": 340,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=267",
+      "elementText": "23"
+    },
+    {
+      "viewport": "desktop",
+      "t": 352,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=267",
+      "elementText": "23"
+    },
+    {
+      "viewport": "desktop",
+      "t": 366,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=267",
+      "elementText": "23"
+    },
+    {
+      "viewport": "desktop",
+      "t": 406,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=341)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "desktop",
+      "t": 406,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=393)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "desktop",
+      "t": 406,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=446)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "desktop",
+      "t": 406,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=494)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "desktop",
+      "t": 522,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=885",
+      "elementText": "10%"
+    },
+    {
+      "viewport": "desktop",
+      "t": 546,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=885",
+      "elementText": "10%"
+    },
+    {
+      "viewport": "desktop",
+      "t": 552,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=885",
+      "elementText": "10%"
+    },
+    {
+      "viewport": "desktop",
+      "t": 552,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=5259",
+      "elementText": "directional, not certain"
+    },
+    {
+      "viewport": "desktop",
+      "t": 581,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=885",
+      "elementText": "10%"
+    },
+    {
+      "viewport": "desktop",
+      "t": 581,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=5259",
+      "elementText": "directional, not certain"
+    },
+    {
+      "viewport": "mobile",
+      "t": 27,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=353)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "mobile",
+      "t": 27,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=522)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "mobile",
+      "t": 27,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=565)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "mobile",
+      "t": 52,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=232",
+      "elementText": "≈25"
+    },
+    {
+      "viewport": "mobile",
+      "t": 60,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=232",
+      "elementText": "≈25"
+    },
+    {
+      "viewport": "mobile",
+      "t": 88,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=232",
+      "elementText": "≈25"
+    },
+    {
+      "viewport": "mobile",
+      "t": 88,
+      "rule": "stale-ink",
+      "detail": "ink path floating off all charts (top=463)",
+      "elementText": ""
+    },
+    {
+      "viewport": "mobile",
+      "t": 88,
+      "rule": "stale-ink",
+      "detail": "ink path floating off all charts (top=491)",
+      "elementText": ""
+    },
+    {
+      "viewport": "mobile",
+      "t": 112,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=232",
+      "elementText": "≈25"
+    },
+    {
+      "viewport": "mobile",
+      "t": 118,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=232",
+      "elementText": "≈25"
+    },
+    {
+      "viewport": "mobile",
+      "t": 190,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=42",
+      "elementText": "*"
+    },
+    {
+      "viewport": "mobile",
+      "t": 190,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=398)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "mobile",
+      "t": 190,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=524)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "mobile",
+      "t": 190,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=609)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "mobile",
+      "t": 190,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=652)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "mobile",
+      "t": 202,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=443",
+      "elementText": "median sale"
+    },
+    {
+      "viewport": "mobile",
+      "t": 289,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=421)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "mobile",
+      "t": 330,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=562",
+      "elementText": "23"
+    },
+    {
+      "viewport": "mobile",
+      "t": 340,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=484",
+      "elementText": "23"
+    },
+    {
+      "viewport": "mobile",
+      "t": 352,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=562",
+      "elementText": "23"
+    },
+    {
+      "viewport": "mobile",
+      "t": 352,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=3150",
+      "elementText": "trend has changed"
+    },
+    {
+      "viewport": "mobile",
+      "t": 366,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=562",
+      "elementText": "23"
+    },
+    {
+      "viewport": "mobile",
+      "t": 366,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=3150",
+      "elementText": "trend has changed"
+    },
+    {
+      "viewport": "mobile",
+      "t": 406,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=586)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "mobile",
+      "t": 406,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=703)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "mobile",
+      "t": 406,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=802)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "mobile",
+      "t": 406,
+      "rule": "stale-ink",
+      "detail": "wk-note floating off all charts (top=896)",
+      "elementText": "*"
+    },
+    {
+      "viewport": "mobile",
+      "t": 424,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=5947",
+      "elementText": "leads prices by ~12 months"
+    },
+    {
+      "viewport": "mobile",
+      "t": 511,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=5947",
+      "elementText": "leads prices by ~12 months"
+    },
+    {
+      "viewport": "mobile",
+      "t": 517,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=5947",
+      "elementText": "leads prices by ~12 months"
+    },
+    {
+      "viewport": "mobile",
+      "t": 517,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=487",
+      "elementText": "20%"
+    },
+    {
+      "viewport": "mobile",
+      "t": 522,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=5947",
+      "elementText": "leads prices by ~12 months"
+    },
+    {
+      "viewport": "mobile",
+      "t": 522,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=487",
+      "elementText": "20%"
+    },
+    {
+      "viewport": "mobile",
+      "t": 522,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=125",
+      "elementText": "10%"
+    },
+    {
+      "viewport": "mobile",
+      "t": 546,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=5947",
+      "elementText": "leads prices by ~12 months"
+    },
+    {
+      "viewport": "mobile",
+      "t": 546,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=487",
+      "elementText": "20%"
+    },
+    {
+      "viewport": "mobile",
+      "t": 546,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=125",
+      "elementText": "10%"
+    },
+    {
+      "viewport": "mobile",
+      "t": 552,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=5947",
+      "elementText": "leads prices by ~12 months"
+    },
+    {
+      "viewport": "mobile",
+      "t": 552,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=487",
+      "elementText": "20%"
+    },
+    {
+      "viewport": "mobile",
+      "t": 552,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=125",
+      "elementText": "10%"
+    },
+    {
+      "viewport": "mobile",
+      "t": 581,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=5947",
+      "elementText": "leads prices by ~12 months"
+    },
+    {
+      "viewport": "mobile",
+      "t": 581,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=487",
+      "elementText": "20%"
+    },
+    {
+      "viewport": "mobile",
+      "t": 581,
+      "rule": "over-caption",
+      "detail": "wk-note intersects caption area=125",
+      "elementText": "10%"
+    }
+  ],
+  "counts": {
+    "stale-ink": 25,
+    "over-caption": 41
+  },
+  "total": 66,
+  "screenshots": 15
+}
