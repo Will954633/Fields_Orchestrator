@@ -1,0 +1,12 @@
+# Never commit the heavy binaries — GitHub is for the CODE, not the media.
+work/            # intermediates + transcripts + manifest (regenerable)
+out/             # rendered deliverables (regenerable; ship the embed via public/walkthrough)
+config.yaml      # per-project working copy (config.example.yaml is the tracked template)
+*.mp4
+*.mov
+*.MP4
+*.MOV
+*.mp3
+*.srt
+*.ass
+__pycache__/
