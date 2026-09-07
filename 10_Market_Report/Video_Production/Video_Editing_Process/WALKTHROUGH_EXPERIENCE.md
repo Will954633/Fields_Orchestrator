@@ -106,7 +106,9 @@ first (see §6).
    closing 3‑signal recap list. The concept text is what the viewer takes away.
 7. **The head has two states.**
    - **STAGE** — large, front‑and‑centre (within the market column), page dimmed — for the
-     intro, the interpretive bridges, and the close (talking *to* the viewer).
+     intro, the interpretive bridges, and the close (talking *to* the viewer). Any writing
+     in this state goes in a **note‑box** on the clean site background, not straight over the
+     dimmed page (§3.1.10).
    - **DOCK** — small, pinned to the **bottom edge of the chart** (anchored to the chart,
      not the viewport, so it's never "too low"), page undimmed — for talking *about* data.
 8. **Stay inside the market column.** The avatar, captions and handwriting are clamped to
@@ -133,9 +135,12 @@ into every chapter, not just Days‑on‑Market. Each maps to a helper that alre
    arrives at a chart, on the way to its docked position:
    1. **pause on the title and sweep a yellow highlighter across it** (`wkTitleHighlight`
       → `wkHighlight`) as the narrator names the chart;
-   2. **put a small blue‑pen asterisk (`*`) beside each of the chart's settings/controls**
-      (e.g. Overlay / Window / Range for Days‑on‑Market; Price‑series / View / Range /
-      Indicators for the explorer) — it flags that the chart is interactive and adjustable;
+   2. **put a small blue‑pen asterisk (`*`) sitting ON the top‑right corner of each
+      *selected* settings pill** — mostly *on* the pill, slightly overhanging the corner
+      (not floating above it). Measure the asterisk and place it by ~⅔ overlap
+      (`left = pill.right − starW*0.62`, `top = pill.top − starH*0.16`). It flags that the
+      chart is interactive and adjustable. (Selected pills = `.dom-pill.active` for
+      dom/median/asking/withdrawn; `.seg button.on, .pill.on` for the explorer.)
    3. **then drop the head down** to its beside‑the‑chart resting position.
    One entrance per chapter. ⚠ The highlighter uses `mix-blend-mode:multiply`, so it only
    works over the **light, undimmed** chart — do it in the DOCK entrance, never over a
@@ -160,11 +165,15 @@ into every chapter, not just Days‑on‑Market. Each maps to a helper that alre
 4. **Horizontal for sentences, tilted for call‑outs.** Multi‑word *concepts* and *labels*
    read best **horizontal** (`.flat` — no rotation); keep the slight biro tilt only for
    short numbers/call‑outs. Long tilted sentences are hard to read.
-5. **A label and its value are one unit.** When a written label pairs with a value
-   ("days on market" + "50 days"), **place the value relative to the label's rendered
-   rect** (`label.getBoundingClientRect().right + gap`), never by independent coordinates —
-   otherwise they drift or collide. Anchor the *pair* far enough from the right edge that
-   the whole thing fits (see issue #26).
+5. **A label and its value are one unit — but the *label* is transient.** When a written
+   label pairs with a value ("days on market" + "50 days"), the **value is the headline fact
+   and persists**; the **written label fades** a few seconds after it's read (tag it and
+   `wkFadeTag` on a later beat, per §3.1.3) so it doesn't clutter the chart while the number
+   and the circled spike stay. When both are on screen together, place the value relative to
+   the label's rendered rect (`label.getBoundingClientRect().right + gap`), never by
+   independent coordinates; if the label fades independently, anchor the value on its own so
+   it survives (Days‑on‑Market: "50 days" is spike‑anchored, "days on market" is tagged
+   `domlabel` and fades at t≈44). Keep the pair clear of the right edge (issue #26).
 6. **Directional arrows are drawn, never typed.** `↑ ↓ →` are not in "Fields Hand" — draw
    them as pen strokes (`wkArrowGlyph`, blue, tagged with the concept so they fade with
    it). Same for any glyph beyond `≈ $ % ~ + : . -`.
@@ -183,6 +192,62 @@ into every chapter, not just Days‑on‑Market. Each maps to a helper that alre
    concept so it fades with the text. This turns a stated relationship into a *shown* one:
    e.g. Days‑on‑Market's "↑ more days on market = weaker demand ↓". Apply it everywhere a
    direction is spoken (see the close recap: up / up / down / sideways‑down).
+   **Inside a STAGE note‑box (§3.1.10) the arrow is an *inline* child of its line**
+   (`wkBoxNote(text,…,dir)` renders a small `wk-boxarrow` SVG in the flex row), not free ink
+   beside the box. Free ink drawn *next to* a growing box gets covered when a later, wider
+   line widens the box over it (issue #28) — inline arrows can't, and they stay glued to
+   their word.
+10. **STAGE writing goes in a note‑box, not straight on the page.** When the head is in
+    **STAGE** (full‑view, page dimmed/blurred), handwriting placed directly over the blurred
+    chart is hard to read. Write STAGE concept lines into a **note‑box**: a rounded‑corner
+    panel (`wk-notebox`, `border-radius:16px`) filled with the **site background colour**
+    (`#f8f9fa`) so the blue biro sits on clean "paper", not over the dimmed page. Rules for
+    the box:
+    - **Horizontal only.** Box lines never tilt (`.wk-boxline` has no rotation) — the box is
+      a legibility surface, so slanted text defeats it. (The tilt stays for on‑chart DOCK
+      call‑outs.)
+    - **One box per STAGE segment**, positioned to the **left** of the head so it doesn't
+      overlap the avatar (`wkStageBox(fx,fy)`, default `fx≈0.27`); lines stack downward and
+      the box grows to fit. Cleared with the ink on the next chapter (`clearWkInk` removes
+      `.wk-notebox`).
+    - **Same write‑on + biro treatment** as free notes (left‑to‑right clip reveal, ballpoint
+      filter), and directional arrows go **inline** in the line (see §3.1.9). Helpers:
+      `wkStageBox` / `wkBoxNote(text,instant,big,fx,fy,dir)`.
+    - This is the STAGE counterpart to §3.1.5's on‑chart placement: on a **light DOCK** chart
+      write on the chart; on a **dimmed STAGE** write in the box.
+    - **Mobile:** the box goes `.mob` — **centred** horizontally (`left:50%`), directly **under the
+      head + caption** (head moves to the top, `wkStage` mobile branch), width‑capped to `92vw`
+      with lines allowed to **wrap** and centre‑align. A left‑anchored desktop box runs off the
+      left edge on a 390px screen (issue #33).
+11. **Two reference points = two circles + a connecting arrow, in narration order.** When the
+    copy compares two points ("from ~25 in June **up to** 50 in August", "peak of 1.5M … **down
+    to** 1.49M"), do NOT circle a region or fire a Will‑hand arrow at one blob. Circle the
+    **first‑mentioned** point, then — on the beat where the movement is spoken — draw a
+    **hand‑drawn point‑to‑point arrow** in the described direction to the **second** point and
+    circle it. The order follows the *narration*, not the calendar: whatever Will says first is
+    circled first. Helpers: `wkPointCircle(sel,VBW,VBH,pt,partner,note,instant,tag,delay)` (circle
+    one point + a value note pushed clear) and `wkArrowVB(...)` (edge‑to‑edge red arrow between two
+    circles). Applied to all five charts (DOM June→Aug, median peak→latest, asking Dec 2023→Sept
+    2026, withdrawn 23→53, lending 20%→10%).
+12. **Anchor circles to the LIVE line, not hardcoded viewBox coords — and keep numbers off both.**
+    Hardcoded `(vx,vy)` drift the moment the chart's range/data changes and the circle lands in
+    empty space (median circles were sitting up in the "gradual decline" text, issue #30). Read the
+    point from the rendered path at runtime (`wkMainPath` → `getPointAtLength`; `wkMedianPts` finds
+    the peak = min‑y and the latest = endpoint; `wkAskLabels` reads each line for its leader
+    target). Every value note is then **pushed to the outer side, away from its partner point**
+    (`placeClear`) so a number never overlaps its own circle or the connecting arrow. A runtime
+    **anti‑overlap** pass (`avoidNoteOverlap`) additionally nudges any note off another note it
+    collides with (the auto‑fix, §5c).
+13. **Design mobile (≤640px) as a distinct layout, not a scaled desktop.** The 390px column
+    compresses every viewBox‑x, so desktop coordinates collide and long lines bleed off‑edge. Rules:
+    (a) STAGE head to the top, caption + centred note‑box below it (pattern 10); (b) DOCK head sits
+    **lower** (`wkHeadAtChart` mobile overlap 0.28 vs 0.55) so it stops covering the chart it's
+    talking about; (c) long DOCK notes **wrap** (`.wk-note{white-space:normal;max-width:82vw}`)
+    instead of running off the right edge; (d) concept lines that sit low on desktop (e.g. "sellers
+    adjusting") move **up into white space** and drop `big` on mobile so they never land on the
+    caption bar; (e) give mobile‑specific viewBox positions via a `markMobile(desk,mob)` switch, and
+    let `wkIsMobile()` gate every branch. **Verify mobile separately** — the QA harness (§5c) runs
+    both viewports because mobile carries ~5× the layout findings.
 
 ---
 
@@ -201,7 +266,9 @@ The building blocks (all in the engine, prefixed `wk`):
 | `wkCircleVB(sel,VBW,VBH,vx,vy,rx,ry,arrow,instant)` | Red circle (+ optional arrow from Will) at a chart viewBox point |
 | `wkNoteVB(sel,VBW,VBH,vx,vy,dx,dy,text,instant,big,flat,tag)` | Blue handwritten note at a viewBox point (+px nudge), width‑clamped. `flat`=horizontal (no tilt); `tag`=group id for fading. Returns the element. |
 | `wkNote(text,sx,sy,instant,big,flat,tag)` | Same, at absolute screen px — use for a value placed relative to another note's rect (§3.1.5) |
-| `wkFreeNote(text,fx,fy,instant,big)` | Blue note at a viewport fraction — for STAGE concept lines (bridge, close recap) |
+| `wkFreeNote(text,fx,fy,instant,big)` | Blue note at a viewport fraction. ⚠ Superseded for STAGE by the note‑box below — free STAGE notes over a dimmed page are hard to read |
+| `wkStageBox(fx,fy,instant)` | Create/return the STAGE **note‑box** — rounded panel on the site background (`#f8f9fa`), left of the head (§3.1.10) |
+| `wkBoxNote(text,instant,big,fx,fy,dir)` | Write one horizontal line into the STAGE note‑box (creating it if needed). `dir` appends an **inline** hand‑drawn arrow: `"up"/"down"/"left"/"right"`, or `"right-down"` for two |
 | `wkEnter(chartSel,holdSec,instant)` | The chapter entrance: `wkTitleHighlight` + `wkSettingsStars`, optionally holding the video (§3.1.1) |
 | `wkTitleHighlight(chartSel,instant)` | Scroll the chart's `.section-title` into view + yellow‑highlighter sweep it |
 | `wkSettingsStars(chartSel,instant)` | Blue‑pen `*` at the top‑right of each **selected** settings pill (`.dom-pill.active`; explorer `.seg button.on,.pill.on`) |
@@ -238,42 +305,42 @@ Times are video seconds. `▶` = concept/teaching write.
 ```
 0    STAGE (intro)
 23   DOCK Days-on-Market (force trailing-3 window)
-35   ▶ "days on market"                     (0:35 "known as its days on market")
-42.5 red circle + arrow on the spike        (0:42 "shot up")
-48   "≈25"                                   (0:48 "about 25 days in June")
-51   "50 days"                               (0:51 "up to 50 days in August")
+35   ▶ "days on market" [tag domlabel]      (0:35 "known as its days on market")
+44   fade "days on market" (wkFadeTag)      (label read; "50 days" persists)
+48   circle June + "≈25"                    (0:48 "about 25 days in June")   ← 1st point
+51   arrow June→Aug, circle Aug + "50 days" (0:51 "up to 50 days in August") ← 2nd point (§3.1.11)
 84   ▶ "more days = weaker demand"           (1:24 demand relationship)
 110  ▶ "a symptom, not a predictor"          (1:54 the key reframe)
-120  STAGE (bridge)
-127  ▶ "prices move gradually"               (2:00)
-134  ▶ "valued on the last 6 months"         (2:08)
+120  STAGE (bridge) — note-box
+127  ▶ box: "prices move gradually" [big]    (2:00)
+134  ▶ box: "valued on the last 6 months"    (2:08)
 156  DOCK Median
-164  ▶ "gradual decline"                     (2:43)
-170  circle peak + "$1.5M"                   (2:52 "1.5 million")
-175  circle latest + "$1.49M"                (2:55 "1.492")
+164  ▶ "gradual decline" (open lower-left)   (2:43)
+170  circle peak + "$1.5M"                   (2:52 "1.5 million")   ← peak/latest READ from line (§3.1.12)
+175  arrow peak→latest, circle + "$1.49M"    (2:55 "1.492")
 186  DOCK Asking (median overlay on, 10yr)
-198  ▶ "asking price" / "median sale"        (3:20 line labels)
-236  circle flip + "Dec 2023"                (3:56)
-250  circle converge + "Sept 2026"           (4:11)
+198  ▶ "asking price"/"median sale" + blue leaders to each line (3:20); FADE at 230 (§3.1.5/4b)
+236  circle flip + "Dec 2023"                (3:56)                ← 1st point
+250  arrow flip→converge, circle + "Sept 2026" (4:11)             ← 2nd point
 264  ▶ "sellers adjusting"                   (4:32)
 285  DOCK Withdrawn
 300  ▶ "homes that didn't sell"              (4:56)
-326  circle 2025 + "23"                      (5:26)
-334  circle 2026 + "53"                      (5:40)
+326  circle 2025 + "23"                      (5:26)                ← 1st point
+334  arrow 2025→2026, circle + "53"          (5:40)                ← 2nd point
 350  ▶ "trend has changed"                   (5:48)
-368  STAGE (need a leading signal)
-380  ▶ "a signal that moves BEFORE prices"   (6:19)
+368  STAGE (need a leading signal) — note-box
+380  ▶ box: "a signal that moves BEFORE prices" (6:19)
 402  DOCK Lending (#ac)
 419  ▶ "leads prices by ~12 months"          (6:55)  [big]
 412  ▶ "used by CBA + RBA"                   (6:48)
-513  circle Q4-25 + "20%"                    (8:40)
-520  circle Q2-26 + "10%"                    (8:43)
+513  circle Q4-25 + "20%"                    (8:40)                ← 1st point
+520  arrow Q4-25→Q2-26, circle + "10%"       (8:43)                ← 2nd point
 548  ▶ "directional, not certain"            (9:07)
-583  STAGE (close)
-591  ▶ "1. days on market: up"               (9:49 recap builds)
-599  ▶ "2. homes withdrawn: up"
-607  ▶ "3. new-house lending: down"
-622  ▶ "so: flat to declining"               (10:12)
+583  STAGE (close) — note-box
+591  ▶ box: "days on market" ↑ (inline arrow) (9:49 recap builds)
+599  ▶ box: "homes withdrawn" ↑
+607  ▶ box: "new-house lending" ↓
+622  ▶ box: "so: flat to declining" → ↓ [big] (10:12)
 ```
 
 ---
@@ -347,6 +414,13 @@ headless screenshots first, then `gh api`, then live verify.
 | 25 | **Cursive width was underestimated** from character count, so coordinate math put notes too close | Verified every placement by screenshot at the real (30 px desktop) font size and nudged | Don't trust coordinate math for handwriting — screenshot at the deployed font size; cursive is wider than it looks |
 | 26 | A faded concept left **orphan arrows** behind (text is a `div`, arrows are SVG `path`s) | `wkFadeTag` fades **both** by tag (inline opacity on div *and* path); tag every element of a concept group with the same tag | Treat a concept as a *group* — tag its text and its glyphs together, fade by tag |
 | 27 | Dock/stage beats **auto‑clear all notes + highlights** (`clearWkInk`) | Intentional (slate‑clear between chapters); sequence transient effects (title highlight) *before* the next dock | Remember: moving to a new chart wipes the slate. Put entrance effects on the entrance beat, not before it |
+| 28 | STAGE recap **arrows drawn as free ink beside the note‑box got hidden** — a later, wider line grew the box over the earlier arrows (box.right moved right of where they were drawn) | Made directional arrows **inline children** of each box line (`wk-boxarrow` SVG in the flex row), so they ride with the text and stay on top of the box (§3.1.9/§3.1.10) | Never anchor free ink to the *edge* of a container that grows after you draw. Put per‑line adornments *inside* the line |
+| 29 | STAGE handwriting **straight over the dimmed/blurred chart was hard to read** (blue biro on a busy, low‑contrast background) | Write STAGE lines into a **rounded note‑box filled with the site bg (`#f8f9fa`)** — clean "paper" under the pen (§3.1.10) | On a dimmed STAGE, give the writing its own opaque surface; only write directly on a chart when it's the light, undimmed DOCK |
+| 30 | **Circles landed off the data line** — hardcoded `(vx,vy)` were tuned for a different range and drifted up into the "gradual decline" text | Read the point from the **rendered path** at runtime (`wkMainPath`/`wkMedianPts` via `getPointAtLength`) instead of hardcoding | Never hardcode a chart coordinate that depends on the selected range/data — anchor to the live geometry (§3.1.12) |
+| 31 | **Handwriting clipped top & bottom** — the write‑on `clip-path:inset(0 …)` cut the cursive ascenders/descenders, and the ballpoint filter region was too short | Gave the clip vertical breathing room (`inset(-38% … -38% …)`), raised `line-height`, widened the filter `y`/`height`, shrank the font a touch | A `clip-path:inset()` reveal clips top/bottom at 0 by default — use negative top/bottom insets for any tall/looping font, and widen the `filter` region to match |
+| 32 | **Stale ink floated over the page during the auto‑scroll** into the next scene ("gradual decline" + numbers stayed on‑screen scrolling into the asking chart) | `clearWkInk()` now fires at the **start of every scene entry** — `wkStage` / `wkTitleHighlight` (before its scroll) / `wkDock` | Ink is viewport‑fixed; clear it BEFORE you scroll, not after you arrive. Detected automatically by the QA harness `stale-ink` rule (§7) |
+| 33 | **Mobile:** STAGE note‑box ran off the **left** edge; long DOCK notes bled off the **right**; "sellers adjusting" wrote over the caption | `.wk-notebox.mob` centred + width‑capped; `.wk-note` wraps on ≤640px; low concept lines raised via `markMobile` (§3.1.13) | Treat ≤640px as its own layout; a scaled desktop always collides. Screenshot mobile separately |
+| 34 | Overlapping notes slipped through manual review | Runtime `avoidNoteOverlap` nudges a note off any note it hits; the **QA harness** (§7) screenshots every `note-overlap`/`over-caption`/`offscreen`/`note-on-circle`/`stale-ink` violation across desktop + mobile before deploy | Don't eyeball overlaps — lint them. Construct to avoid (a), auto‑nudge (b), and screenshot‑on‑violation (c) |
 
 ---
 
@@ -363,6 +437,25 @@ node ./_shotwalk.cjs "http://localhost:5173/news/robina?walkthrough=1" out.png <
 ```
 Read the PNGs (multimodal) at the key beats. Then **`npm run build`** must pass (the prod
 strictness gate, §6.7).
+
+**Automated layout QA — the error‑detection gate (`qa/walkthrough_qa.cjs`).** Eyeballing a few
+frames misses overlaps, especially on mobile. The harness drives the walkthrough across **both
+viewports** (desktop 1280 + mobile 390), seeks to ~55 audit timepoints that bracket every scene
+transition and annotation, reads the geometry of every note / ink path / caption / chart, and
+flags five violation classes — **`note-overlap`, `over-caption`, `offscreen`, `note-on-circle`,
+`stale-ink`** — screenshotting each and writing `qa/out/qa_report.json` (exit 1 on any finding).
+This is the three‑part contract Will asked for: **(a) construct so it can't happen** (clear‑before‑scroll,
+`placeClear`, mobile layout), **(b) auto‑fix at runtime** (`avoidNoteOverlap`), **(c) surface with a
+screenshot** when it still slips through. Run it against dev before deploying and again against the
+live URL after:
+```bash
+cd 10_Market_Report/Video_Production/Video_Editing_Process/qa
+NODE_PATH=/home/fields/Feilds_Website/01_Website/node_modules \
+  node walkthrough_qa.cjs "http://localhost:5173/news/robina?walkthrough=1" --out ./out_dev
+```
+Read the screenshots it flags — some findings are legitimate (a note that *should* sit off the
+charts), so the PNG is the arbiter, not the raw count. The count must not regress against the
+prior run.
 
 **Deploy** (website changes are gated — CLAUDE.md §2/§4; git push hangs → `gh api`):
 ```bash
