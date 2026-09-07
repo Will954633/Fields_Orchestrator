@@ -19,6 +19,7 @@ Usage:  python3 scripts/03_build.py --edl work/edl.json [--config config.yaml]
 """
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -95,11 +96,13 @@ def render_segments(cfg, edl, work):
         vf, af = grade_vf(cfg, seg, master), grade_af(cfg)
         print(f"  seg {i:03d}  {seg['src']}  {seg['in']:.2f}→{seg['out']:.2f} ({dur:.1f}s) "
               f"cx={seg.get('face_cx')}  {seg.get('chapter','')}")
+        threads = os.environ.get("WALK_FFMPEG_THREADS", "")
+        tflag = ["-threads", threads] if threads else []
         vlib.run([
-            "ffmpeg", "-v", "error", "-y",
+            "ffmpeg", "-v", "error", "-y", *tflag,
             "-ss", str(seg["in"]), "-i", str(src), "-t", str(dur),
             "-vf", vf, "-af", af,
-            "-r", str(fps), "-ar", "48000", "-ac", "2",
+            "-r", str(fps), "-ar", "48000", "-ac", "2", *tflag,
             # These are INTERMEDIATES (re-encoded into the finals), and 4K decode on a
             # shared VM is the bottleneck — veryfast/crf16 keeps them visually lossless
             # while roughly halving wall-clock vs preset medium.
