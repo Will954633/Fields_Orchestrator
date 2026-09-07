@@ -1,0 +1,69 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Walkthrough video build config.  Copy to config.yaml per project and edit.
+# Every field has a sane default in 03_build.py; this file only overrides.
+# ─────────────────────────────────────────────────────────────────────────────
+
+project:
+  slug: "robina_2026-08_dom"      # → out/<slug>.mp4 and site public/walkthrough/<slug>.mp4
+  title: "Robina — August 2026 Market Overview"
+  suburb: "Robina"
+
+paths:
+  raw_dir:  "../Example_Raw_Video"          # folder of raw DJI clips (relative to this file)
+  work_dir: "./work"                        # intermediates (safe to delete/rebuild)
+  out_dir:  "./out"                         # final deliverables
+
+# ── Framing: the raw is 3840×2160; Will sits left-of-centre. We crop a centred
+#    square around his face, then scale. face_cx is auto-detected per clip in the
+#    EDL, but these are the global crop rules.
+framing:
+  master_square: 1080     # square master edge (px). Web mp4 is downscaled from this.
+  web_square: 512         # embed avatar edge (px). Matches the live site's 512×512.
+  zoom: 1.00              # 1.0 = full-height square crop; >1 punches in tighter
+  # face_cy target (vertical): keep eyes on upper third. 0.42 ≈ eyes-high framing.
+  face_cy_target: 0.42
+  # Baked circle-on-black master (the *.mov social deliverable). The web mp4 ignores
+  # these — the live page draws its own circle via CSS border-radius on the 512² square.
+  circle_diameter: 820    # circle Ø in the 1920×1080 frame (Aug '26 ≈ 760–820)
+  circle_cy_frac: 0.46    # circle vertical centre as fraction of frame height
+
+# ── Look / lighting grade (applied to every segment; per-segment override in EDL)
+look:
+  brightness: 0.03        # eq brightness  (-1..1)  — lift the flat indoor exposure
+  contrast: 1.06          # eq contrast    (0..2)
+  saturation: 1.08        # eq saturation  (0..3)   — a touch more life in skin/shirt
+  gamma: 1.02
+  warmth: 6               # colorbalance midtone red/blue shift (0=off, +warm)
+  sharpen: 0.6            # unsharp luma amount (0=off)
+
+# ── Audio cleanup chain
+audio:
+  highpass_hz: 80         # kill low-end rumble/AC
+  denoise: "afftdn"       # afftdn | anlmdn | none   (RNNoise/arnndn needs a .rnnn model — not installed)
+  denoise_nf: -25         # afftdn noise floor (dB); more negative = gentler
+  target_lufs: -16.0      # loudnorm integrated target (web/dialogue standard)
+  target_tp: -1.5         # true-peak ceiling (dBTP)
+
+# ── Assembly
+assembly:
+  fps: 30
+  transition: "cut"       # cut | dissolve
+  dissolve_sec: 0.20      # only used when transition=dissolve
+
+# ── Captions (burned into the *_captions master; the web mp4 stays caption-free
+#    because the live page renders its own guided-tour captions)
+captions:                 # burned as ASS at real 1920×1080 px (not scaled by libass)
+  font: "DejaVu Sans"
+  fontsize: 54            # real pixels at 1080p (≈ the Aug '26 caption size)
+  primary_colour: "&H00FFFFFF"   # ASS BGR — white
+  outline_colour: "&H00000000"   # black
+  outline: 3
+  margin_v: 90            # px from bottom (sits below the circle)
+
+# ── Deliverables to emit (all default true)
+outputs:
+  web_mp4: true                  # 512² square, H.264, no captions  → the embed
+  circle_mov_nocaps: true        # 1080 baked circle-on-black, HEVC, no captions
+  circle_mov_caps: true          # 1080 baked circle-on-black, HEVC, + captions
+  srt: true
+  transcript_md: true
