@@ -1,0 +1,33 @@
+{
+  "slug": "robina_2026-08_dom",
+  "title": "Robina — August 2026 Market Overview",
+  "notes": "Worked example, cut from the 10 real DJI takes (see work/raw_transcript.md). Demonstrates the take-selection the pipeline can't automate away: (1) clip 0060 opens with a repeat of 0026's closing line ('let's jump in') — trimmed. (2) clip 0062 is a 217s take that covers the bridge + median price AND a rough first pass at asking-vs-sale; the asking section is DROPPED because clip 0064 redoes it cleanly. (3) clip 0066 is a discarded first take of the 'new house lending' intro — DROPPED, superseded by the cleaner 0070. (4) clip 0070's tail ('if we click on the three sub average…') is a false start 0076 redoes — trimmed. (5) small false starts ('Well,', 'So as I said before, these aren't') trimmed at the edges. face_cx values are the auto-detected crop centres from stage 01.",
+  "segments": [
+    { "src": "DJI_20260907104301_0026_D.MP4", "in": 0.0,  "out": 19.5, "chapter": "Intro — who Will is", "face_cx": 0.49,
+      "transcript": "Hi there, my name's Will. I sell homes around the Southern Gold Coast, but before I got into real estate, I was a data analyst for many years… so let's jump in." },
+
+    { "src": "DJI_20260907122914_0060_D.MP4", "in": 1.2, "out": 53.0, "chapter": "Chart 1 · Days on Market", "face_cx": 0.44,
+      "transcript": "What we've got here is how long it takes a house to sell in Robina… risen from ~25 days in June to ~50 days now… way above that 10-yr seasonal trend (ex-COVID, rolling 3-mo)." },
+
+    { "src": "DJI_20260907123010_0061_D.MP4", "in": 0.0, "out": 48.0, "chapter": "Chart 1 · why it matters", "face_cx": 0.498, "zoom": 1.05,
+      "transcript": "Why does that matter? Days on market is an indicator of buyer demand… but it's a symptom of the current market, not a predictor of where it's headed." },
+
+    { "src": "DJI_20260907123108_0062_D.MP4", "in": 0.0, "out": 79.0, "chapter": "Bridge + Chart 2 · Median Price", "face_cx": 0.49,
+      "transcript": "Prices move gradually — appraisals are set off the last 6 months of sales, so asking lags… peak ~$1,500,000 (Mar 2026) now $1,492,000 — a gradual decline, not the magnitude of days-on-market. (DROP the asking-vs-sale portion after this — 0064 redoes it cleanly.)" },
+
+    { "src": "DJI_20260907123508_0064_D.MP4", "in": 0.0, "out": 69.0, "chapter": "Chart 3 · Asking vs Sale Price", "face_cx": 0.498,
+      "transcript": "Clean take: asking sat BELOW sale for most of history → flips ABOVE in Dec 2023 → back to match in Sept 2026. Sellers are adjusting to actually sell." },
+
+    { "src": "DJI_20260907123701_0065_D.MP4", "in": 0.0, "out": 95.0, "chapter": "Chart 4 · Withdrawn + bridge to leading indicator", "face_cx": 0.448,
+      "transcript": "Withdrawn homes: back to pre-GFC, 2022 correction, step up 2021→2023… 2025: 23 unsold vs 2026: 53 already. Trend confirmed. To see AHEAD we need a metric that moves before the market. (Trim the trailing false start at ~1:56.)" },
+
+    { "src": "DJI_20260907124140_0070_D.MP4", "in": 0.0, "out": 31.0, "chapter": "Chart 5 · New House Lending — intro", "face_cx": 0.49, "zoom": 1.05,
+      "transcript": "New house lending — heavily studied, used by CBA + RBA, strong correlation, moves ~12 months before house prices. (Best take of this intro — 0066 dropped. Trim the 'if we click…' false start at the end.)" },
+
+    { "src": "DJI_20260907124536_0076_D.MP4", "in": 0.0, "out": 158.0, "chapter": "Chart 5 · walkthrough + directional close", "face_cx": 0.448,
+      "transcript": "Select 3-suburb median, actual timings, all data; marked historical lead/lag pairs → 3-year view: peaked end-2024, halved Q4-2025 (20%) → Q2-2026 (10%). A directional signal, not a certainty." },
+
+    { "src": "DJI_20260907125213_0082_D.MP4", "in": 0.0, "out": 43.0, "chapter": "Close — three signals, one direction", "face_cx": 0.42,
+      "transcript": "Three data points, same direction: days-on-market ↑, withdrawals ↑, new-house-lending ↓ (halved). Taken together: flat to declining, very unlikely to be rising — not measures of certainty. (Trim the 'so as I said before, these aren't' restart at ~0:43.)" }
+  ]
+}
