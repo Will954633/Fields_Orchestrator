@@ -83,14 +83,48 @@ def grade_af(cfg):
 
 
 # ----------------------------------------------------------------------------- stages
+def snap_segment(cfg, work, seg, src):
+    """Move this segment's in/out onto silence so no word is clipped and joins land on a
+    breath (config assembly.snap_to_silence, default on). Returns (in, out, report)."""
+    if not D(cfg, "assembly", "snap_to_silence", default=True):
+        return float(seg["in"]), float(seg["out"]), None
+    stem = Path(seg["src"]).stem
+    sil = vlib.detect_silences(
+        str(src), cache_json=str(work / f"_sil_{stem}.json"),
+        noise_db=D(cfg, "assembly", "snap_noise_db", default=-38.0),
+        min_silence=D(cfg, "assembly", "snap_min_silence", default=0.12),
+    )
+    in0, out0 = float(seg["in"]), float(seg["out"])
+    new_in, rin = vlib.snap_in(sil, in0,
+                               preroll=D(cfg, "assembly", "snap_preroll", default=0.18),
+                               max_extend=D(cfg, "assembly", "snap_max_extend", default=3.0))
+    new_out, rout = vlib.snap_out(sil, out0,
+                                  tail_pad=D(cfg, "assembly", "snap_tail_pad", default=0.22),
+                                  max_extend=D(cfg, "assembly", "snap_max_extend", default=3.0))
+    # clamp to the clip's real duration (some EDL out-points overshoot the clip) and
+    # never invert
+    clip_dur = vlib.probe_summary(str(src))["duration"]
+    new_out = min(new_out, clip_dur - 0.02)
+    new_in = max(0.0, min(new_in, new_out - 0.3))
+    report = {"src": seg["src"], "in": [round(in0, 2), round(new_in, 2), rin],
+              "out": [round(out0, 2), round(new_out, 2), rout]}
+    return new_in, new_out, report
+
+
 def render_segments(cfg, edl, work):
     master = D(cfg, "framing", "master_square", default=1080)
     fps = D(cfg, "assembly", "fps", default=30)
     raw_dir = (HERE / cfg["paths"]["raw_dir"]).resolve()
     segs = [s for s in edl["segments"] if not s.get("drop")]
-    paths = []
+    paths, boundaries = [], []
     for i, seg in enumerate(segs):
         src = raw_dir / seg["src"]
+        in_t, out_t, rep = snap_segment(cfg, work, seg, src)
+        if rep:
+            boundaries.append({"seg": i, **rep})
+            if "WARN" in rep["out"][2] or "WARN" in rep["in"][2]:
+                print(f"    ⚠ seg {i:03d} {rep}")
+        seg = {**seg, "in": in_t, "out": out_t}
         dur = round(float(seg["out"]) - float(seg["in"]), 3)
         outp = work / f"seg_{i:03d}.mp4"
         vf, af = grade_vf(cfg, seg, master), grade_af(cfg)
@@ -113,7 +147,12 @@ def render_segments(cfg, edl, work):
         ])
         paths.append(outp)
     (work / "seg_list.json").write_text(json.dumps([str(p) for p in paths], indent=2))
-    print(f"  ✓ {len(paths)} segments rendered")
+    (work / "boundaries.json").write_text(json.dumps(boundaries, indent=2))
+    if boundaries:
+        adj = sum(1 for b in boundaries if b["in"][0] != b["in"][1] or b["out"][0] != b["out"][1])
+        print(f"  ✓ {len(paths)} segments rendered · snapped {adj}/{len(boundaries)} boundaries to silence")
+    else:
+        print(f"  ✓ {len(paths)} segments rendered")
     return paths
 
 
