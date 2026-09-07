@@ -75,6 +75,27 @@ Stages are independently re-runnable with `--stage {segments,master,captions,der
 — if you only re-cut, re-run from `segments`; if you only re-graded audio, `derivatives`
 alone rebuilds the movs from the existing master.
 
+### Rendering on this VM — memory & contention (read before a full run)
+
+The 4K→1080 segment pass is CPU- and memory-heavy, and `fields-orchestrator-vm` also runs
+mongod, code-server, the orchestrator and often a `claude -p` session. Observed 2026-09-07:
+a full 9-segment (~10 min) build was **OOM-killed** part-way through the longest segments
+under that load, leaving a **corrupt** `work/seg_NNN.mp4` (0 bytes, "moov atom not found").
+
+Practical rules:
+- **Render the segment pass when the VM is quiet** (nothing else heavy running), or split it:
+  `--stage segments` first, confirm all `work/seg_*.mp4` are non-zero and probe cleanly, then
+  `--stage master captions derivatives`. Every stage is independently re-runnable, so a killed
+  segment pass just resumes — but **delete any zero-byte/corrupt `seg_*.mp4` first** or the
+  concat inherits the corruption.
+- The intermediates use `-preset veryfast -crf 16` for this reason (visually lossless as an
+  intermediate, roughly half the wall-clock of `medium`). The finals keep full quality.
+- Peak memory is one 4K decode at a time (the pipeline is sequential), so short spans are
+  safe; the risk is the long (>60 s) 4K segments. If OOM recurs, render those segments
+  individually.
+- **Don't kill/restart a running build to "unstick" it** — under contention it's slow, not
+  stuck. Killing mid-segment is what produces the corrupt intermediate above.
+
 ## Step 5 — QC (Claude runs, must pass)
 
 ```bash
