@@ -74,6 +74,13 @@ cp out/<slug>.mp4  /home/fields/Feilds_Website/01_Website/public/walkthrough/<sl
 
 ## What you need to know before touching this
 
+> **Two halves.** This pipeline produces the edited *clip*. Turning that clip into the
+> engaging, educational **on‑page walkthrough** (Will drawing on the live page, Khan‑style
+> teaching, the design rules, and every UX issue + fix) is documented in
+> **[WALKTHROUGH_EXPERIENCE.md](WALKTHROUGH_EXPERIENCE.md)** — read it before authoring a
+> walkthrough's choreography.
+
+- **The on‑page walkthrough experience & choreography:** [WALKTHROUGH_EXPERIENCE.md](WALKTHROUGH_EXPERIENCE.md)
 - **Deliverables & exact specs:** [OUTPUT_SPEC.md](OUTPUT_SPEC.md)
 - **The EDL format:** [edl.schema.json](edl.schema.json) + [examples/](examples/)
 - **All tunables** (framing, grade, denoise, captions, circle): [config.example.yaml](config.example.yaml)
