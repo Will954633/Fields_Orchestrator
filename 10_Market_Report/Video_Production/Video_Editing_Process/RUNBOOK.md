@@ -42,6 +42,17 @@ and proposes an EDL; Will approves or adjusts.
    ```bash
    python3 scripts/02_propose_edl.py     # → work/edl.draft.json  (one full clip per row)
    ```
+> **Cut points are approximate — the audio decides the exact frame.** Stage 03 runs
+> **snap-to-silence** (`assembly.snap_to_silence`, on by default): it maps each clip's
+> real sound/silence (ffmpeg `silencedetect`) and moves every `in`/`out` onto a silence
+> gap — so a sentence is never clipped mid-word and every join lands on a breath. It pads
+> `snap_tail_pad` after the last word and `snap_preroll` before the first, and if there's
+> no pause forward within `snap_max_extend` it falls back to the nearest pause *behind*
+> (ends the previous complete sentence). The adjustments are logged to
+> `work/boundaries.json` and `04_verify.py` fails if any cut couldn't be snapped to
+> silence. So author the EDL at *sentence* granularity — you don't need frame accuracy,
+> and you should **not** set a cut mid-sentence expecting it to hold.
+
 2. **Claude proposes the cut** by editing the scaffold into `work/edl.json`, applying the
    rubric in [AUTONOMOUS.md §Cut rubric](AUTONOMOUS.md#cut-rubric):
    - keep only the **best single take** of each idea; drop restarts, stumbles, dead air;
