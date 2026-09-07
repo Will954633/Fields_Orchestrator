@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Walkthrough Edit Decision List",
+  "description": "The single interface between the creative cut (which takes, in what order, trimmed how) and the deterministic render engine (03_build.py). Authored by Claude+Will (assisted mode) or by a Max agent (auto mode). Everything below the 'segments' list is mechanical; the segments list IS the edit.",
+  "type": "object",
+  "required": ["slug", "segments"],
+  "properties": {
+    "slug": { "type": "string", "description": "Project slug; must match config.project.slug." },
+    "title": { "type": "string" },
+    "notes": { "type": "string", "description": "Editor's rationale — why these takes, what was cut and why (repetition, flubs, dead air)." },
+    "segments": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The final cut, in playback order. Each entry is one kept span of one raw clip.",
+      "items": {
+        "type": "object",
+        "required": ["src", "in", "out"],
+        "properties": {
+          "src": { "type": "string", "description": "Raw clip filename (basename), e.g. DJI_20260907123108_0062_D.MP4" },
+          "in":  { "type": "number", "description": "In-point in the source clip, seconds." },
+          "out": { "type": "number", "description": "Out-point in the source clip, seconds." },
+          "chapter": { "type": "string", "description": "Optional label (e.g. 'Intro', 'Chart 1 · Days on Market') — carried into the storyboard, not the render." },
+          "face_cx": { "type": "number", "description": "Normalised horizontal face centre 0..1 for this clip's crop. Auto-detected by 01/02; override if the auto-centre is off." },
+          "zoom": { "type": "number", "description": "Per-segment punch-in override (defaults to config.framing.zoom). Use a slightly different zoom on adjacent same-topic takes to avoid a jump-cut." },
+          "look": { "type": "object", "description": "Per-segment grade overrides (any subset of config.look) — e.g. a clip shot in different light." },
+          "transcript": { "type": "string", "description": "For reference only (what Will says in this span). Ignored by the render; the final captions are re-transcribed from the assembled audio." },
+          "drop": { "type": "boolean", "description": "If true, keep the row for the record but exclude it from the render (a documented cut)." }
+        }
+      }
+    }
+  }
+}
