@@ -100,7 +100,10 @@ def render_segments(cfg, edl, work):
             "-ss", str(seg["in"]), "-i", str(src), "-t", str(dur),
             "-vf", vf, "-af", af,
             "-r", str(fps), "-ar", "48000", "-ac", "2",
-            "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+            # These are INTERMEDIATES (re-encoded into the finals), and 4K decode on a
+            # shared VM is the bottleneck — veryfast/crf16 keeps them visually lossless
+            # while roughly halving wall-clock vs preset medium.
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "16",
             "-pix_fmt", "yuv420p", "-g", str(fps * 2), "-keyint_min", str(fps),
             "-c:a", "aac", "-b:a", "192k",
             "-movflags", "+faststart", str(outp),
@@ -113,6 +116,18 @@ def render_segments(cfg, edl, work):
 
 def assemble_master(cfg, work):
     paths = [Path(p) for p in json.loads((work / "seg_list.json").read_text())]
+    # Guard: a segment pass that was OOM-killed mid-write leaves a 0-byte/unreadable
+    # intermediate; concat would silently inherit the corruption. Fail loud instead
+    # (CLAUDE.md 7b — assert the outcome, don't just avoid throwing).
+    for p in paths:
+        if not p.exists() or p.stat().st_size < 1024:
+            raise RuntimeError(f"segment missing/too small: {p} — re-render (delete it first)")
+        try:
+            d = vlib.probe_summary(str(p))["duration"]
+        except Exception as e:
+            raise RuntimeError(f"segment unreadable/corrupt: {p} ({e}) — delete and re-render")
+        if not d or d < 0.1:
+            raise RuntimeError(f"segment has no duration: {p} — delete and re-render")
     master_mp4 = work / "master_square.mp4"
     trans = D(cfg, "assembly", "transition", default="cut")
     if trans == "cut" or len(paths) == 1:
