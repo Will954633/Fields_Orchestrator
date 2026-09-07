@@ -103,6 +103,86 @@ def extract_audio_for_asr(src: str, dst_mp3: str, start: float | None = None,
     return dst_mp3
 
 
+# ----------------------------------------------------------------------------- silence / cut snapping
+def detect_silences(src: str, cache_json: str | None = None, noise_db: float = -38.0,
+                    min_silence: float = 0.12) -> list[tuple[float, float]]:
+    """Map where the audio is SILENT → list of (start, end) intervals (seconds).
+    Extracts the audio to a temp wav first (decoding audio through 4K video is ~100× slower).
+    Result is cached to cache_json so a clip is analysed once per build. The gaps between
+    speech are what every cut must land in — see snap_in/snap_out."""
+    if cache_json and Path(cache_json).exists():
+        return [tuple(x) for x in json.loads(Path(cache_json).read_text())]
+    import tempfile, re as _re
+    wav = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
+    run(["ffmpeg", "-v", "error", "-y", "-i", str(src), "-vn", "-ac", "1", "-ar", "16000", wav])
+    proc = run(["ffmpeg", "-hide_banner", "-i", wav, "-af",
+                f"silencedetect=noise={noise_db}dB:d={min_silence}", "-f", "null", "-"],
+               check=False)
+    os.unlink(wav)
+    starts, sil = [], []
+    for m in _re.finditer(r"silence_(start|end):\s*([0-9.]+)", proc.stderr):
+        kind, val = m.group(1), float(m.group(2))
+        if kind == "start":
+            starts.append(val)
+        else:
+            s = starts.pop() if starts else 0.0
+            sil.append((round(s, 3), round(val, 3)))
+    if starts:  # trailing silence to EOF
+        sil.append((round(starts[0], 3), 10 ** 9))
+    if cache_json:
+        Path(cache_json).write_text(json.dumps(sil))
+    return sil
+
+
+def _in_silence(silences, t):
+    for s, e in silences:
+        if s <= t <= e:
+            return (s, e)
+    return None
+
+
+def snap_out(silences, out_t, *, tail_pad=0.22, max_extend=3.0):
+    """Move an out-point so the last WORD finishes and the cut lands in the following
+    breath. If out_t is mid-speech, extend to the next pause and pad into it; if already
+    in a pause, keep (padded). Never extend more than max_extend (avoids swallowing the
+    next sentence). Returns (snapped_t, reason)."""
+    here = _in_silence(silences, out_t)
+    if here:
+        s, e = here
+        return (min(e - 0.02, max(out_t, s + tail_pad)), "already-in-pause")
+    # prefer the next pause forward (completes the sentence in progress)…
+    nxt = min((iv for iv in silences if iv[0] > out_t), default=None, key=lambda iv: iv[0])
+    if nxt and nxt[0] - out_t <= max_extend:
+        s, e = nxt
+        return (min(e - 0.02, s + tail_pad), f"extended +{s - out_t:.2f}s to pause")
+    # …else fall BACK to the nearest preceding pause, so we end on the previous complete
+    # sentence rather than clip mid-word (guarantees the cut lands in silence).
+    prev = max((iv for iv in silences if iv[1] < out_t), default=None, key=lambda iv: iv[1])
+    if prev and out_t - prev[1] <= max_extend:
+        s, e = prev
+        return (min(e - 0.02, s + tail_pad), f"backed -{out_t - e:.2f}s to prior pause")
+    return (out_t, "no pause within window — left as-is (WARN: may clip)")
+
+
+def snap_in(silences, in_t, *, preroll=0.18, max_extend=3.0):
+    """Move an in-point so the first WORD is whole and there's a short breath of lead-in.
+    If in_t is inside a pause, start just before the next word; if mid-speech, back up to
+    the onset of the current word. Returns (snapped_t, reason)."""
+    here = _in_silence(silences, in_t)
+    if here:
+        s, e = here
+        return (max(0.0, e - preroll), "started at word onset")
+    prev_e = 0.0
+    for s, e in silences:
+        if e <= in_t:
+            prev_e = e
+        else:
+            break
+    if in_t - prev_e <= max_extend:
+        return (max(0.0, prev_e - preroll), f"backed -{in_t - prev_e:.2f}s to word onset")
+    return (in_t, "no pause within window — left as-is")
+
+
 # ----------------------------------------------------------------------------- Vertex / Gemini
 def _vertex_post(parts: list[dict], max_tokens: int = 8192, model: Optional[str] = None) -> str:
     """One generateContent call against Vertex, reusing claude_vision's token/creds.
