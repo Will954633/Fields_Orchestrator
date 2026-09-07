@@ -83,10 +83,25 @@ def main():
     master = work / "master_square.mp4"
     if master.exists():
         got = vlib.probe_summary(str(master))["duration"]
-        kept = sum(float(x["out"]) - float(x["in"]) for x in edl["segments"] if not x.get("drop"))
-        # dissolve shortens by (n-1)*d; allow generous tolerance
+        # Compare against the ACTUAL rendered segments (snap-to-silence moves cut points,
+        # so the raw EDL sum no longer matches); fall back to the EDL sum if no seg list.
+        seg_list = work / "seg_list.json"
+        if seg_list.exists():
+            kept = sum(vlib.probe_summary(p)["duration"]
+                       for p in json.loads(seg_list.read_text()) if Path(p).exists())
+            basis = "segments"
+        else:
+            kept = sum(float(x["out"]) - float(x["in"]) for x in edl["segments"] if not x.get("drop"))
+            basis = "EDL"
         check("master_duration", abs(got - kept) <= max(2.0, 0.05 * kept),
-              f"master {got:.1f}s vs EDL {kept:.1f}s")
+              f"master {got:.1f}s vs {basis} {kept:.1f}s")
+        # every cut landed in silence?
+        bfile = work / "boundaries.json"
+        if bfile.exists():
+            b = json.loads(bfile.read_text())
+            warns = [x for x in b if "WARN" in x["in"][2] or "WARN" in x["out"][2]]
+            check("cuts_on_silence", not warns,
+                  "all snapped to silence" if not warns else f"{len(warns)} cut(s) may clip")
         # 3. loudness
         li = measure_loudness(master)
         target = cfg.get("audio", {}).get("target_lufs", -16.0)
