@@ -1,0 +1,461 @@
+{
+ "note": "houses only; ratio = price / suburb-year median",
+ "regimes": {
+  "flat_easing": [
+   2015,
+   2016,
+   2017,
+   2018,
+   2019
+  ],
+  "cheap_credit_boom": [
+   2020,
+   2021
+  ],
+  "tightening": [
+   2022,
+   2023
+  ],
+  "easing_recovery": [
+   2024,
+   2025,
+   2026
+  ]
+ },
+ "yearly": {
+  "robina": {
+   "2015": {
+    "n": 443,
+    "median": 585000,
+    "thin": false
+   },
+   "2016": {
+    "n": 419,
+    "median": 648000,
+    "thin": false
+   },
+   "2017": {
+    "n": 356,
+    "median": 710000,
+    "thin": false
+   },
+   "2018": {
+    "n": 379,
+    "median": 694000,
+    "thin": false
+   },
+   "2019": {
+    "n": 329,
+    "median": 700000,
+    "thin": false
+   },
+   "2020": {
+    "n": 348,
+    "median": 745000,
+    "thin": false
+   },
+   "2021": {
+    "n": 395,
+    "median": 950000,
+    "thin": false
+   },
+   "2022": {
+    "n": 312,
+    "median": 1130000,
+    "thin": false
+   },
+   "2023": {
+    "n": 284,
+    "median": 1156250,
+    "thin": false
+   },
+   "2024": {
+    "n": 319,
+    "median": 1340000,
+    "thin": false
+   },
+   "2025": {
+    "n": 330,
+    "median": 1480750,
+    "thin": false
+   },
+   "2026": {
+    "n": 173,
+    "median": 1515000,
+    "thin": false
+   }
+  },
+  "varsity_lakes": {
+   "2015": {
+    "n": 212,
+    "median": 547750,
+    "thin": false
+   },
+   "2016": {
+    "n": 178,
+    "median": 589000,
+    "thin": false
+   },
+   "2017": {
+    "n": 171,
+    "median": 615000,
+    "thin": false
+   },
+   "2018": {
+    "n": 164,
+    "median": 616500,
+    "thin": false
+   },
+   "2019": {
+    "n": 165,
+    "median": 645000,
+    "thin": false
+   },
+   "2020": {
+    "n": 149,
+    "median": 650000,
+    "thin": false
+   },
+   "2021": {
+    "n": 181,
+    "median": 857000,
+    "thin": false
+   },
+   "2022": {
+    "n": 139,
+    "median": 1000000,
+    "thin": false
+   },
+   "2023": {
+    "n": 122,
+    "median": 988000,
+    "thin": false
+   },
+   "2024": {
+    "n": 151,
+    "median": 1170000,
+    "thin": false
+   },
+   "2025": {
+    "n": 148,
+    "median": 1350055,
+    "thin": false
+   },
+   "2026": {
+    "n": 76,
+    "median": 1387500,
+    "thin": false
+   }
+  },
+  "burleigh_waters": {
+   "2015": {
+    "n": 274,
+    "median": 678000,
+    "thin": false
+   },
+   "2016": {
+    "n": 226,
+    "median": 695692,
+    "thin": false
+   },
+   "2017": {
+    "n": 213,
+    "median": 780000,
+    "thin": false
+   },
+   "2018": {
+    "n": 224,
+    "median": 826500,
+    "thin": false
+   },
+   "2019": {
+    "n": 261,
+    "median": 845000,
+    "thin": false
+   },
+   "2020": {
+    "n": 203,
+    "median": 920000,
+    "thin": false
+   },
+   "2021": {
+    "n": 275,
+    "median": 1275000,
+    "thin": false
+   },
+   "2022": {
+    "n": 201,
+    "median": 1490000,
+    "thin": false
+   },
+   "2023": {
+    "n": 213,
+    "median": 1500000,
+    "thin": false
+   },
+   "2024": {
+    "n": 238,
+    "median": 1590000,
+    "thin": false
+   },
+   "2025": {
+    "n": 241,
+    "median": 1830000,
+    "thin": false
+   },
+   "2026": {
+    "n": 135,
+    "median": 1910000,
+    "thin": false
+   }
+  }
+ },
+ "regime_mix": {
+  "robina": {
+   "flat_easing": {
+    "n": 1926,
+    "premium_share_gt1.5x_pct": 6.8,
+    "premium_ci": [
+     5.8,
+     8.0
+    ],
+    "tail_share_gt2x_pct": 1.6,
+    "tail_ci": [
+     1.1,
+     2.2
+    ],
+    "entry_share_lt0.75x_pct": 3.9,
+    "entry_ci": [
+     3.1,
+     4.9
+    ],
+    "p90_p10_ratio": 1.72,
+    "p99_ratio": 2.14
+   },
+   "cheap_credit_boom": {
+    "n": 743,
+    "premium_share_gt1.5x_pct": 6.5,
+    "premium_ci": [
+     4.9,
+     8.5
+    ],
+    "tail_share_gt2x_pct": 0.8,
+    "tail_ci": [
+     0.4,
+     1.8
+    ],
+    "entry_share_lt0.75x_pct": 14.5,
+    "entry_ci": [
+     12.2,
+     17.3
+    ],
+    "p90_p10_ratio": 1.93,
+    "p99_ratio": 1.89
+   },
+   "tightening": {
+    "n": 596,
+    "premium_share_gt1.5x_pct": 8.7,
+    "premium_ci": [
+     6.7,
+     11.3
+    ],
+    "tail_share_gt2x_pct": 2.5,
+    "tail_ci": [
+     1.5,
+     4.1
+    ],
+    "entry_share_lt0.75x_pct": 8.9,
+    "entry_ci": [
+     6.9,
+     11.4
+    ],
+    "p90_p10_ratio": 1.91,
+    "p99_ratio": 2.4
+   },
+   "easing_recovery": {
+    "n": 822,
+    "premium_share_gt1.5x_pct": 6.1,
+    "premium_ci": [
+     4.6,
+     7.9
+    ],
+    "tail_share_gt2x_pct": 1.0,
+    "tail_ci": [
+     0.5,
+     1.9
+    ],
+    "entry_share_lt0.75x_pct": 10.5,
+    "entry_ci": [
+     8.6,
+     12.7
+    ],
+    "p90_p10_ratio": 1.82,
+    "p99_ratio": 1.97
+   }
+  },
+  "varsity_lakes": {
+   "flat_easing": {
+    "n": 890,
+    "premium_share_gt1.5x_pct": 5.4,
+    "premium_ci": [
+     4.1,
+     7.1
+    ],
+    "tail_share_gt2x_pct": 0.9,
+    "tail_ci": [
+     0.5,
+     1.8
+    ],
+    "entry_share_lt0.75x_pct": 3.8,
+    "entry_ci": [
+     2.7,
+     5.3
+    ],
+    "p90_p10_ratio": 1.67,
+    "p99_ratio": 1.92
+   },
+   "cheap_credit_boom": {
+    "n": 330,
+    "premium_share_gt1.5x_pct": 7.3,
+    "premium_ci": [
+     4.9,
+     10.6
+    ],
+    "tail_share_gt2x_pct": 0.9,
+    "tail_ci": [
+     0.3,
+     2.6
+    ],
+    "entry_share_lt0.75x_pct": 4.5,
+    "entry_ci": [
+     2.8,
+     7.4
+    ],
+    "p90_p10_ratio": 1.79,
+    "p99_ratio": 1.96
+   },
+   "tightening": {
+    "n": 261,
+    "premium_share_gt1.5x_pct": 4.6,
+    "premium_ci": [
+     2.6,
+     7.9
+    ],
+    "tail_share_gt2x_pct": 0.8,
+    "tail_ci": [
+     0.2,
+     2.8
+    ],
+    "entry_share_lt0.75x_pct": 1.9,
+    "entry_ci": [
+     0.8,
+     4.4
+    ],
+    "p90_p10_ratio": 1.63,
+    "p99_ratio": 1.8
+   },
+   "easing_recovery": {
+    "n": 375,
+    "premium_share_gt1.5x_pct": 2.9,
+    "premium_ci": [
+     1.6,
+     5.2
+    ],
+    "tail_share_gt2x_pct": 0.3,
+    "tail_ci": [
+     0.0,
+     1.5
+    ],
+    "entry_share_lt0.75x_pct": 4.3,
+    "entry_ci": [
+     2.6,
+     6.8
+    ],
+    "p90_p10_ratio": 1.64,
+    "p99_ratio": 1.64
+   }
+  },
+  "burleigh_waters": {
+   "flat_easing": {
+    "n": 1198,
+    "premium_share_gt1.5x_pct": 9.5,
+    "premium_ci": [
+     8.0,
+     11.3
+    ],
+    "tail_share_gt2x_pct": 1.3,
+    "tail_ci": [
+     0.8,
+     2.1
+    ],
+    "entry_share_lt0.75x_pct": 12.0,
+    "entry_ci": [
+     10.3,
+     14.0
+    ],
+    "p90_p10_ratio": 2.01,
+    "p99_ratio": 2.04
+   },
+   "cheap_credit_boom": {
+    "n": 478,
+    "premium_share_gt1.5x_pct": 9.6,
+    "premium_ci": [
+     7.3,
+     12.6
+    ],
+    "tail_share_gt2x_pct": 1.9,
+    "tail_ci": [
+     1.0,
+     3.5
+    ],
+    "entry_share_lt0.75x_pct": 16.7,
+    "entry_ci": [
+     13.7,
+     20.3
+    ],
+    "p90_p10_ratio": 2.15,
+    "p99_ratio": 2.14
+   },
+   "tightening": {
+    "n": 414,
+    "premium_share_gt1.5x_pct": 10.4,
+    "premium_ci": [
+     7.8,
+     13.7
+    ],
+    "tail_share_gt2x_pct": 3.4,
+    "tail_ci": [
+     2.0,
+     5.6
+    ],
+    "entry_share_lt0.75x_pct": 16.7,
+    "entry_ci": [
+     13.4,
+     20.6
+    ],
+    "p90_p10_ratio": 2.19,
+    "p99_ratio": 2.29
+   },
+   "easing_recovery": {
+    "n": 614,
+    "premium_share_gt1.5x_pct": 14.3,
+    "premium_ci": [
+     11.8,
+     17.3
+    ],
+    "tail_share_gt2x_pct": 4.7,
+    "tail_ci": [
+     3.3,
+     6.7
+    ],
+    "entry_share_lt0.75x_pct": 15.3,
+    "entry_ci": [
+     12.7,
+     18.4
+    ],
+    "p90_p10_ratio": 2.29,
+    "p99_ratio": 2.72
+   }
+  }
+ }
+}
