@@ -1,0 +1,532 @@
+{
+ "generated": "run via renovation_premium_study.py",
+ "window_months": 12,
+ "latest_sale": "2026-09-07",
+ "n_total": 258,
+ "n_by_suburb": {
+  "burleigh_waters": 79,
+  "robina": 117,
+  "varsity_lakes": 62
+ },
+ "drops": {
+  "floor": 150,
+  "price": 30,
+  "new_build": 29,
+  "waterfront_excluded": 14,
+  "land": 7
+ },
+ "tier_counts": {
+  "burleigh_waters": {
+   "cosmetically_updated": 37,
+   "fully_renovated": 26,
+   "partially_renovated": 10,
+   "original": 6
+  },
+  "robina": {
+   "cosmetically_updated": 65,
+   "fully_renovated": 38,
+   "partially_renovated": 11,
+   "original": 3
+  },
+  "varsity_lakes": {
+   "cosmetically_updated": 41,
+   "fully_renovated": 16,
+   "partially_renovated": 3,
+   "original": 2
+  }
+ },
+ "leg1_strata": {
+  "burleigh_waters": [
+   {
+    "beds": "3bed",
+    "floor_band": "small",
+    "floor_range": "98-145sqm",
+    "n_reno": 3,
+    "n_unreno": 13,
+    "med_ppsqm_reno": 12061,
+    "med_ppsqm_unreno": 10399,
+    "gap_pct": 16.0,
+    "thin": true
+   },
+   {
+    "beds": "3bed",
+    "floor_band": "medium",
+    "floor_range": "155-202sqm",
+    "n_reno": 0,
+    "n_unreno": 4,
+    "med_ppsqm_reno": null,
+    "med_ppsqm_unreno": 11452,
+    "gap_pct": null,
+    "thin": true
+   },
+   {
+    "beds": "4bed",
+    "floor_band": "small",
+    "floor_range": "94-149sqm",
+    "n_reno": 2,
+    "n_unreno": 4,
+    "med_ppsqm_reno": 18361,
+    "med_ppsqm_unreno": 13347,
+    "gap_pct": null,
+    "thin": true
+   },
+   {
+    "beds": "4bed",
+    "floor_band": "medium",
+    "floor_range": "157-209sqm",
+    "n_reno": 4,
+    "n_unreno": 10,
+    "med_ppsqm_reno": 12689,
+    "med_ppsqm_unreno": 9712,
+    "gap_pct": 30.7,
+    "thin": true
+   },
+   {
+    "beds": "4bed",
+    "floor_band": "large",
+    "floor_range": "213-326sqm",
+    "n_reno": 9,
+    "n_unreno": 6,
+    "med_ppsqm_reno": 6902,
+    "med_ppsqm_unreno": 6849,
+    "gap_pct": 0.8,
+    "thin": false
+   },
+   {
+    "beds": "5+bed",
+    "floor_band": "medium",
+    "floor_range": "169-192sqm",
+    "n_reno": 1,
+    "n_unreno": 3,
+    "med_ppsqm_reno": 22531,
+    "med_ppsqm_unreno": 10301,
+    "gap_pct": null,
+    "thin": true
+   },
+   {
+    "beds": "5+bed",
+    "floor_band": "large",
+    "floor_range": "214-770sqm",
+    "n_reno": 6,
+    "n_unreno": 2,
+    "med_ppsqm_reno": 7583,
+    "med_ppsqm_unreno": 9991,
+    "gap_pct": null,
+    "thin": true
+   }
+  ],
+  "robina": [
+   {
+    "beds": "3bed",
+    "floor_band": "small",
+    "floor_range": "105-161sqm",
+    "n_reno": 5,
+    "n_unreno": 20,
+    "med_ppsqm_reno": 9734,
+    "med_ppsqm_unreno": 9234,
+    "gap_pct": 5.4,
+    "thin": false
+   },
+   {
+    "beds": "3bed",
+    "floor_band": "medium",
+    "floor_range": "168-204sqm",
+    "n_reno": 5,
+    "n_unreno": 7,
+    "med_ppsqm_reno": 8213,
+    "med_ppsqm_unreno": 7103,
+    "gap_pct": 15.6,
+    "thin": false
+   },
+   {
+    "beds": "3bed",
+    "floor_band": "large",
+    "floor_range": "244-279sqm",
+    "n_reno": 2,
+    "n_unreno": 1,
+    "med_ppsqm_reno": 6276,
+    "med_ppsqm_unreno": 6073,
+    "gap_pct": null,
+    "thin": true
+   },
+   {
+    "beds": "4bed",
+    "floor_band": "small",
+    "floor_range": "126-160sqm",
+    "n_reno": 4,
+    "n_unreno": 6,
+    "med_ppsqm_reno": 9990,
+    "med_ppsqm_unreno": 9858,
+    "gap_pct": 1.3,
+    "thin": true
+   },
+   {
+    "beds": "4bed",
+    "floor_band": "medium",
+    "floor_range": "162-224sqm",
+    "n_reno": 6,
+    "n_unreno": 14,
+    "med_ppsqm_reno": 7992,
+    "med_ppsqm_unreno": 7895,
+    "gap_pct": 1.2,
+    "thin": false
+   },
+   {
+    "beds": "4bed",
+    "floor_band": "large",
+    "floor_range": "226-495sqm",
+    "n_reno": 7,
+    "n_unreno": 12,
+    "med_ppsqm_reno": 6446,
+    "med_ppsqm_unreno": 5778,
+    "gap_pct": 11.6,
+    "thin": false
+   },
+   {
+    "beds": "5+bed",
+    "floor_band": "medium",
+    "floor_range": "186-220sqm",
+    "n_reno": 1,
+    "n_unreno": 2,
+    "med_ppsqm_reno": 9008,
+    "med_ppsqm_unreno": 7881,
+    "gap_pct": null,
+    "thin": true
+   },
+   {
+    "beds": "5+bed",
+    "floor_band": "large",
+    "floor_range": "230-457sqm",
+    "n_reno": 8,
+    "n_unreno": 5,
+    "med_ppsqm_reno": 6604,
+    "med_ppsqm_unreno": 5577,
+    "gap_pct": 18.4,
+    "thin": false
+   }
+  ],
+  "varsity_lakes": [
+   {
+    "beds": "3bed",
+    "floor_band": "small",
+    "floor_range": "91-157sqm",
+    "n_reno": 4,
+    "n_unreno": 10,
+    "med_ppsqm_reno": 9139,
+    "med_ppsqm_unreno": 9669,
+    "gap_pct": -5.5,
+    "thin": true
+   },
+   {
+    "beds": "3bed",
+    "floor_band": "medium",
+    "floor_range": "164-227sqm",
+    "n_reno": 0,
+    "n_unreno": 4,
+    "med_ppsqm_reno": null,
+    "med_ppsqm_unreno": 6365,
+    "gap_pct": null,
+    "thin": true
+   },
+   {
+    "beds": "3bed",
+    "floor_band": "large",
+    "floor_range": "287-300sqm",
+    "n_reno": 0,
+    "n_unreno": 2,
+    "med_ppsqm_reno": null,
+    "med_ppsqm_unreno": 5090,
+    "gap_pct": null,
+    "thin": true
+   },
+   {
+    "beds": "4bed",
+    "floor_band": "small",
+    "floor_range": "104-163sqm",
+    "n_reno": 1,
+    "n_unreno": 5,
+    "med_ppsqm_reno": 15489,
+    "med_ppsqm_unreno": 8766,
+    "gap_pct": null,
+    "thin": true
+   },
+   {
+    "beds": "4bed",
+    "floor_band": "medium",
+    "floor_range": "170-237sqm",
+    "n_reno": 3,
+    "n_unreno": 10,
+    "med_ppsqm_reno": 8415,
+    "med_ppsqm_unreno": 7132,
+    "gap_pct": 18.0,
+    "thin": true
+   },
+   {
+    "beds": "4bed",
+    "floor_band": "large",
+    "floor_range": "238-313sqm",
+    "n_reno": 2,
+    "n_unreno": 6,
+    "med_ppsqm_reno": 6320,
+    "med_ppsqm_unreno": 5367,
+    "gap_pct": null,
+    "thin": true
+   },
+   {
+    "beds": "5+bed",
+    "floor_band": "medium",
+    "floor_range": "183-222sqm",
+    "n_reno": 1,
+    "n_unreno": 1,
+    "med_ppsqm_reno": 8896,
+    "med_ppsqm_unreno": 9266,
+    "gap_pct": null,
+    "thin": true
+   },
+   {
+    "beds": "5+bed",
+    "floor_band": "large",
+    "floor_range": "256-435sqm",
+    "n_reno": 5,
+    "n_unreno": 5,
+    "med_ppsqm_reno": 5241,
+    "med_ppsqm_unreno": 5222,
+    "gap_pct": 0.4,
+    "thin": false
+   }
+  ]
+ },
+ "leg2_hedonic": {
+  "burleigh_waters": {
+   "n": 79,
+   "r2": 0.733,
+   "tiers_vs_original": {
+    "cosmetically_updated": {
+     "premium_pct": 10.1,
+     "ci_pct": [
+      -3.5,
+      25.7
+     ],
+     "p": 0.153
+    },
+    "partially_renovated": {
+     "premium_pct": 12.6,
+     "ci_pct": [
+      -2.9,
+      30.6
+     ],
+     "p": 0.1165
+    },
+    "fully_renovated": {
+     "premium_pct": 24.4,
+     "ci_pct": [
+      8.1,
+      43.1
+     ],
+     "p": 0.0023
+    }
+   }
+  },
+  "robina": {
+   "n": 117,
+   "r2": 0.778,
+   "tiers_vs_original": {
+    "cosmetically_updated": {
+     "premium_pct": 4.9,
+     "ci_pct": [
+      0.6,
+      9.5
+     ],
+     "p": 0.026
+    },
+    "partially_renovated": {
+     "premium_pct": 2.0,
+     "ci_pct": [
+      -3.9,
+      8.2
+     ],
+     "p": 0.5202
+    },
+    "fully_renovated": {
+     "premium_pct": 12.8,
+     "ci_pct": [
+      7.0,
+      18.8
+     ],
+     "p": 0.0
+    }
+   }
+  },
+  "varsity_lakes": {
+   "n": 62,
+   "r2": 0.738,
+   "tiers_vs_original": {
+    "cosmetically_updated": {
+     "premium_pct": -6.8,
+     "ci_pct": [
+      -19.8,
+      8.3
+     ],
+     "p": 0.3567
+    },
+    "partially_renovated": {
+     "premium_pct": -0.4,
+     "ci_pct": [
+      -10.2,
+      10.4
+     ],
+     "p": 0.9337
+    },
+    "fully_renovated": {
+     "premium_pct": 2.6,
+     "ci_pct": [
+      -12.4,
+      20.1
+     ],
+     "p": 0.7548
+    }
+   }
+  },
+  "POOLED": {
+   "n": 258,
+   "r2": 0.765,
+   "tiers_vs_original": {
+    "cosmetically_updated": {
+     "premium_pct": 8.9,
+     "ci_pct": [
+      2.0,
+      16.3
+     ],
+     "p": 0.0108
+    },
+    "partially_renovated": {
+     "premium_pct": 7.6,
+     "ci_pct": [
+      -0.1,
+      15.9
+     ],
+     "p": 0.0548
+    },
+    "fully_renovated": {
+     "premium_pct": 19.6,
+     "ci_pct": [
+      11.6,
+      28.2
+     ],
+     "p": 0.0
+    }
+   }
+  },
+  "suburb_interaction": {
+   "treated[T.True]": {
+    "coef_pct": 18.3,
+    "p": 0.0005
+   },
+   "treated[T.True]:C(suburb)[T.robina]": {
+    "coef_pct": -9.4,
+    "p": 0.0552
+   },
+   "treated[T.True]:C(suburb)[T.varsity_lakes]": {
+    "coef_pct": -8.1,
+    "p": 0.1467
+   }
+  }
+ },
+ "leg3_matched": {
+  "burleigh_waters": {
+   "n_treated": 26,
+   "n_matched": 6,
+   "n_unmatched": 20,
+   "median_gap_pct": 25.8,
+   "mean_gap_pct": 25.2,
+   "boot_ci_pct": null,
+   "median_comps_per_match": 2
+  },
+  "robina": {
+   "n_treated": 38,
+   "n_matched": 11,
+   "n_unmatched": 27,
+   "median_gap_pct": 12.4,
+   "mean_gap_pct": 9.4,
+   "boot_ci_pct": [
+    0.9,
+    16.0
+   ],
+   "median_comps_per_match": 3
+  },
+  "varsity_lakes": {
+   "n_treated": 16,
+   "n_matched": 4,
+   "n_unmatched": 12,
+   "median_gap_pct": 3.7,
+   "mean_gap_pct": 6.7,
+   "boot_ci_pct": null,
+   "median_comps_per_match": 2
+  }
+ },
+ "secondary_items": {
+  "burleigh_waters": {
+   "n": 78,
+   "items": {
+    "kitchen": {
+     "premium_pct": 2.1,
+     "p": 0.792
+    },
+    "bathrooms_reno": {
+     "premium_pct": -8.9,
+     "p": 0.2491
+    },
+    "flooring": {
+     "premium_pct": 10.3,
+     "p": 0.1152
+    },
+    "modern_score": {
+     "premium_pct": 4.1,
+     "p": 0.1125
+    }
+   }
+  },
+  "robina": {
+   "n": 114,
+   "items": {
+    "kitchen": {
+     "premium_pct": -2.4,
+     "p": 0.3307
+    },
+    "bathrooms_reno": {
+     "premium_pct": -0.8,
+     "p": 0.7402
+    },
+    "flooring": {
+     "premium_pct": 0.3,
+     "p": 0.9055
+    },
+    "modern_score": {
+     "premium_pct": 4.2,
+     "p": 0.0007
+    }
+   }
+  },
+  "varsity_lakes": {
+   "n": 61,
+   "items": {
+    "kitchen": {
+     "premium_pct": -1.5,
+     "p": 0.6769
+    },
+    "bathrooms_reno": {
+     "premium_pct": -1.4,
+     "p": 0.6295
+    },
+    "flooring": {
+     "premium_pct": -6.6,
+     "p": 0.1229
+    },
+    "modern_score": {
+     "premium_pct": 6.6,
+     "p": 0.0
+    }
+   }
+  }
+ }
+}
