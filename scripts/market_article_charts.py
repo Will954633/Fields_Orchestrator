@@ -211,10 +211,148 @@ def chart_bw_asking_sqm(gc):
     return _save(fig, "median_bw_asking_sqm.png")
 
 
+_ASKING_SOLD_HTML_TEMPLATE = r"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Burleigh Waters houses: asking vs sold</title>
+<style>
+  :root{--ink:#1a120e;--muted:#6b5d52;--grid:#e4dccf;--surface:#fff;--copper:#b87333;--green:#2e6b4c;}
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--surface);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);}
+  .wrap{position:relative;width:100%;}
+  svg{display:block;width:100%;height:auto;touch-action:none;cursor:crosshair;}
+  .tip{position:absolute;pointer-events:none;background:var(--ink);color:#fff;
+    padding:8px 10px;border-radius:6px;font-size:12.5px;line-height:1.45;opacity:0;
+    transition:opacity .08s;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:5;}
+  .tip .d{color:#cbb8a6;font-size:11px;margin-bottom:3px;}
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <svg id="chart" viewBox="0 0 820 470" preserveAspectRatio="xMidYMid meet" role="img"
+       aria-label="Interactive line chart of Burleigh Waters house asking prices versus sold median, 2009 to 2026"></svg>
+  <div class="tip" id="tip"></div>
+</div>
+<script>
+const ASK = __ASK__, SOLD = __SOLD__;
+const VBW=820, VBH=470, M={l:60,r:16,t:66,b:36};
+const PW=VBW-M.l-M.r, PH=VBH-M.t-M.b;
+const svg=document.getElementById('chart'), tip=document.getElementById('tip'), wrap=document.getElementById('wrap');
+const NS='http://www.w3.org/2000/svg';
+function el(n,a){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;}
+const askT=ASK.map(d=>Date.parse(d[0]));
+const t0=askT[0], t1=askT[askT.length-1];
+const yMin=400000, yMax=2500000;
+const xOf=t=>M.l+(t-t0)/(t1-t0)*PW;
+const yOf=v=>M.t+(1-(v-yMin)/(yMax-yMin))*PH;
+// title + legend (inside the viewBox so the whole chart scales as one unit)
+const ttl=el('text',{x:6,y:24,'font-size':16,'font-weight':700,fill:'#1a120e'});
+ttl.textContent='Burleigh Waters houses: what sellers ask vs what homes sell for';svg.appendChild(ttl);
+svg.appendChild(el('rect',{x:6,y:43,width:20,height:3.5,rx:1.5,fill:'#b87333'}));
+const lg1=el('text',{x:32,y:49,'font-size':13,fill:'#6b5d52'});
+lg1.textContent='Asking price — SQM, postcode 4220';svg.appendChild(lg1);
+svg.appendChild(el('rect',{x:262,y:43,width:20,height:3.5,rx:1.5,fill:'#2e6b4c'}));
+const lg2=el('text',{x:288,y:49,'font-size':13,fill:'#6b5d52'});
+lg2.textContent='Sold median — Burleigh Waters, 12-month rolling';svg.appendChild(lg2);
+for(let v=500000; v<=2500000; v+=500000){
+  const y=yOf(v);
+  svg.appendChild(el('line',{x1:M.l,y1:y,x2:VBW-M.r,y2:y,stroke:'#e4dccf','stroke-width':1}));
+  const tx=el('text',{x:M.l-8,y:y+4,'text-anchor':'end','font-size':12,fill:'#6b5d52'});
+  tx.textContent='$'+(v/1e6).toFixed(1)+'M'; svg.appendChild(tx);
+}
+const yy0=new Date(t0).getFullYear(), yy1=new Date(t1).getFullYear();
+for(let yr=Math.ceil(yy0/2)*2; yr<=yy1; yr+=2){
+  const x=xOf(Date.parse(yr+'-01-01'));
+  const tx=el('text',{x:x,y:VBH-12,'text-anchor':'middle','font-size':12,fill:'#6b5d52'});
+  tx.textContent=yr; svg.appendChild(tx);
+}
+let up='', dn='';
+SOLD.forEach(d=>{const x=xOf(Date.parse(d[0])); up+=(up?' L':'M')+x+' '+yOf(d[2]);});
+for(let i=SOLD.length-1;i>=0;i--){const d=SOLD[i],x=xOf(Date.parse(d[0])); dn+=' L'+x+' '+yOf(d[3]);}
+svg.appendChild(el('path',{d:up+dn+' Z',fill:'#2e6b4c','fill-opacity':0.13}));
+let ap=''; ASK.forEach((d,i)=>{ap+=(i?' L':'M')+xOf(askT[i])+' '+yOf(d[1]);});
+svg.appendChild(el('path',{d:ap,fill:'none',stroke:'#b87333','stroke-width':2.4,'stroke-linejoin':'round'}));
+let sp=''; SOLD.forEach((d,i)=>{sp+=(i?' L':'M')+xOf(Date.parse(d[0]))+' '+yOf(d[1]);});
+svg.appendChild(el('path',{d:sp,fill:'none',stroke:'#2e6b4c','stroke-width':2.4,'stroke-linejoin':'round'}));
+SOLD.forEach(d=>{svg.appendChild(el('circle',{cx:xOf(Date.parse(d[0])),cy:yOf(d[1]),r:3,fill:'#2e6b4c',stroke:'#fff','stroke-width':1}));});
+const cross=el('line',{y1:M.t,y2:M.t+PH,stroke:'#1a120e','stroke-width':1,'stroke-dasharray':'3 3',opacity:0});
+const dotA=el('circle',{r:4.5,fill:'#b87333',stroke:'#fff','stroke-width':1.5,opacity:0});
+const dotS=el('circle',{r:4.5,fill:'#2e6b4c',stroke:'#fff','stroke-width':1.5,opacity:0});
+svg.appendChild(cross);svg.appendChild(dotA);svg.appendChild(dotS);
+function fmtM(v){return '$'+(v/1e6).toFixed(2)+'M';}
+const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function nearestAsk(t){let lo=0,hi=askT.length-1;while(lo<hi){const m=(lo+hi)>>1;if(askT[m]<t)lo=m+1;else hi=m;}
+  if(lo>0&&Math.abs(askT[lo-1]-t)<Math.abs(askT[lo]-t))lo--;return lo;}
+function soldAt(t){let r=SOLD[0];for(const d of SOLD){if(Date.parse(d[0])<=t)r=d;else break;}return r;}
+function move(clientX){
+  const rect=svg.getBoundingClientRect();
+  let vx=(clientX-rect.left)/rect.width*VBW;
+  vx=Math.max(M.l,Math.min(VBW-M.r,vx));
+  const t=t0+(vx-M.l)/PW*(t1-t0);
+  const ai=nearestAsk(t), a=ASK[ai], ax=xOf(askT[ai]);
+  const s=soldAt(askT[ai]);
+  cross.setAttribute('x1',ax);cross.setAttribute('x2',ax);cross.setAttribute('opacity',1);
+  dotA.setAttribute('cx',ax);dotA.setAttribute('cy',yOf(a[1]));dotA.setAttribute('opacity',1);
+  dotS.setAttribute('cx',xOf(Date.parse(s[0])));dotS.setAttribute('cy',yOf(s[1]));dotS.setAttribute('opacity',1);
+  const dt=new Date(a[0]);
+  tip.innerHTML='<div class="d">'+MO[dt.getMonth()]+' '+dt.getFullYear()+'</div>'+
+    '<b style="color:#e6a45f">'+fmtM(a[1])+'</b> asking<br>'+
+    '<b style="color:#8fc7a8">'+fmtM(s[1])+'</b> sold <span style="color:#cbb8a6">('+s[4]+')</span>';
+  const wr=wrap.getBoundingClientRect();
+  const px=ax/VBW*rect.width+(rect.left-wr.left);
+  tip.style.opacity=1;
+  const tw=tip.offsetWidth;
+  let left=px+14; if(left+tw>wr.width) left=px-tw-14; if(left<2) left=2;
+  tip.style.left=left+'px';
+  tip.style.top=(yOf(Math.max(a[1],s[1]))/VBH*rect.height+(rect.top-wr.top)-8)+'px';
+}
+svg.addEventListener('mousemove',e=>move(e.clientX));
+svg.addEventListener('mouseleave',()=>{tip.style.opacity=0;cross.setAttribute('opacity',0);dotA.setAttribute('opacity',0);dotS.setAttribute('opacity',0);});
+svg.addEventListener('touchmove',e=>{if(e.touches[0])move(e.touches[0].clientX);},{passive:true});
+svg.addEventListener('touchstart',e=>{if(e.touches[0])move(e.touches[0].clientX);},{passive:true});
+</script>
+</body>
+</html>"""
+
+
+def chart_bw_asking_sqm_html(gc):
+    """Interactive version of the Trap 4 asking-vs-sold chart — a self-contained HTML
+    file (inline SVG + vanilla JS, no external libs) with a hover tooltip. Served from
+    the blob host and embedded in the article via <iframe>. Same data as the PNG."""
+    import datetime as _dt
+    import json
+    START = _dt.date(2009, 1, 1)
+
+    d = gc["sqm_asking_prices"].find_one({"_id": "burleigh_waters"})
+    ask = [[r["date"], round(r["houses_all"])] for r in d["series"] if r.get("houses_all")]
+
+    sd = gc["precomputed_indexed_prices"].find_one({"_id": "burleigh_waters"})
+
+    def qend(p):
+        qt, yt = p.split()
+        return _dt.date(int(yt), int(qt[1:]) * 3, 28)
+    sold = [[qend(r["period"]).isoformat(), r["rolling_median"],
+             r.get("ci_low") or r["rolling_median"], r.get("ci_high") or r["rolling_median"],
+             r["period"]]
+            for r in sd["rolling_12m_median_series"] if qend(r["period"]) >= START]
+
+    html = _ASKING_SOLD_HTML_TEMPLATE.replace("__ASK__", json.dumps(ask)).replace("__SOLD__", json.dumps(sold))
+    os.makedirs(OUT, exist_ok=True)
+    path = os.path.join(OUT, "median_bw_asking_sqm.html")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(html)
+    print(f"{PUBLIC}/median_bw_asking_sqm.html  ({len(html)} bytes, {len(ask)} ask pts, {len(sold)} sold pts)")
+    return f"{PUBLIC}/median_bw_asking_sqm.html"
+
+
 def build_median(gc):
     p1, end = chart_robina_bedroom_index(gc)
     p2 = chart_robina_rolling_ci(gc)
     p3 = chart_bw_asking_sqm(gc)
+    p3h = chart_bw_asking_sqm_html(gc)
     print("\nINDEX ENDPOINTS (2026-Q2):", {k: round(v) for k, v in end.items()})
 
 
@@ -753,6 +891,7 @@ def main():
         build_all(gc)
     elif args.bw_asking:
         chart_bw_asking_sqm(gc)
+        chart_bw_asking_sqm_html(gc)
     elif args.median:
         build_median(gc)
 
