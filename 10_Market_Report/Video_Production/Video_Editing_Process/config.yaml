@@ -49,6 +49,14 @@ assembly:
   fps: 30
   transition: "cut"       # cut | dissolve
   dissolve_sec: 0.20      # only used when transition=dissolve
+  # Snap every cut onto a silence gap so no word is clipped and joins land on a breath.
+  # Cut points in the EDL become approximate — the audio decides the exact frame.
+  snap_to_silence: true
+  snap_noise_db: -38.0    # audio below this = silence (speech mean ≈ -29dB, room ≈ -45dB)
+  snap_min_silence: 0.12  # a gap must be ≥ this to count as a pause (seconds)
+  snap_tail_pad: 0.22     # breath kept AFTER the last word before the out-cut
+  snap_preroll: 0.18      # breath kept BEFORE the first word after the in-cut
+  snap_max_extend: 3.0    # never move a cut more than this hunting for a pause
 
 # ── Captions (burned into the *_captions master; the web mp4 stays caption-free
 #    because the live page renders its own guided-tour captions)
