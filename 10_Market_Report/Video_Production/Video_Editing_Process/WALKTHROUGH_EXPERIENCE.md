@@ -256,6 +256,32 @@ into every chapter, not just Days‑on‑Market. Each maps to a helper that alre
     caption bar; (e) give mobile‑specific viewBox positions via a `markMobile(desk,mob)` switch, and
     let `wkIsMobile()` gate every branch. **Verify mobile separately** — the QA harness (§5c) runs
     both viewports because mobile carries ~5× the layout findings.
+14. **The connecting arrow ARCS, and always points first→second.** The two-point connector (§3.1.11)
+    swings up-and-over (`wkArrow(...,arc)`), not straight — but keep the bow **gentle and capped**
+    (`min(46, dist*0.24)`); an over-large bow on close circles loops back on itself instead of
+    connecting the two (issue #35). And when circles sit **close relative to their radii**, pulling the
+    start to A's far edge and the end to B's near edge makes them **cross over and reverse** the arrow —
+    `wkArrowVB` scales the edge offsets so the start always stays behind the end (the withdrawn
+    2025→2026 reversal, issue #36). **To check any arrow's direction:** it must run from the
+    first‑mentioned point to the second; read the two points from the *live chart geometry*
+    (`wkMainPath`, or a colour‑targeted path like the blue `#007bff` lending line — §3.1.12), never from
+    hardcoded coords that drift with the chart's range.
+15. **Lock ink to the chart on scroll; boxes stay on screen.** Chart‑anchored ink (circles, arrows,
+    on‑chart notes, highlights, the settings asterisks) lives in `#wkInkWrap`; a scroll listener
+    translates the wrap by `(baseline − scrollY)` so it **rides with the chart** when the viewer scrolls
+    or the page auto‑scrolls (item 8). STAGE note‑boxes, the avatar and the caption are NOT in the wrap —
+    they stay fixed to the viewport. Anything you draw on a chart is chart‑anchored by default.
+16. **Zoom + pan (the camera) — use it where the narration walks along a specific stretch of data.**
+    `wkCamera(svgSel, VBW, focusVx, scale, secs)` scales the chart svg **and** `#wkInkWrap` around the
+    same screen point, so any annotations stay glued through the move; call it again with a new `focusVx`
+    to **pan** (the CSS transition animates the translate); `wkCameraOff` returns to normal. Reach for it
+    when Will narrates a *specific section or period* on a chart and a closer look helps — e.g. panning
+    left→right across the "asking sat below sale" history, then zooming the recent convergence. Rules:
+    (a) **never let the docked head cover the data being spoken to** — the focus is usually the upper/right
+    of the chart, the head sits bottom‑left, so check the overlap per zoom; (b) fade/clear on‑chart text
+    that would scale awkwardly *before* a big zoom; (c) a scene change (`clearWkInk`) resets the camera,
+    so keep a zoom inside one dock scene; (d) use it a **few** times, not constantly — it punctuates, it
+    isn't the default view.
 
 ---
 
@@ -320,16 +346,19 @@ Times are video seconds. `▶` = concept/teaching write.
 84   ▶ "more days = weaker demand"           (1:24 demand relationship)
 110  ▶ "a symptom, not a predictor"          (1:54 the key reframe)
 120  STAGE (bridge) — note-box
-127  ▶ box: "prices move gradually" [big]    (2:00)
-134  ▶ box: "valued on the last 6 months"    (2:08)
+127  ▶ box: "Unlike share markets, home prices move gradually" [big]  (2:00)
+134  ▶ box: "Homes are valued on 6 months of data, stocks change value instantly…"  (2:08)
 156  DOCK Median
 164  ▶ "gradual decline" (open lower-left)   (2:43)
 170  circle peak + "$1.5M"                   (2:52 "1.5 million")   ← peak/latest READ from line (§3.1.12)
 175  arrow peak→latest, circle + "$1.49M"    (2:55 "1.492")
 186  DOCK Asking (median overlay on, 10yr)
-198  ▶ "asking price"/"median sale" + blue leaders to each line (3:20); FADE at 230 (§3.1.5/4b)
+198  ▶ "asking price"/"median sale" + blue leaders; FADE at 214 (§3.1.5/4b)
+216  CAMERA zoom+pan L→R across the historical period (asking<sale)  ← §3.1.16
+230  CAMERA off
 236  circle flip + "Dec 2023"                (3:56)                ← 1st point
 250  arrow flip→converge, circle + "Sept 2026" (4:11)             ← 2nd point
+255  CAMERA zoom the recent convergence (Sept 2026); off at 263
 264  ▶ "sellers adjusting"                   (4:32)
 285  DOCK Withdrawn
 300  ▶ "homes that didn't sell"              (4:56)
@@ -338,11 +367,14 @@ Times are video seconds. `▶` = concept/teaching write.
 350  ▶ "trend has changed"                   (5:48)
 368  STAGE (need a leading signal) — note-box
 380  ▶ box: "a signal that moves BEFORE prices" (6:19)
-402  DOCK Lending (#ac)
-419  ▶ "leads prices by ~12 months"          (6:55)  [big]
-412  ▶ "used by CBA + RBA"                   (6:48)
-513  circle Q4-25 + "20%"                    (8:40)                ← 1st point
-520  arrow Q4-25→Q2-26, circle + "10%"       (8:43)                ← 2nd point
+402  DOCK Lending (#ac) — entrance ritual on #subseg/#modeseg/#rangeseg pills (item 7)
+414  ▶ "used by CBA + RBA"                   (6:48)
+420  ▶ "leads prices by ~12 months"          (6:55)  [big]
+435  SET explorer: 3-suburb / actual timing / all data (+re-star those pills)
+479  SET range → 3 yr ("click on the three-year view")
+510  RECENT: clear all text, lock to 3yr view
+513  circle Q4-25 + "20%" (read from blue #007bff line)           ← 1st point
+520  arrow Q4-25→Q2-26, circle + "10%"                            ← 2nd point
 548  ▶ "directional, not certain"            (9:07)
 583  STAGE (close) — note-box
 591  ▶ box: "days on market" ↑ (inline arrow) (9:49 recap builds)
@@ -429,6 +461,11 @@ headless screenshots first, then `gh api`, then live verify.
 | 32 | **Stale ink floated over the page during the auto‑scroll** into the next scene ("gradual decline" + numbers stayed on‑screen scrolling into the asking chart) | `clearWkInk()` now fires at the **start of every scene entry** — `wkStage` / `wkTitleHighlight` (before its scroll) / `wkDock` | Ink is viewport‑fixed; clear it BEFORE you scroll, not after you arrive. Detected automatically by the QA harness `stale-ink` rule (§7) |
 | 33 | **Mobile:** STAGE note‑box ran off the **left** edge; long DOCK notes bled off the **right**; "sellers adjusting" wrote over the caption | `.wk-notebox.mob` centred + width‑capped; `.wk-note` wraps on ≤640px; low concept lines raised via `markMobile` (§3.1.13) | Treat ≤640px as its own layout; a scaled desktop always collides. Screenshot mobile separately |
 | 34 | Overlapping notes slipped through manual review | Runtime `avoidNoteOverlap` nudges a note off any note it hits; the **QA harness** (§7) screenshots every `note-overlap`/`over-caption`/`offscreen`/`note-on-circle`/`stale-ink` violation across desktop + mobile before deploy | Don't eyeball overlaps — lint them. Construct to avoid (a), auto‑nudge (b), and screenshot‑on‑violation (c) |
+| 35 | The two‑point **arc looped back on itself** instead of connecting the circles | Reduced the bow to `min(46, dist*0.24)` — a gentle, capped arc | A bow larger than the chord (esp. a big `min()` floor) curls the arrow; keep the arc gentle and capped (§3.1.14) |
+| 36 | **Withdrawn arrow pointed 2026→2025** (backwards vs the narration) | The circles were close but large‑radius, so the edge offsets crossed over; `wkArrowVB` now scales the offsets so start stays behind end | When circles are close relative to their radii, full edge offsets reverse the arrow — scale them (§3.1.14) |
+| 37 | Lending **entrance ritual did nothing** — pills got no asterisk/blink | The explorer's pills live in `#subseg`/`#modeseg`/`#rangeseg`, NOT inside `#ac` (the chart) — scoped `wkSettingsStars` to those segs | The explorer's controls are outside its chart element; scope the ritual to the widget, not the svg (§3.1.1/item 7) |
+| 38 | Lending **recent circles landed on the wrong line** ("20%" flew off left) | `wkMainPath` grabbed the longest (black price) path; targeted the **blue `#007bff`** new‑housing‑lending line instead | On a multi‑line chart, pick the path by **colour/role**, not by length (§3.1.12) |
+| 39 | Captions ran **~1–5 s behind Will's voice** | Word‑timestamp transcription → `qa/sync_check.py` measured the drift and rewrote `WALK_SEGMENTS` to the actual spoken starts | Don't hand‑time captions — measure against the audio and correct systematically (§7 sync check) |
 
 ---
 
@@ -464,6 +501,17 @@ NODE_PATH=/home/fields/Feilds_Website/01_Website/node_modules \
 Read the screenshots it flags — some findings are legitimate (a note that *should* sit off the
 charts), so the PNG is the arbiter, not the raw count. The count must not regress against the
 prior run.
+
+**Caption/voice sync check (`qa/sync_check.py` + `qa/transcribe_words.py`).** Captions come from the
+hardcoded `WALK_SEGMENTS` timecodes; if those drift from Will's actual delivery the subtitles run
+ahead of or behind his voice. The checker transcribes the clip with **word‑level timestamps**
+(`transcribe_words.py` → faster‑whisper → `words.json`), then for each segment finds where its
+opening words are *actually* spoken (search windowed to ±18 s of the declared time so it can't match a
+later repeat of common words), reports the drift, and writes a **corrected `WALK_SEGMENTS`**
+(`walk_segments_corrected.txt`, high‑confidence + monotonic only). Re‑run it whenever the clip or the
+segments change. On the first pass it found a **systematic ~1 s lag (up to ~5 s on individual lines)**
+and re‑synced 54 of 82 captions. The on‑chart ink beats are timed to the same video clock, so fixing
+the captions to the voice also aligns them with the ink.
 
 **Deploy** (website changes are gated — CLAUDE.md §2/§4; git push hangs → `gh api`):
 ```bash
