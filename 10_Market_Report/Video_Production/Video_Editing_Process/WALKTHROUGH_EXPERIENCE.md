@@ -140,7 +140,9 @@ into every chapter, not just Days‑on‑Market. Each maps to a helper that alre
       (not floating above it). Measure the asterisk and place it by ~⅔ overlap
       (`left = pill.right − starW*0.62`, `top = pill.top − starH*0.16`). It flags that the
       chart is interactive and adjustable. (Selected pills = `.dom-pill.active` for
-      dom/median/asking/withdrawn; `.seg button.on, .pill.on` for the explorer.)
+      dom/median/asking/withdrawn; `.seg button.on, .pill.on` for the explorer.) **As each
+      asterisk is drawn, its pill blinks/flickers a couple of times quickly** (`wkBlinkPill`
+      → `@keyframes wkPillBlink`, ~0.55 s) to draw the eye to the control being marked.
    3. **then drop the head down** to its beside‑the‑chart resting position.
    One entrance per chapter. ⚠ The highlighter uses `mix-blend-mode:multiply`, so it only
    works over the **light, undimmed** chart — do it in the DOCK entrance, never over a
@@ -226,9 +228,15 @@ into every chapter, not just Days‑on‑Market. Each maps to a helper that alre
     **hand‑drawn point‑to‑point arrow** in the described direction to the **second** point and
     circle it. The order follows the *narration*, not the calendar: whatever Will says first is
     circled first. Helpers: `wkPointCircle(sel,VBW,VBH,pt,partner,note,instant,tag,delay)` (circle
-    one point + a value note pushed clear) and `wkArrowVB(...)` (edge‑to‑edge red arrow between two
+    one point + a value note pushed clear) and `wkArrowVB(...)` (arced red arrow between two
     circles). Applied to all five charts (DOM June→Aug, median peak→latest, asking Dec 2023→Sept
     2026, withdrawn 23→53, lending 20%→10%).
+    - **The connecting arrow ARCS — it never runs straight.** It leaves the first circle and swings
+      **up‑and‑over** to the same relative point on the second (like tracing between two clock hands),
+      not a ruler line between them. `wkArrowVB` passes a strong arc (`wkArrow(..., arc≈0.5)`: bow ∝
+      the span, control point forced above the chord), and the arrowhead follows the arc's tangent
+      into the second circle. A straight connector reads as a bar chart; the arc reads as a
+      hand‑drawn "watch this move over to here."
 12. **Anchor circles to the LIVE line, not hardcoded viewBox coords — and keep numbers off both.**
     Hardcoded `(vx,vy)` drift the moment the chart's range/data changes and the circle lands in
     empty space (median circles were sitting up in the "gradual decline" text, issue #30). Read the
