@@ -164,9 +164,47 @@ def chart_robina_rolling_ci(gc):
     return _save(fig, "median_robina_rolling_ci.png")
 
 
+def chart_bw_asking_sqm(gc):
+    """Trap 4: SQM Research weekly asking prices for postcode 4220 (Burleigh Waters,
+    Burleigh Heads, Miami) — houses, units and combined, full history."""
+    import datetime as _dt
+    import matplotlib.dates as mdates
+    d = gc["sqm_asking_prices"].find_one({"_id": "burleigh_waters"})
+    series = d["series"]
+    xs = [_dt.date.fromisoformat(r["date"]) for r in series]
+    houses = [r.get("houses_all") for r in series]
+    units = [r.get("units_all") for r in series]
+    combined = [r.get("combined") for r in series]
+
+    fig, ax = plt.subplots(figsize=(8, 4.6))
+    _style(ax)
+    ax.plot(xs, houses, color=COPPER, linewidth=2.6, zorder=3)
+    ax.plot(xs, units, color=SLATE, linewidth=2.2, zorder=3)
+    ax.plot(xs, combined, color=MUTED, linewidth=1.6, linestyle=(0, (5, 3)), zorder=2)
+
+    def endlabel(ys, col, label):
+        yend = next((v for v in reversed(ys) if v is not None), None)
+        ax.annotate(f"{label}  ${yend/1e6:.2f}M", (xs[-1], yend), xytext=(8, 0),
+                    textcoords="offset points", va="center", color=col,
+                    fontsize=10.5, fontweight="bold")
+    endlabel(houses, COPPER, "Houses")
+    endlabel(units, SLATE, "Units")
+    endlabel(combined, MUTED, "Combined")
+
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"${v/1e6:.1f}M"))
+    ax.xaxis.set_major_locator(mdates.YearLocator(2))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    ax.set_xlim(xs[0], xs[-1] + (xs[-1] - xs[0]) * 0.14)
+    ax.set_title("What sellers are asking in Burleigh Waters (postcode 4220)",
+                 color=INK, fontsize=13, fontweight="bold", loc="left", pad=12)
+    print("SQM BW latest:", series[-1])
+    return _save(fig, "median_bw_asking_sqm.png")
+
+
 def build_median(gc):
     p1, end = chart_robina_bedroom_index(gc)
     p2 = chart_robina_rolling_ci(gc)
+    p3 = chart_bw_asking_sqm(gc)
     print("\nINDEX ENDPOINTS (2026-Q2):", {k: round(v) for k, v in end.items()})
 
 
@@ -697,11 +735,14 @@ def build_all(gc):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--median", action="store_true")
+    ap.add_argument("--bw-asking", action="store_true")
     ap.add_argument("--all", action="store_true")
     args = ap.parse_args()
     gc = get_client()["Gold_Coast"]
     if args.all:
         build_all(gc)
+    elif args.bw_asking:
+        chart_bw_asking_sqm(gc)
     elif args.median:
         build_median(gc)
 
