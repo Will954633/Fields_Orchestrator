@@ -165,39 +165,49 @@ def chart_robina_rolling_ci(gc):
 
 
 def chart_bw_asking_sqm(gc):
-    """Trap 4: SQM Research weekly asking prices for postcode 4220 (Burleigh Waters,
-    Burleigh Heads, Miami) — houses, units and combined, full history."""
+    """Trap 4: Burleigh Waters houses — asking vs sold over time. Copper: SQM Research
+    weekly asking-price series for postcode 4220 (BW, Burleigh Heads, Miami). Green:
+    the 12-month rolling median of recorded house sales in Burleigh Waters, with CI band."""
     import datetime as _dt
     import matplotlib.dates as mdates
+    START = _dt.date(2009, 1, 1)
+
+    # asking — SQM houses, postcode 4220, weekly
     d = gc["sqm_asking_prices"].find_one({"_id": "burleigh_waters"})
-    series = d["series"]
-    xs = [_dt.date.fromisoformat(r["date"]) for r in series]
-    houses = [r.get("houses_all") for r in series]
-    units = [r.get("units_all") for r in series]
-    combined = [r.get("combined") for r in series]
+    ask = [(_dt.date.fromisoformat(r["date"]), r.get("houses_all")) for r in d["series"]]
+    ax_x = [x for x, y in ask if y is not None]
+    ax_y = [y for x, y in ask if y is not None]
+
+    # sold — rolling 12m median, BW houses, quarterly
+    sd = gc["precomputed_indexed_prices"].find_one({"_id": "burleigh_waters"})
+
+    def qend(p):
+        qt, yt = p.split()
+        return _dt.date(int(yt), int(qt[1:]) * 3, 28)
+    sold = [(qend(r["period"]), r["rolling_median"], r.get("ci_low"), r.get("ci_high"))
+            for r in sd["rolling_12m_median_series"] if qend(r["period"]) >= START]
+    sx = [s[0] for s in sold]
+    sm = [s[1] for s in sold]
+    slo = [s[2] or s[1] for s in sold]
+    shi = [s[3] or s[1] for s in sold]
 
     fig, ax = plt.subplots(figsize=(8, 4.6))
     _style(ax)
-    ax.plot(xs, houses, color=COPPER, linewidth=2.6, zorder=3)
-    ax.plot(xs, units, color=SLATE, linewidth=2.2, zorder=3)
-    ax.plot(xs, combined, color=MUTED, linewidth=1.6, linestyle=(0, (5, 3)), zorder=2)
-
-    def endlabel(ys, col, label):
-        yend = next((v for v in reversed(ys) if v is not None), None)
-        ax.annotate(f"{label}  ${yend/1e6:.2f}M", (xs[-1], yend), xytext=(8, 0),
-                    textcoords="offset points", va="center", color=col,
-                    fontsize=10.5, fontweight="bold")
-    endlabel(houses, COPPER, "Houses")
-    endlabel(units, SLATE, "Units")
-    endlabel(combined, MUTED, "Combined")
+    ax.fill_between(sx, slo, shi, color=GREEN, alpha=0.13, zorder=1)
+    ax.plot(ax_x, ax_y, color=COPPER, linewidth=2.6, zorder=3,
+            label="Asking price — SQM, postcode 4220")
+    ax.plot(sx, sm, color=GREEN, linewidth=2.6, marker="o", markersize=4,
+            markerfacecolor=GREEN, markeredgecolor=SURFACE, markeredgewidth=1.0, zorder=4,
+            label="Sold median — Burleigh Waters, 12-month rolling")
 
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"${v/1e6:.1f}M"))
     ax.xaxis.set_major_locator(mdates.YearLocator(2))
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
-    ax.set_xlim(xs[0], xs[-1] + (xs[-1] - xs[0]) * 0.14)
-    ax.set_title("What sellers are asking in Burleigh Waters (postcode 4220)",
+    ax.set_xlim(START, ax_x[-1])
+    ax.legend(frameon=False, fontsize=10, loc="upper left", labelcolor=INK)
+    ax.set_title("Burleigh Waters houses: what sellers ask vs what homes sell for",
                  color=INK, fontsize=13, fontweight="bold", loc="left", pad=12)
-    print("SQM BW latest:", series[-1])
+    print("asking latest:", ask[-1], "| sold latest:", sold[-1])
     return _save(fig, "median_bw_asking_sqm.png")
 
 
