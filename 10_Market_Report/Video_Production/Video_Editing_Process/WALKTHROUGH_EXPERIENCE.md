@@ -262,7 +262,16 @@ into every chapter, not just Days‑on‑Market. Each maps to a helper that alre
     translates the wrap by `(baseline − scrollY)` so it **rides with the chart** when the viewer scrolls
     or the page auto‑scrolls (item 8). STAGE note‑boxes, the avatar and the caption are NOT in the wrap —
     they stay fixed to the viewport. Anything you draw on a chart is chart‑anchored by default.
-16. **Zoom + pan (the camera) — use it where the narration walks along a specific stretch of data.**
+16. **⚠ KNOWN NO-OP as of 2026-09-09 — the chart camera does NOT visibly zoom. Do not rely on it; use
+    circles/labels to carry any "zoom in / look closer" narration.** Confirmed on production
+    (`robina?walkthrough=2`): Chrome computes an `<svg>` root's `transform-box` as `view-box`, so the CSS
+    transform MEASURES as scaled (`getBoundingClientRect`) but PAINTS in viewBox user-space → nothing zooms.
+    The ink wrap (a div) transforms fine, which is why the drawn ink can look like it moved while the chart
+    underneath doesn't. The proper fix (future, deliberate task) is to transform a wrapper `<div>` with an
+    explicit width/height around each chart svg, not the svg itself. See fix-history
+    `[WALK-CAMERA-SVG-TRANSFORMBOX]`. The description below is the *intended* behaviour, retained for when it's fixed:
+
+    **Zoom + pan (the camera) — use it where the narration walks along a specific stretch of data.**
     `wkCamera(svgSel, VBW, focusVx, scale, secs)` scales the chart svg **and** `#wkInkWrap` around the
     same screen point, so any annotations stay glued through the move; call it again with a new `focusVx`
     to **pan** (the CSS transition animates the translate); `wkCameraOff` returns to normal. Reach for it
