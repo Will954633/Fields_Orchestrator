@@ -262,19 +262,20 @@ into every chapter, not just Days‑on‑Market. Each maps to a helper that alre
     translates the wrap by `(baseline − scrollY)` so it **rides with the chart** when the viewer scrolls
     or the page auto‑scrolls (item 8). STAGE note‑boxes, the avatar and the caption are NOT in the wrap —
     they stay fixed to the viewport. Anything you draw on a chart is chart‑anchored by default.
-16. **⚠ KNOWN NO-OP as of 2026-09-09 — the chart camera does NOT visibly zoom. Do not rely on it; use
-    circles/labels to carry any "zoom in / look closer" narration.** Confirmed on production
-    (`robina?walkthrough=2`): Chrome computes an `<svg>` root's `transform-box` as `view-box`, so the CSS
-    transform MEASURES as scaled (`getBoundingClientRect`) but PAINTS in viewBox user-space → nothing zooms.
-    The ink wrap (a div) transforms fine, which is why the drawn ink can look like it moved while the chart
-    underneath doesn't. The proper fix (future, deliberate task) is to transform a wrapper `<div>` with an
-    explicit width/height around each chart svg, not the svg itself. See fix-history
-    `[WALK-CAMERA-SVG-TRANSFORMBOX]`. The description below is the *intended* behaviour, retained for when it's fixed:
+16. **Zoom (the camera) — FIXED 2026-09-09 to animate the SVG viewBox (it works now).** ⚠ Do NOT zoom by
+    putting a CSS `transform` on the chart `<svg>` — Chrome computes an `<svg>` root's `transform-box` as
+    `view-box`, so the transform MEASURES as scaled but PAINTS in viewBox user-space → no visible zoom (this
+    silently broke the camera for months; see fix-history `[WALK-CAMERA-SVG-TRANSFORMBOX]` →
+    `[WALK-CAMERA-VIEWBOX-FIX]`). Instead `wkCamera` shrinks the svg's **`viewBox` attribute** to the focus
+    region (the SVG-native zoom, always paints) and applies the matching screen affine to the ink wrap
+    (`#wkInkWrap`, a `<div>` — divs paint transforms fine) so ink stays glued; both tween together per rAF.
+    `wkCamera(svgSel, VBW, focusVx, scale, secs, foVy, VBH)` — the two circles are drawn FIRST, then the
+    camera magnifies them (they're in the wrap and scale with it). `wkCameraOff` tweens the viewBox back.
 
-    **Zoom + pan (the camera) — use it where the narration walks along a specific stretch of data.**
-    `wkCamera(svgSel, VBW, focusVx, scale, secs)` scales the chart svg **and** `#wkInkWrap` around the
-    same screen point, so any annotations stay glued through the move; call it again with a new `focusVx`
-    to **pan** (the CSS transition animates the translate); `wkCameraOff` returns to normal. Reach for it
+    (Historical note — the ORIGINAL implementation used a CSS `transform` on the svg and did NOT paint;
+    the viewBox-animation approach above replaced it. The choreography rules below apply unchanged.)
+
+    Reach for it
     when Will narrates a *specific section or period* on a chart and a closer look helps — e.g. panning
     left→right across the "asking sat below sale" history, then zooming the recent convergence. Rules:
     (a) **never let the docked head cover the data being spoken to** — the focus is usually the upper/right
