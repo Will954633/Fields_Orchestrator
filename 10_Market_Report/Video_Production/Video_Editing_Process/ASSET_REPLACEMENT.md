@@ -141,4 +141,50 @@ works unchanged). What's extra for a *new* suburb is making the engine pick the 
 - **`walkthrough_qa.cjs`** — layout lint (overlap / off-screen / over-caption / stale-ink) across
   desktop + mobile. Run it after a swap the same as for any change (see WALKTHROUGH_EXPERIENCE.md §7).
 
+---
+
+## Adding a SECOND version of a walkthrough (`?walkthrough=2`)
+
+Done for Robina on 2026-09-09 (the V3 cut). Use this when you want a second cut of the SAME suburb
+live alongside the first (A/B), rather than replacing it. Unlike a straight swap, a second cut is
+usually a **different narration** — reworded, a different length, and sometimes different chart
+stories — so it needs its **own beat choreography**, not a re-time of the first.
+
+The engine is versioned by the `?walkthrough=` value:
+- **`walkVersion()`** reads the query param → `1` or `2` (0 = off). `walkFlagOn()` = `walkVersion()>0`
+  (gates the hero).
+- **`WALK_SRC()`** returns the per-version video path (`robina_2026-08_dom.mp4` vs
+  `robina_2026-08_v3_dom.mp4`). Used by `avatarVideo()` and `#wkVid`.
+- **Captions** are per-version: `WALK_SEGMENTS` (v1) and `WALK_SEGMENTS_V2` (v2); `walkCues()` picks
+  by version.
+- **Beats** are per-version: `walkBeats()` (v1) and `walkBeatsV3()` (v2); `startWalk` dispatches on
+  `walk.version`.
+
+To add version 2:
+1. Re-encode + place the video as a **new file** (`robina_2026-08_v3_dom.mp4`); wire it into
+   `WALK_SRC()`.
+2. Add `WALK_SEGMENTS_V2` from the new `walk_segments.txt`; confirm `walkCues()` and its `END`
+   fallback are version-aware (⚠ when you copy caption logic, swap **every** `WALK_SEGMENTS[...]`
+   ref — a missed `[i+1]` reference read past the shorter v1 array and threw
+   `Cannot read '0' of undefined`, which silently killed the whole beat loop; the transport shows
+   but the video sticks at 0:00).
+3. **Author `walkBeatsV3()` to the new narration** — don't assume `retime_beats.py` will map it. Read
+   the new captions; most beats reuse the same helpers (`wkEnter`/`wkDock`/`wkDomJune`/`wkMedianPts`/
+   `wkAcRecent`/…), but any section whose *story* changed needs new beats (V3's asking chart tells a
+   June-2026 "$1.6M asking vs $1.49M median, then dropped to match" story instead of the
+   Dec-2023-flip story; V3 also adds a rental-yields STAGE section). Circle POSITIONS still read from
+   live geometry, so they adapt.
+4. ⚠ **Zoom + annotate order (double-transform trap):** the camera scales the chart **and**
+   `#wkInkWrap` together. If you zoom FIRST and then draw ink, the ink is computed from the
+   already-transformed chart and then transformed AGAIN by the wrap → it flies off-screen. **Draw the
+   circles/notes first, THEN `wkCamera` to magnify** (the ink is already in the wrap and scales with
+   it — the V1 asking-recent pattern). This is why the V3 asking beats are circle(300)/arrow(308)/
+   zoom(312), not zoom-then-circle.
+5. Build, verify **both** `?walkthrough=1` and `?walkthrough=2` (a versioning bug can break one and
+   not the other), then deploy the engine + the new video.
+
+⚠ **Headless verify for a longer/2nd video:** a bigger clip needs buffering before a seek to a late
+timepoint sticks — use a shooter that waits for the `seeked` event (`_shotwalkR.cjs`), not a fixed
+sleep, or late frames screenshot blank at 0:00.
+
 See **WALKTHROUGH_EXPERIENCE.md** for the choreography/design rules the beats implement.
