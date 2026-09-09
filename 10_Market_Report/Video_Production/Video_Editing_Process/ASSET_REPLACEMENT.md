@@ -143,9 +143,16 @@ Burleigh Waters is a small, mechanical follow. Mechanism (see fix-history `[WALK
 5. Verify BOTH the new suburb AND Robina (a registry bug can break routing) via headless screenshots at
    the DOM/median/asking/withdrawn/lending beats, then deploy engine + video.
 
-⚠ **The on-page chart camera zoom (`wkCamera`) is a KNOWN NO-OP** — it has never visibly rendered (SVG
-`transform-box: view-box` quirk, see fix-history `[WALK-CAMERA-SVG-TRANSFORMBOX]`). Do NOT rely on it for
-a new suburb; the circles/labels carry the emphasis. Fixing it (wrapper-div) is a separate task.
+✅ **The on-page chart camera zoom (`wkCamera`) WORKS as of 2026-09-09** (fix-history
+`[WALK-CAMERA-VIEWBOX-FIX]`). It zooms by animating the svg's **`viewBox` attribute** (SVG-native, always
+paints) + a matching screen affine on the ink wrap — NOT a CSS transform on the svg (that silently painted
+nothing, the `transform-box: view-box` quirk). Reuse `wkCamera(DS,1000,940,3.2,secs,352,420)` for a new
+suburb's withdrawn "zoom in on 2025" beat (draw the 23/53 circles FIRST, then camera).
+
+⚠ **When cloning a beat set, grep every helper call against `function <name>`** — a deleted helper (e.g.
+`wkArrowVB`, removed 2026-09-09) is a runtime *throw* inside the rAF beat loop that silently kills
+`walkTick` and everything downstream (transport freezes at 0:00). It may NOT surface on the paused-seek
+verify path — only on monotonic playback. Burleigh hit exactly this (`[WALK-BURLEIGH-ARROWVB-THROW]`).
 
 ---
 
