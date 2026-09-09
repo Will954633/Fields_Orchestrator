@@ -118,18 +118,34 @@ re-shoot after the build completes.
 
 ## Adding a NEW suburb (Varsity Lakes / Burleigh Waters)
 
-The walkthrough currently runs **Robina only** (`WALK_SRC` + `WALK_SEGMENTS` are single values, and
-`?walkthrough=1` is wired to the Robina overview). Because the narration script is identical, the
-**captions timeline and the beat remap are produced the same way** (steps 2–4, and `retime_beats.py`
-works unchanged). What's extra for a *new* suburb is making the engine pick the right assets:
+**DONE for Varsity Lakes on 2026-09-09** — the engine is now **suburb-aware** via a registry, so adding
+Burleigh Waters is a small, mechanical follow. Mechanism (see fix-history `[WALK-VARSITY-LAKES]`):
 
-- Make `WALK_SRC` and `WALK_SEGMENTS` **per-suburb** (keyed by the `/news/:suburb` slug) instead of
-  single constants, and gate the hero on the suburb having an asset.
-- The **ink beats are shared** — same `walkBeats()`, just re-timed per suburb's captions. Circle
-  *positions* already read from live chart geometry (`wkMedianPts`, the blue `#007bff` lending line,
-  etc.), so they auto-adapt to each suburb's data; only the **times** come from `retime_beats`.
-- The lending chart is the **3-suburb pooled** indicator — identical across all three walkthroughs,
-  so its beats/times/circles don't change between suburbs.
+- **`walkSuburb()`** reads `state.suburb` (set by `mountFlow` from the `/news/:suburb` route).
+- **`walkConf()`** is a registry keyed by **(suburb, version)** → `{src, segs, beats, end, chapters}`.
+  `WALK_SRC()`, `walkCues()`, `wkSkip()` (chapters), `walkFlagOn()` (gates the hero — returns false, so
+  NO hero, when the suburb has no asset), and `startWalk`'s beat dispatch are ALL driven by it.
+- The **ink beats read live chart geometry** (`domPts`/`wkMedianPts`/`wkAskLines`/the blue `#007bff`
+  lending line, etc.), so circle POSITIONS and the circled NUMBERS auto-adapt to each suburb's data
+  (Varsity's DOM auto-labelled ≈23→35; Robina's was ≈25→50 — same beat, no code change).
+- The **withdrawn + lending charts are 3-suburb POOLED** (23→53, 20→10) — identical across suburbs, so
+  those beats are copied verbatim.
+
+**To add Burleigh Waters:**
+1. Re-encode its `*_dom.mp4` (step 1) → `public/walkthrough/burleigh-waters_2026-08_dom.mp4`.
+2. Add `WALK_SEGMENTS_BURLEIGH` from its `*_walk_segments.txt` (compact JSON, one line).
+3. Add a `"Burleigh Waters": { 1:{ src, segs:WALK_SEGMENTS_BURLEIGH, beats:walkBeatsVarsity /*or a variant*/, end:<videoLen>, chapters:[…] } }` entry to `walkConf()`.
+4. **Beats:** if Burleigh's narration matches the V3 structure (flat/rising median? layer-in-Robina asking?),
+   reuse `walkBeatsVarsity` and just retime; if its median/asking STORY differs, clone it to
+   `walkBeatsBurleigh()` and adjust those two sections (everything else — DOM, withdrawn, lending, stages —
+   is shared). **Read the captions and check the median + asking narration specifically**, that's where
+   suburbs diverge.
+5. Verify BOTH the new suburb AND Robina (a registry bug can break routing) via headless screenshots at
+   the DOM/median/asking/withdrawn/lending beats, then deploy engine + video.
+
+⚠ **The on-page chart camera zoom (`wkCamera`) is a KNOWN NO-OP** — it has never visibly rendered (SVG
+`transform-box: view-box` quirk, see fix-history `[WALK-CAMERA-SVG-TRANSFORMBOX]`). Do NOT rely on it for
+a new suburb; the circles/labels carry the emphasis. Fixing it (wrapper-div) is a separate task.
 
 ---
 
