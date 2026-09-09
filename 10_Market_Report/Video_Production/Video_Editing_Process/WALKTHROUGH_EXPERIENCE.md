@@ -221,29 +221,24 @@ into every chapter, not just Days‑on‑Market. Each maps to a helper that alre
       head + caption** (head moves to the top, `wkStage` mobile branch), width‑capped to `92vw`
       with lines allowed to **wrap** and centre‑align. A left‑anchored desktop box runs off the
       left edge on a 390px screen (issue #33).
-11. **Two reference points = two circles + a connecting arrow, in narration order.** When the
-    copy compares two points ("from ~25 in June **up to** 50 in August", "peak of 1.5M … **down
+11. **Two reference points = two circles, in narration order — NOTHING drawn between them.** When
+    the copy compares two points ("from ~25 in June **up to** 50 in August", "peak of 1.5M … **down
     to** 1.49M"), do NOT circle a region or fire a Will‑hand arrow at one blob. Circle the
-    **first‑mentioned** point, then — on the beat where the movement is spoken — draw a
-    **hand‑drawn point‑to‑point arrow** in the described direction to the **second** point and
-    circle it. The order follows the *narration*, not the calendar: whatever Will says first is
-    circled first. Helpers: `wkPointCircle(sel,VBW,VBH,pt,partner,note,instant,tag,delay)` (circle
-    one point + a value note pushed clear) and `wkArrowVB(...)` (arced red arrow between two
-    circles). Applied to all five charts (DOM June→Aug, median peak→latest, asking Dec 2023→Sept
-    2026, withdrawn 23→53, lending 20%→10%).
-    - **The connecting arrow ARCS — it never runs straight.** It leaves the first circle and swings
-      **up‑and‑over** to the same relative point on the second (like tracing between two clock hands),
-      not a ruler line between them. `wkArrowVB` passes a strong arc (`wkArrow(..., arc≈0.5)`: bow ∝
-      the span, control point forced above the chord), and the arrowhead follows the arc's tangent
-      into the second circle. A straight connector reads as a bar chart; the arc reads as a
-      hand‑drawn "watch this move over to here."
+    **first‑mentioned** point, then — on the beat where the second point is spoken — circle the
+    **second** point. The order follows the *narration*, not the calendar: whatever Will says first is
+    circled first. **Never draw a connecting arrow or line between the two circles** — the pair of
+    circles carries the comparison on its own. (Rule changed 2026‑09‑09 on Will's direction: the arced
+    `wkArrowVB` connector and its helper were deleted from the engine; the old arc/direction rules
+    lived here and in §3.1.14, both now retired.) Helper: `wkPointCircle(sel,VBW,VBH,pt,partner,note,
+    instant,tag,delay)` (circle one point + a value note pushed clear). Applied to all five charts
+    (DOM June→Aug, median peak→latest, asking Dec 2023→Sept 2026, withdrawn 23→53, lending 20%→10%).
 12. **Anchor circles to the LIVE line, not hardcoded viewBox coords — and keep numbers off both.**
     Hardcoded `(vx,vy)` drift the moment the chart's range/data changes and the circle lands in
     empty space (median circles were sitting up in the "gradual decline" text, issue #30). Read the
     point from the rendered path at runtime (`wkMainPath` → `getPointAtLength`; `wkMedianPts` finds
     the peak = min‑y and the latest = endpoint; `wkAskLabels` reads each line for its leader
     target). Every value note is then **pushed to the outer side, away from its partner point**
-    (`placeClear`) so a number never overlaps its own circle or the connecting arrow. A runtime
+    (`placeClear`) so a number never overlaps its own circle or its partner point. A runtime
     **anti‑overlap** pass (`avoidNoteOverlap`) additionally nudges any note off another note it
     collides with (the auto‑fix, §5c).
 13. **Design mobile (≤640px) as a distinct layout, not a scaled desktop.** The 390px column
@@ -256,16 +251,12 @@ into every chapter, not just Days‑on‑Market. Each maps to a helper that alre
     caption bar; (e) give mobile‑specific viewBox positions via a `markMobile(desk,mob)` switch, and
     let `wkIsMobile()` gate every branch. **Verify mobile separately** — the QA harness (§5c) runs
     both viewports because mobile carries ~5× the layout findings.
-14. **The connecting arrow ARCS, and always points first→second.** The two-point connector (§3.1.11)
-    swings up-and-over (`wkArrow(...,arc)`), not straight — but keep the bow **gentle and capped**
-    (`min(46, dist*0.24)`); an over-large bow on close circles loops back on itself instead of
-    connecting the two (issue #35). And when circles sit **close relative to their radii**, pulling the
-    start to A's far edge and the end to B's near edge makes them **cross over and reverse** the arrow —
-    `wkArrowVB` scales the edge offsets so the start always stays behind the end (the withdrawn
-    2025→2026 reversal, issue #36). **To check any arrow's direction:** it must run from the
-    first‑mentioned point to the second; read the two points from the *live chart geometry*
-    (`wkMainPath`, or a colour‑targeted path like the blue `#007bff` lending line — §3.1.12), never from
-    hardcoded coords that drift with the chart's range.
+14. **(RETIRED 2026‑09‑09 — connecting arrows removed.)** This rule governed the arc shape and
+    first→second direction of the two‑point connector (`wkArrowVB`, issues #35/#36). The connector no
+    longer exists: two compared points get two circles and nothing between them (§3.1.11). What still
+    applies: read compared points from the *live chart geometry* (`wkMainPath`, or a colour‑targeted
+    path like the blue `#007bff` lending line — §3.1.12), never from hardcoded coords that drift with
+    the chart's range.
 15. **Lock ink to the chart on scroll; boxes stay on screen.** Chart‑anchored ink (circles, arrows,
     on‑chart notes, highlights, the settings asterisks) lives in `#wkInkWrap`; a scroll listener
     translates the wrap by `(baseline − scrollY)` so it **rides with the chart** when the viewer scrolls
