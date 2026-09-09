@@ -436,14 +436,13 @@ gRoll.appendChild(el('path',{d:rp,fill:'none',stroke:'#2e6b4c','stroke-width':3,
 ROLL.forEach(d=>{gRoll.appendChild(el('circle',{cx:xOf(Date.parse(d[0])),cy:yOf(d[2]),r:5,fill:'#2e6b4c',stroke:'#fff','stroke-width':1.4}));});
 let mp=''; M3.forEach((d,i)=>{mp+=(i?' L':'M')+xOf(Date.parse(d[0]))+' '+yOf(d[2]);});
 gM3.appendChild(el('path',{d:mp,fill:'none',stroke:'#40607f','stroke-width':2,'stroke-dasharray':'5 4','stroke-linejoin':'round'}));
-M3.forEach(d=>{gM3.appendChild(el('circle',{cx:xOf(Date.parse(d[0])),cy:yOf(d[2]),r:3.6,fill:'#40607f',stroke:'#fff','stroke-width':1}));});
 QTR.forEach(d=>{gQtr.appendChild(el('circle',{cx:xOf(Date.parse(d[0])),cy:yOf(d[2]),r:6,fill:'#b87333',stroke:'#fff','stroke-width':1.4}));});
 svg.appendChild(gRoll);svg.appendChild(gM3);svg.appendChild(gQtr);
 __HELPERS__
 const DEFS=[
   {key:'roll',label:'12-month median', color:'#2e6b4c', on:true, g:gRoll},
   {key:'qtr', label:'Single-quarter median', color:'#b87333', on:true, g:gQtr},
-  {key:'m3',  label:'3-month median', color:'#40607f', on:true, g:gM3},
+  {key:'m3',  label:'3-month rolling (90-day)', color:'#40607f', on:true, g:gM3},
 ];
 const hl=el('circle',{r:7.5,fill:'none','stroke-width':2.5,opacity:0});
 svg.appendChild(hl);
@@ -562,9 +561,9 @@ def chart_robina_rolling_ci_html(gc):
     qtr = [[_qend(r["period"]).isoformat(), _qlabel(r["period"]), r["median_price"],
             r.get("median_sample_n") or r.get("transaction_count") or r.get("raw_transaction_count") or 0]
            for r in qtr_rows if r.get("median_price")]
-    m3 = [[_mend(ym).isoformat(), _mend(ym).strftime("%b %Y"), med, n]
-          for ym, med, lo, hi, n in _rolling_3m_median(gc, "robina", n_anchors=24)
-          if "2025-03" <= ym <= "2026-06"]
+    # Continuously-recomputed trailing-90-day median (daily), not month-stepped quarters.
+    m3 = [[iso, lbl, med, n]
+          for iso, lbl, med, n in _rolling_90d_median(gc, "robina", "2025-03", "2026-06")]
 
     ys = ([r[3] for r in roll] + [r[4] for r in roll] + [r[2] for r in qtr] + [r[2] for r in m3])
     ymin = (min(ys) - 40000) // 50000 * 50000
@@ -632,6 +631,44 @@ def _rolling_3m_median(gc, suburb, n_anchors=9):
         med = int(statistics.median(w))
         lo, hi = upx.bootstrap_ci(w)
         out.append((f"{yy}-{mm:02d}", med, lo, hi, len(w)))
+    return out
+
+
+def _rolling_90d_median(gc, suburb, start_ym, end_ym, window_days=90, step_days=1):
+    """Continuously-recomputed trailing-N-day house median from the live union sale set.
+    For every step date (default daily) from the 1st of start_ym to the end of end_ym,
+    the median of union sales in the trailing window (date - window_days, date].
+    Returns [(date_iso, 'D Mon YYYY', median, n)], dropping windows thinner than
+    MIN_N_QUARTER. Unlike _rolling_3m_median (monthly-stepped, 3 calendar months) this
+    slides continuously over an exact 90-day window."""
+    import importlib.util
+    import random
+    from collections import defaultdict
+    from datetime import datetime, timedelta
+    spec = importlib.util.spec_from_file_location(
+        "upx", "/home/fields/Fields_Orchestrator/scripts/precompute_union_prices.py")
+    upx = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(upx)
+    from shared.db import get_client
+    random.seed(42)
+    client = get_client()
+    counters = defaultdict(int)
+    sales = upx.dedupe_sales(
+        upx.load_domain_history(client["Gold_Coast"], suburb, counters)
+        + upx.load_onthehouse(client["system_monitor"], suburb, counters))
+    pts = sorted((datetime.strptime(d, "%Y-%m-%d"), p) for (_, d), p in sales.items())
+    cur = datetime(int(start_ym[:4]), int(start_ym[5:7]), 1)
+    _e = _mend(end_ym)
+    end = datetime(_e.year, _e.month, _e.day)
+    win = timedelta(days=window_days)
+    out = []
+    while cur <= end:
+        ws = cur - win
+        w = [p for d, p in pts if ws < d <= cur]
+        if len(w) >= upx.MIN_N_QUARTER:
+            out.append((cur.date().isoformat(), cur.strftime("%-d %b %Y"),
+                        int(statistics.median(w)), len(w)))
+        cur += timedelta(days=step_days)
     return out
 
 
