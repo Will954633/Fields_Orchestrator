@@ -281,7 +281,12 @@ into every chapter, not just Days‑on‑Market. Each maps to a helper that alre
     of the chart, the head sits bottom‑left, so check the overlap per zoom; (b) fade/clear on‑chart text
     that would scale awkwardly *before* a big zoom; (c) a scene change (`clearWkInk`) resets the camera,
     so keep a zoom inside one dock scene; (d) use it a **few** times, not constantly — it punctuates, it
-    isn't the default view.
+    isn't the default view. (e) **Draw the circles/notes first, THEN `wkCamera`** — zooming first and
+    annotating after double‑transforms the ink off‑screen (the wrap transform applies twice); annotate‑
+    then‑zoom keeps the ink glued and magnified with the chart. (f) For a target **low or high on the
+    chart** (e.g. the withdrawn 2025/2026 bars near the bottom axis), pass the optional `foVy, VBH`
+    (`wkCamera(sel,VBW,foVx,scale,secs,foVy,VBH)`) so it centres **vertically** too — a centre‑anchored
+    scale would otherwise push a low target out of the clipped view and its number labels with it.
 
 ---
 
