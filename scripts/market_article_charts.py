@@ -211,53 +211,96 @@ def chart_bw_asking_sqm(gc):
     return _save(fig, "median_bw_asking_sqm.png")
 
 
+_CHART_CSS = r"""
+  :root{--ink:#1a120e;--muted:#6b5d52;--grid:#e4dccf;--surface:#fff;--copper:#b87333;--green:#2e6b4c;--slate:#40607f;--gold:#c1913c;}
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--surface);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);}
+  .wrap{position:relative;width:100%;}
+  svg{display:block;width:100%;height:auto;touch-action:none;cursor:crosshair;}
+  .pill{cursor:pointer;}
+  .tip{position:absolute;pointer-events:none;background:var(--ink);color:#fff;
+    padding:8px 10px;border-radius:6px;font-size:12.5px;line-height:1.45;opacity:0;
+    transition:opacity .08s;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:5;}
+  .tip .d{color:#cbb8a6;font-size:11px;margin-bottom:3px;}
+  .tip .n{color:#cbb8a6;font-size:11.5px;}
+"""
+
+# Shared pill + tooltip JS. Expects: svg, NS, el(). buildPills(defs, y) lays the pills
+# out left-to-right, sizing each from its measured text; defs = [{key,label,color,on,g}].
+_CHART_JS_HELPERS = r"""
+function buildPills(defs, y, onToggle){
+  let px=6;
+  defs.forEach(s=>{
+    const g=el('g',{'class':'pill',role:'button',tabindex:0,'aria-pressed':s.on});
+    const txt=el('text',{x:0,y:y+19,'font-size':13,fill:'#1a120e'});
+    txt.textContent=s.label;
+    const rect=el('rect',{y:y,height:28,rx:14});
+    const dot=el('circle',{cy:y+14,r:5});
+    g.appendChild(rect);g.appendChild(dot);g.appendChild(txt);svg.appendChild(g);
+    const tw=txt.getComputedTextLength();
+    rect.setAttribute('x',px);rect.setAttribute('width',tw+40);
+    dot.setAttribute('cx',px+16);
+    txt.setAttribute('x',px+28);
+    s.pill={g,rect,dot,txt};
+    px+=tw+40+10;
+    const flip=()=>{s.on=!s.on;paintPill(s);g.setAttribute('aria-pressed',s.on);onToggle(s);};
+    g.addEventListener('click',flip);
+    g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();flip();}});
+    paintPill(s);
+  });
+}
+function paintPill(s){
+  const on=s.on;
+  s.pill.rect.setAttribute('fill',on?s.color:'none');
+  s.pill.rect.setAttribute('fill-opacity',on?0.12:1);
+  s.pill.rect.setAttribute('stroke',on?s.color:'#c9beb0');
+  s.pill.rect.setAttribute('stroke-width',1.2);
+  s.pill.dot.setAttribute('fill',on?s.color:'#c9beb0');
+  s.pill.txt.setAttribute('fill',on?'#1a120e':'#8a7d70');
+  if(s.g) s.g.style.display=on?'':'none';
+}
+function fmt$(v){return '$'+Math.round(v).toLocaleString('en-AU');}
+function placeTip(pxView,pyView){
+  const rect=svg.getBoundingClientRect(), wr=wrap.getBoundingClientRect();
+  const px=pxView/VBW*rect.width+(rect.left-wr.left);
+  tip.style.opacity=1;
+  const tw=tip.offsetWidth;
+  let left=px+14; if(left+tw>wr.width) left=px-tw-14; if(left<2) left=2;
+  tip.style.left=left+'px';
+  tip.style.top=Math.max(0,pyView/VBH*rect.height+(rect.top-wr.top)-tip.offsetHeight-12)+'px';
+}
+"""
+
 _ASKING_SOLD_HTML_TEMPLATE = r"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Burleigh Waters houses: asking vs sold</title>
-<style>
-  :root{--ink:#1a120e;--muted:#6b5d52;--grid:#e4dccf;--surface:#fff;--copper:#b87333;--green:#2e6b4c;}
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;background:var(--surface);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);}
-  .wrap{position:relative;width:100%;}
-  svg{display:block;width:100%;height:auto;touch-action:none;cursor:crosshair;}
-  .tip{position:absolute;pointer-events:none;background:var(--ink);color:#fff;
-    padding:8px 10px;border-radius:6px;font-size:12.5px;line-height:1.45;opacity:0;
-    transition:opacity .08s;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.22);z-index:5;}
-  .tip .d{color:#cbb8a6;font-size:11px;margin-bottom:3px;}
-</style>
+<style>__CSS__</style>
 </head>
 <body>
 <div class="wrap" id="wrap">
-  <svg id="chart" viewBox="0 0 820 470" preserveAspectRatio="xMidYMid meet" role="img"
-       aria-label="Interactive line chart of Burleigh Waters house asking prices versus sold median, 2009 to 2026"></svg>
+  <svg id="chart" viewBox="0 0 820 500" preserveAspectRatio="xMidYMid meet" role="img"
+       aria-label="Interactive line chart of Burleigh Waters house asking prices versus sold medians, 2009 to 2026. Use the pill buttons to choose series; hover or tap any point for the figures and sample sizes."></svg>
   <div class="tip" id="tip"></div>
 </div>
 <script>
-const ASK = __ASK__, SOLD = __SOLD__;
-const VBW=820, VBH=470, M={l:60,r:16,t:66,b:36};
+const ASK = __ASK__, SOLD = __SOLD__, M3 = __M3__, QTR = __QTR__;
+const VBW=820, VBH=500, M={l:60,r:16,t:96,b:36};
 const PW=VBW-M.l-M.r, PH=VBH-M.t-M.b;
 const svg=document.getElementById('chart'), tip=document.getElementById('tip'), wrap=document.getElementById('wrap');
 const NS='http://www.w3.org/2000/svg';
 function el(n,a){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;}
 const askT=ASK.map(d=>Date.parse(d[0]));
 const t0=askT[0], t1=askT[askT.length-1];
-const yMin=400000, yMax=2500000;
+const yMin=__YMIN__, yMax=__YMAX__;
 const xOf=t=>M.l+(t-t0)/(t1-t0)*PW;
 const yOf=v=>M.t+(1-(v-yMin)/(yMax-yMin))*PH;
-// title + legend (inside the viewBox so the whole chart scales as one unit)
 const ttl=el('text',{x:6,y:24,'font-size':16,'font-weight':700,fill:'#1a120e'});
 ttl.textContent='Burleigh Waters houses: what sellers ask vs what homes sell for';svg.appendChild(ttl);
-svg.appendChild(el('rect',{x:6,y:43,width:20,height:3.5,rx:1.5,fill:'#b87333'}));
-const lg1=el('text',{x:32,y:49,'font-size':13,fill:'#6b5d52'});
-lg1.textContent='Asking price — SQM, postcode 4220';svg.appendChild(lg1);
-svg.appendChild(el('rect',{x:262,y:43,width:20,height:3.5,rx:1.5,fill:'#2e6b4c'}));
-const lg2=el('text',{x:288,y:49,'font-size':13,fill:'#6b5d52'});
-lg2.textContent='Sold median — Burleigh Waters, 12-month rolling';svg.appendChild(lg2);
-for(let v=500000; v<=2500000; v+=500000){
+for(let v=Math.ceil(yMin/500000)*500000; v<=yMax; v+=500000){
   const y=yOf(v);
   svg.appendChild(el('line',{x1:M.l,y1:y,x2:VBW-M.r,y2:y,stroke:'#e4dccf','stroke-width':1}));
   const tx=el('text',{x:M.l-8,y:y+4,'text-anchor':'end','font-size':12,fill:'#6b5d52'});
@@ -269,48 +312,73 @@ for(let yr=Math.ceil(yy0/2)*2; yr<=yy1; yr+=2){
   const tx=el('text',{x:x,y:VBH-12,'text-anchor':'middle','font-size':12,fill:'#6b5d52'});
   tx.textContent=yr; svg.appendChild(tx);
 }
+// series groups (order = draw order)
+const gRoll=el('g',{}), gAsk=el('g',{}), gM3=el('g',{}), gQtr=el('g',{});
 let up='', dn='';
 SOLD.forEach(d=>{const x=xOf(Date.parse(d[0])); up+=(up?' L':'M')+x+' '+yOf(d[2]);});
 for(let i=SOLD.length-1;i>=0;i--){const d=SOLD[i],x=xOf(Date.parse(d[0])); dn+=' L'+x+' '+yOf(d[3]);}
-svg.appendChild(el('path',{d:up+dn+' Z',fill:'#2e6b4c','fill-opacity':0.13}));
-let ap=''; ASK.forEach((d,i)=>{ap+=(i?' L':'M')+xOf(askT[i])+' '+yOf(d[1]);});
-svg.appendChild(el('path',{d:ap,fill:'none',stroke:'#b87333','stroke-width':2.4,'stroke-linejoin':'round'}));
+gRoll.appendChild(el('path',{d:up+dn+' Z',fill:'#2e6b4c','fill-opacity':0.13}));
 let sp=''; SOLD.forEach((d,i)=>{sp+=(i?' L':'M')+xOf(Date.parse(d[0]))+' '+yOf(d[1]);});
-svg.appendChild(el('path',{d:sp,fill:'none',stroke:'#2e6b4c','stroke-width':2.4,'stroke-linejoin':'round'}));
-SOLD.forEach(d=>{svg.appendChild(el('circle',{cx:xOf(Date.parse(d[0])),cy:yOf(d[1]),r:3,fill:'#2e6b4c',stroke:'#fff','stroke-width':1}));});
+gRoll.appendChild(el('path',{d:sp,fill:'none',stroke:'#2e6b4c','stroke-width':2.4,'stroke-linejoin':'round'}));
+SOLD.forEach(d=>{gRoll.appendChild(el('circle',{cx:xOf(Date.parse(d[0])),cy:yOf(d[1]),r:3,fill:'#2e6b4c',stroke:'#fff','stroke-width':1}));});
+let ap=''; ASK.forEach((d,i)=>{ap+=(i?' L':'M')+xOf(askT[i])+' '+yOf(d[1]);});
+gAsk.appendChild(el('path',{d:ap,fill:'none',stroke:'#b87333','stroke-width':2.4,'stroke-linejoin':'round'}));
+let mp='', prev=0;
+M3.forEach(d=>{const t=Date.parse(d[0]);
+  mp+=((prev&&t-prev<45*86400000)?' L':'M')+xOf(t)+' '+yOf(d[2]); prev=t;});
+gM3.appendChild(el('path',{d:mp,fill:'none',stroke:'#40607f','stroke-width':1.8,'stroke-linejoin':'round'}));
+M3.forEach(d=>{gM3.appendChild(el('circle',{cx:xOf(Date.parse(d[0])),cy:yOf(d[2]),r:2.6,fill:'#40607f',stroke:'#fff','stroke-width':0.8}));});
+QTR.forEach(d=>{gQtr.appendChild(el('circle',{cx:xOf(Date.parse(d[0])),cy:yOf(d[2]),r:3.6,fill:'#c1913c',stroke:'#fff','stroke-width':1}));});
+svg.appendChild(gRoll);svg.appendChild(gM3);svg.appendChild(gQtr);svg.appendChild(gAsk);
+__HELPERS__
+const DEFS=[
+  {key:'ask', label:'Asking price', color:'#b87333', on:true,  g:gAsk},
+  {key:'roll',label:'12-month sold median', color:'#2e6b4c', on:true, g:gRoll},
+  {key:'m3',  label:'3-month sold median', color:'#40607f', on:false, g:gM3},
+  {key:'qtr', label:'Quarterly sold median', color:'#c1913c', on:false, g:gQtr},
+];
 const cross=el('line',{y1:M.t,y2:M.t+PH,stroke:'#1a120e','stroke-width':1,'stroke-dasharray':'3 3',opacity:0});
-const dotA=el('circle',{r:4.5,fill:'#b87333',stroke:'#fff','stroke-width':1.5,opacity:0});
-const dotS=el('circle',{r:4.5,fill:'#2e6b4c',stroke:'#fff','stroke-width':1.5,opacity:0});
-svg.appendChild(cross);svg.appendChild(dotA);svg.appendChild(dotS);
-function fmtM(v){return '$'+(v/1e6).toFixed(2)+'M';}
+svg.appendChild(cross);
+const hdots={};
+DEFS.forEach(s=>{hdots[s.key]=el('circle',{r:4.5,fill:s.color,stroke:'#fff','stroke-width':1.5,opacity:0});svg.appendChild(hdots[s.key]);});
+function hideHover(){tip.style.opacity=0;cross.setAttribute('opacity',0);DEFS.forEach(s=>hdots[s.key].setAttribute('opacity',0));}
+buildPills(DEFS, 40, hideHover);
 const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-function nearestAsk(t){let lo=0,hi=askT.length-1;while(lo<hi){const m=(lo+hi)>>1;if(askT[m]<t)lo=m+1;else hi=m;}
-  if(lo>0&&Math.abs(askT[lo-1]-t)<Math.abs(askT[lo]-t))lo--;return lo;}
-function soldAt(t){let r=SOLD[0];for(const d of SOLD){if(Date.parse(d[0])<=t)r=d;else break;}return r;}
+function nearest(arr,t){let lo=0,hi=arr.length-1;
+  while(lo<hi){const m=(lo+hi)>>1;if(Date.parse(arr[m][0])<t)lo=m+1;else hi=m;}
+  if(lo>0&&Math.abs(Date.parse(arr[lo-1][0])-t)<Math.abs(Date.parse(arr[lo][0])-t))lo--;return arr[lo];}
 function move(clientX){
+  const on=k=>DEFS.find(s=>s.key===k).on;
+  if(!DEFS.some(s=>s.on)){hideHover();return;}
   const rect=svg.getBoundingClientRect();
   let vx=(clientX-rect.left)/rect.width*VBW;
   vx=Math.max(M.l,Math.min(VBW-M.r,vx));
   const t=t0+(vx-M.l)/PW*(t1-t0);
-  const ai=nearestAsk(t), a=ASK[ai], ax=xOf(askT[ai]);
-  const s=soldAt(askT[ai]);
-  cross.setAttribute('x1',ax);cross.setAttribute('x2',ax);cross.setAttribute('opacity',1);
-  dotA.setAttribute('cx',ax);dotA.setAttribute('cy',yOf(a[1]));dotA.setAttribute('opacity',1);
-  dotS.setAttribute('cx',xOf(Date.parse(s[0])));dotS.setAttribute('cy',yOf(s[1]));dotS.setAttribute('opacity',1);
-  const dt=new Date(a[0]);
-  tip.innerHTML='<div class="d">'+MO[dt.getMonth()]+' '+dt.getFullYear()+'</div>'+
-    '<b style="color:#e6a45f">'+fmtM(a[1])+'</b> asking<br>'+
-    '<b style="color:#8fc7a8">'+fmtM(s[1])+'</b> sold <span style="color:#cbb8a6">('+s[4]+')</span>';
-  const wr=wrap.getBoundingClientRect();
-  const px=ax/VBW*rect.width+(rect.left-wr.left);
-  tip.style.opacity=1;
-  const tw=tip.offsetWidth;
-  let left=px+14; if(left+tw>wr.width) left=px-tw-14; if(left<2) left=2;
-  tip.style.left=left+'px';
-  tip.style.top=(yOf(Math.max(a[1],s[1]))/VBH*rect.height+(rect.top-wr.top)-8)+'px';
+  cross.setAttribute('x1',vx);cross.setAttribute('x2',vx);cross.setAttribute('opacity',1);
+  const dt=new Date(t);
+  let html='<div class="d">'+MO[dt.getMonth()]+' '+dt.getFullYear()+'</div>', topY=M.t+PH;
+  DEFS.forEach(s=>hdots[s.key].setAttribute('opacity',0));
+  if(on('ask')){const a=nearest(ASK,t);
+    hdots.ask.setAttribute('cx',xOf(Date.parse(a[0])));hdots.ask.setAttribute('cy',yOf(a[1]));hdots.ask.setAttribute('opacity',1);
+    topY=Math.min(topY,yOf(a[1]));
+    html+='<b style="color:#e6a45f">'+fmt$(a[1])+'</b> asking <span class="n">(SQM weekly)</span><br>';}
+  if(on('roll')){const s=nearest(SOLD,t);
+    hdots.roll.setAttribute('cx',xOf(Date.parse(s[0])));hdots.roll.setAttribute('cy',yOf(s[1]));hdots.roll.setAttribute('opacity',1);
+    topY=Math.min(topY,yOf(s[1]));
+    html+='<b style="color:#8fc7a8">'+fmt$(s[1])+'</b> sold, 12-month median <span class="n">('+s[4]+(s[5]?' · '+s[5]+' sales':'')+')</span><br>';}
+  if(on('m3')){const m=nearest(M3,t);
+    hdots.m3.setAttribute('cx',xOf(Date.parse(m[0])));hdots.m3.setAttribute('cy',yOf(m[2]));hdots.m3.setAttribute('opacity',1);
+    topY=Math.min(topY,yOf(m[2]));
+    html+='<b style="color:#9db8d4">'+fmt$(m[2])+'</b> sold, 3-month median <span class="n">(to '+m[1]+(m[3]?' · '+m[3]+' sales':'')+')</span><br>';}
+  if(on('qtr')){const q=nearest(QTR,t);
+    hdots.qtr.setAttribute('cx',xOf(Date.parse(q[0])));hdots.qtr.setAttribute('cy',yOf(q[2]));hdots.qtr.setAttribute('opacity',1);
+    topY=Math.min(topY,yOf(q[2]));
+    html+='<b style="color:#e0c084">'+fmt$(q[2])+'</b> sold, quarterly median <span class="n">('+q[1]+(q[3]?' · '+q[3]+' sales':'')+')</span><br>';}
+  tip.innerHTML=html;
+  placeTip(vx,topY);
 }
 svg.addEventListener('mousemove',e=>move(e.clientX));
-svg.addEventListener('mouseleave',()=>{tip.style.opacity=0;cross.setAttribute('opacity',0);dotA.setAttribute('opacity',0);dotS.setAttribute('opacity',0);});
+svg.addEventListener('mouseleave',hideHover);
 svg.addEventListener('touchmove',e=>{if(e.touches[0])move(e.touches[0].clientX);},{passive:true});
 svg.addEventListener('touchstart',e=>{if(e.touches[0])move(e.touches[0].clientX);},{passive:true});
 </script>
@@ -318,39 +386,203 @@ svg.addEventListener('touchstart',e=>{if(e.touches[0])move(e.touches[0].clientX)
 </html>"""
 
 
+_ROBINA_ROLLING_HTML_TEMPLATE = r"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Robina house median: trend vs noise</title>
+<style>__CSS__</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <svg id="chart" viewBox="0 0 820 500" preserveAspectRatio="xMidYMid meet" role="img"
+       aria-label="Interactive chart of the Robina house median, 2025 to 2026. Use the pill buttons to choose between the 12-month rolling median, single-quarter medians and the 3-month rolling median; hover or tap any point for the figure and its sample size."></svg>
+  <div class="tip" id="tip"></div>
+</div>
+<script>
+const ROLL = __ROLL__, QTR = __QTR__, M3 = __M3__;
+const VBW=820, VBH=500, M={l:64,r:20,t:96,b:40};
+const PW=VBW-M.l-M.r, PH=VBH-M.t-M.b;
+const svg=document.getElementById('chart'), tip=document.getElementById('tip'), wrap=document.getElementById('wrap');
+const NS='http://www.w3.org/2000/svg';
+function el(n,a){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;}
+const allT=ROLL.map(d=>Date.parse(d[0]));
+const m3T=M3.map(d=>Date.parse(d[0]));
+const t0=Math.min(allT[0],m3T.length?m3T[0]:allT[0])-25*86400000;
+const t1=Math.max(allT[allT.length-1],m3T.length?m3T[m3T.length-1]:0)+25*86400000;
+const yMin=__YMIN__, yMax=__YMAX__;
+const xOf=t=>M.l+(t-t0)/(t1-t0)*PW;
+const yOf=v=>M.t+(1-(v-yMin)/(yMax-yMin))*PH;
+const ttl=el('text',{x:6,y:24,'font-size':16,'font-weight':700,fill:'#1a120e'});
+ttl.textContent='Robina house median: the smooth line is the trend, the dots are the noise';svg.appendChild(ttl);
+for(let v=Math.ceil(yMin/100000)*100000; v<=yMax; v+=100000){
+  const y=yOf(v);
+  svg.appendChild(el('line',{x1:M.l,y1:y,x2:VBW-M.r,y2:y,stroke:'#e4dccf','stroke-width':1}));
+  const tx=el('text',{x:M.l-8,y:y+4,'text-anchor':'end','font-size':12,fill:'#6b5d52'});
+  tx.textContent='$'+(v/1e6).toFixed(1)+'M'; svg.appendChild(tx);
+}
+ROLL.forEach(d=>{
+  const tx=el('text',{x:xOf(Date.parse(d[0])),y:VBH-14,'text-anchor':'middle','font-size':11.5,fill:'#6b5d52'});
+  tx.textContent=d[1]; svg.appendChild(tx);
+});
+const gRoll=el('g',{}), gQtr=el('g',{}), gM3=el('g',{});
+let up='', dn='';
+ROLL.forEach(d=>{up+=(up?' L':'M')+xOf(Date.parse(d[0]))+' '+yOf(d[3]);});
+for(let i=ROLL.length-1;i>=0;i--){dn+=' L'+xOf(Date.parse(ROLL[i][0]))+' '+yOf(ROLL[i][4]);}
+gRoll.appendChild(el('path',{d:up+dn+' Z',fill:'#2e6b4c','fill-opacity':0.14}));
+let rp=''; ROLL.forEach((d,i)=>{rp+=(i?' L':'M')+xOf(Date.parse(d[0]))+' '+yOf(d[2]);});
+gRoll.appendChild(el('path',{d:rp,fill:'none',stroke:'#2e6b4c','stroke-width':3,'stroke-linejoin':'round'}));
+ROLL.forEach(d=>{gRoll.appendChild(el('circle',{cx:xOf(Date.parse(d[0])),cy:yOf(d[2]),r:5,fill:'#2e6b4c',stroke:'#fff','stroke-width':1.4}));});
+let mp=''; M3.forEach((d,i)=>{mp+=(i?' L':'M')+xOf(Date.parse(d[0]))+' '+yOf(d[2]);});
+gM3.appendChild(el('path',{d:mp,fill:'none',stroke:'#40607f','stroke-width':2,'stroke-dasharray':'5 4','stroke-linejoin':'round'}));
+M3.forEach(d=>{gM3.appendChild(el('circle',{cx:xOf(Date.parse(d[0])),cy:yOf(d[2]),r:3.6,fill:'#40607f',stroke:'#fff','stroke-width':1}));});
+QTR.forEach(d=>{gQtr.appendChild(el('circle',{cx:xOf(Date.parse(d[0])),cy:yOf(d[2]),r:6,fill:'#b87333',stroke:'#fff','stroke-width':1.4}));});
+svg.appendChild(gRoll);svg.appendChild(gM3);svg.appendChild(gQtr);
+__HELPERS__
+const DEFS=[
+  {key:'roll',label:'12-month median', color:'#2e6b4c', on:true, g:gRoll},
+  {key:'qtr', label:'Single-quarter median', color:'#b87333', on:true, g:gQtr},
+  {key:'m3',  label:'3-month median', color:'#40607f', on:true, g:gM3},
+];
+const hl=el('circle',{r:7.5,fill:'none','stroke-width':2.5,opacity:0});
+svg.appendChild(hl);
+function hideHover(){tip.style.opacity=0;hl.setAttribute('opacity',0);}
+buildPills(DEFS, 40, hideHover);
+// hoverable points across visible series
+const TIPCOL={roll:'#8fc7a8',qtr:'#e6a45f',m3:'#9db8d4'};
+function points(){
+  const out=[];
+  const on=k=>DEFS.find(s=>s.key===k).on;
+  if(on('roll'))ROLL.forEach(d=>out.push({k:'roll',x:xOf(Date.parse(d[0])),y:yOf(d[2]),
+    h:'<div class="d">'+d[1]+'</div><b style="color:'+TIPCOL.roll+'">'+fmt$(d[2])+'</b> 12-month rolling median'+(d[5]?'<br><span class="n">'+d[5]+' sales in the 12-month window</span>':'')}));
+  if(on('qtr'))QTR.forEach(d=>out.push({k:'qtr',x:xOf(Date.parse(d[0])),y:yOf(d[2]),
+    h:'<div class="d">'+d[1]+'</div><b style="color:'+TIPCOL.qtr+'">'+fmt$(d[2])+'</b> single-quarter median'+(d[3]?'<br><span class="n">'+d[3]+' sales in the quarter</span>':'')}));
+  if(on('m3'))M3.forEach(d=>out.push({k:'m3',x:xOf(Date.parse(d[0])),y:yOf(d[2]),
+    h:'<div class="d">3 months to '+d[1]+'</div><b style="color:'+TIPCOL.m3+'">'+fmt$(d[2])+'</b> 3-month rolling median'+(d[3]?'<br><span class="n">'+d[3]+' sales in the window</span>':'')}));
+  return out;
+}
+function move(clientX,clientY){
+  const rect=svg.getBoundingClientRect();
+  const vx=(clientX-rect.left)/rect.width*VBW;
+  const vy=(clientY-rect.top)/rect.height*VBH;
+  let best=null,bd=1e9;
+  points().forEach(p=>{const dx=p.x-vx,dy=p.y-vy,d2=dx*dx+dy*dy;if(d2<bd){bd=d2;best=p;}});
+  if(!best||bd>38*38){hideHover();return;}
+  const col=DEFS.find(s=>s.key===best.k).color;
+  hl.setAttribute('cx',best.x);hl.setAttribute('cy',best.y);hl.setAttribute('stroke',col);hl.setAttribute('opacity',1);
+  tip.innerHTML=best.h;
+  placeTip(best.x,best.y);
+}
+svg.addEventListener('mousemove',e=>move(e.clientX,e.clientY));
+svg.addEventListener('mouseleave',hideHover);
+svg.addEventListener('touchmove',e=>{if(e.touches[0])move(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
+svg.addEventListener('touchstart',e=>{if(e.touches[0])move(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
+</script>
+</body>
+</html>"""
+
+
+def _qend(p):
+    """'Q2 2026' or '2026-Q2' -> approximate quarter-end date (day 28 of last month)."""
+    import datetime as _dt
+    p = _qlabel(p)
+    qt, yt = p.split()
+    return _dt.date(int(yt), int(qt[1:]) * 3, 28)
+
+
+def _mend(ym):
+    """'2026-06' -> approximate month-end date (day 28)."""
+    import datetime as _dt
+    y, m = ym.split("-")
+    return _dt.date(int(y), int(m), 28)
+
+
+def _write_html(name, html):
+    os.makedirs(OUT, exist_ok=True)
+    with open(os.path.join(OUT, name), "w", encoding="utf-8") as f:
+        f.write(html)
+    print(f"{PUBLIC}/{name}  ({len(html)} bytes)")
+    return f"{PUBLIC}/{name}"
+
+
 def chart_bw_asking_sqm_html(gc):
     """Interactive version of the Trap 4 asking-vs-sold chart — a self-contained HTML
-    file (inline SVG + vanilla JS, no external libs) with a hover tooltip. Served from
-    the blob host and embedded in the article via <iframe>. Same data as the PNG."""
+    file (inline SVG + vanilla JS, no external libs). Pills toggle asking / 12-month /
+    3-month / quarterly sold medians; the hover tooltip carries value + sample size."""
     import datetime as _dt
     import json
     START = _dt.date(2009, 1, 1)
+    END_3M = "2026-06"   # match the last complete quarter; later months are under-captured
 
     d = gc["sqm_asking_prices"].find_one({"_id": "burleigh_waters"})
     ask = [[r["date"], round(r["houses_all"])] for r in d["series"] if r.get("houses_all")]
 
     sd = gc["precomputed_indexed_prices"].find_one({"_id": "burleigh_waters"})
-
-    def qend(p):
-        qt, yt = p.split()
-        return _dt.date(int(yt), int(qt[1:]) * 3, 28)
-    sold = [[qend(r["period"]).isoformat(), r["rolling_median"],
+    sold = [[_qend(r["period"]).isoformat(), r["rolling_median"],
              r.get("ci_low") or r["rolling_median"], r.get("ci_high") or r["rolling_median"],
-             r["period"]]
-            for r in sd["rolling_12m_median_series"] if qend(r["period"]) >= START]
+             _qlabel(r["period"]), r.get("transaction_count") or 0]
+            for r in sd["rolling_12m_median_series"] if _qend(r["period"]) >= START]
 
-    html = _ASKING_SOLD_HTML_TEMPLATE.replace("__ASK__", json.dumps(ask)).replace("__SOLD__", json.dumps(sold))
-    os.makedirs(OUT, exist_ok=True)
-    path = os.path.join(OUT, "median_bw_asking_sqm.html")
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(html)
-    print(f"{PUBLIC}/median_bw_asking_sqm.html  ({len(html)} bytes, {len(ask)} ask pts, {len(sold)} sold pts)")
-    return f"{PUBLIC}/median_bw_asking_sqm.html"
+    qtr = [[_qend(r["period"]).isoformat(), _qlabel(r["period"]), r["median_price"],
+            r.get("median_sample_n") or r.get("transaction_count") or r.get("raw_transaction_count") or 0]
+           for r in sd["indexed_series"]
+           if r.get("median_price") and _qend(r["period"]) >= START and not r.get("is_in_progress")]
+
+    m3 = [[_mend(ym).isoformat(), _mend(ym).strftime("%b %Y"), med, n]
+          for ym, med, lo, hi, n in _rolling_3m_median(gc, "burleigh_waters", n_anchors=240)
+          if ym <= END_3M and _mend(ym) >= START]
+
+    ys = ([v for _, v in ask] + [r[3] for r in sold] + [r[2] for r in qtr] + [r[2] for r in m3])
+    ymin = max(0, (min(ys) - 60000) // 100000 * 100000)
+    ymax = -((-(max(ys) + 60000)) // 100000) * 100000
+
+    html = (_ASKING_SOLD_HTML_TEMPLATE
+            .replace("__CSS__", _CHART_CSS).replace("__HELPERS__", _CHART_JS_HELPERS)
+            .replace("__ASK__", json.dumps(ask)).replace("__SOLD__", json.dumps(sold))
+            .replace("__M3__", json.dumps(m3)).replace("__QTR__", json.dumps(qtr))
+            .replace("__YMIN__", str(ymin)).replace("__YMAX__", str(ymax)))
+    print(f"  bw: {len(ask)} ask, {len(sold)} sold-12m, {len(m3)} sold-3m, {len(qtr)} qtr pts, y {ymin}-{ymax}")
+    return _write_html("median_bw_asking_sqm.html", html)
+
+
+def chart_robina_rolling_ci_html(gc):
+    """Interactive version of the Trap 3 chart. Pills toggle the 12-month rolling
+    median (with its 90% confidence band), single-quarter medians and a 3-month
+    rolling median; every point's tooltip carries value + sample size."""
+    import json
+    d = gc["precomputed_indexed_prices"].find_one({"_id": "robina"})
+    roll_rows = _q_range(d["rolling_12m_median_series"], "2025-Q1", "2026-Q2")
+    qtr_rows = _q_range(d["indexed_series"], "2025-Q1", "2026-Q2")
+
+    roll = [[_qend(r["period"]).isoformat(), _qlabel(r["period"]), r["rolling_median"],
+             r.get("ci_low") or r["rolling_median"], r.get("ci_high") or r["rolling_median"],
+             r.get("transaction_count") or 0]
+            for r in roll_rows]
+    qtr = [[_qend(r["period"]).isoformat(), _qlabel(r["period"]), r["median_price"],
+            r.get("median_sample_n") or r.get("transaction_count") or r.get("raw_transaction_count") or 0]
+           for r in qtr_rows if r.get("median_price")]
+    m3 = [[_mend(ym).isoformat(), _mend(ym).strftime("%b %Y"), med, n]
+          for ym, med, lo, hi, n in _rolling_3m_median(gc, "robina", n_anchors=24)
+          if "2025-03" <= ym <= "2026-06"]
+
+    ys = ([r[3] for r in roll] + [r[4] for r in roll] + [r[2] for r in qtr] + [r[2] for r in m3])
+    ymin = (min(ys) - 40000) // 50000 * 50000
+    ymax = -((-(max(ys) + 40000)) // 50000) * 50000
+
+    html = (_ROBINA_ROLLING_HTML_TEMPLATE
+            .replace("__CSS__", _CHART_CSS).replace("__HELPERS__", _CHART_JS_HELPERS)
+            .replace("__ROLL__", json.dumps(roll)).replace("__QTR__", json.dumps(qtr))
+            .replace("__M3__", json.dumps(m3))
+            .replace("__YMIN__", str(ymin)).replace("__YMAX__", str(ymax)))
+    print(f"  robina: {len(roll)} roll, {len(qtr)} qtr, {len(m3)} m3 pts, y {ymin}-{ymax}")
+    return _write_html("median_robina_rolling_ci.html", html)
 
 
 def build_median(gc):
     p1, end = chart_robina_bedroom_index(gc)
     p2 = chart_robina_rolling_ci(gc)
+    p2h = chart_robina_rolling_ci_html(gc)
     p3 = chart_bw_asking_sqm(gc)
     p3h = chart_bw_asking_sqm_html(gc)
     print("\nINDEX ENDPOINTS (2026-Q2):", {k: round(v) for k, v in end.items()})
@@ -358,9 +590,9 @@ def build_median(gc):
 
 # ---------- shared computations ----------
 
-def _rolling_3m_median(gc, suburb):
+def _rolling_3m_median(gc, suburb, n_anchors=9):
     """Month-stepped trailing 3-month house median via the live median pipeline funcs.
-    Returns [(YYYY-MM, median, lo, hi)] for the last 9 anchors, dropping thin windows."""
+    Returns [(YYYY-MM, median, lo, hi, n)] for the last n_anchors, dropping thin windows."""
     import importlib.util
     import random
     from datetime import datetime
@@ -381,7 +613,7 @@ def _rolling_3m_median(gc, suburb):
     end = max(d for d, _ in pts)
     y, m = end.year, end.month
     anchors = []
-    for _ in range(9):
+    for _ in range(n_anchors):
         anchors.append((y, m))
         m -= 1
         if m == 0:
