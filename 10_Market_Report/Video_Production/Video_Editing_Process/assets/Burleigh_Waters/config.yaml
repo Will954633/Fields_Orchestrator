@@ -1,0 +1,51 @@
+project:
+  slug: burleigh-waters_2026-08_dom
+  title: "Burleigh Waters \u2014 August 2026 Market Overview"
+  suburb: Burleigh Waters
+paths:
+  raw_dir: /Users/projects/Documents/Fields_Videos/Market-Updates/August_2026/09th/All_Graded
+  work_dir: ./work
+  out_dir: ./out
+framing:
+  master_square: 1080
+  web_square: 512
+  zoom: 1.0
+  face_cy_target: 0.42
+  circle_diameter: 820
+  circle_cy_frac: 0.46
+look:
+  brightness: 0.03
+  contrast: 1.06
+  saturation: 1.08
+  gamma: 1.02
+  warmth: 6
+  sharpen: 0.6
+audio:
+  highpass_hz: 80
+  denoise: afftdn
+  denoise_nf: -25
+  target_lufs: -16.0
+  target_tp: -1.5
+assembly:
+  fps: 30
+  transition: cut
+  dissolve_sec: 0.2
+  snap_to_silence: false
+  snap_noise_db: -38.0
+  snap_min_silence: 0.12
+  snap_tail_pad: 0.22
+  snap_preroll: 0.18
+  snap_max_extend: 3.0
+captions:
+  font: DejaVu Sans
+  fontsize: 54
+  primary_colour: '&H00FFFFFF'
+  outline_colour: '&H00000000'
+  outline: 3
+  margin_v: 90
+outputs:
+  web_mp4: true
+  circle_mov_nocaps: true
+  circle_mov_caps: true
+  srt: true
+  transcript_md: true
