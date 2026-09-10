@@ -181,7 +181,7 @@ grading mistakes would generally blur the difference between groups and pull the
 estimated premiums toward zero, although systematic grading errors could still affect
 the results. And waterfront homes, a market of their own, were left out entirely.
 
-The conclusion is not that every owner should renovate. It is that buyers distinguished
+The conclusion here is not advice to renovate. It is that buyers distinguished
 sharply between a home that was completely finished and one where the work had merely
 begun — and the amount they paid for that difference depended heavily on the suburb.
 
