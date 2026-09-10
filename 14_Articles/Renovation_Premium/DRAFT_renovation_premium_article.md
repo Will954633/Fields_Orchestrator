@@ -163,6 +163,19 @@ up even through the 2022–2023 interest-rate rises, the fastest tightening in a
 generation. Robina's share stayed relatively stable, around 6 to 8 in a hundred, in
 every rate environment.
 
+<iframe src="https://blobs.fieldsestate.com.au/article-charts/premium-tier-two-panel.html?v=20260910"
+        scrolling="no" style="width:100%;aspect-ratio:820/760;border:0;"
+        title="The premium end of the market 2015–2026 — every sale against its year's median, and the share above 1.5x per suburb"></iframe>
+<noscript><img src="https://blobs.fieldsestate.com.au/article-charts/premium-tier-two-panel.png?v=20260910"
+     alt="Chart of the share of each suburb's house sales above 1.5 times its typical price, 2015 to 2026"
+     style="width:100%;height:auto;"></noscript>
+
+*Each dot in the top panel is one of the 8,647 sales, priced against its suburb's
+typical price that year. The lower panel counts the share above the 1.5× line.
+Year-by-year figures are noisier than the multi-year averages in the text — Burleigh
+Waters dipped in 2023 before its 2024–2026 surge. Hover or tap any year for the
+numbers.*
+
 That does not tell us whether these buyers were paying cash, borrowing less, earning
 more or simply prioritising Burleigh Waters more highly. But it does show the suburb's
 premium segment remained unusually resilient as borrowing costs rose. One possible
