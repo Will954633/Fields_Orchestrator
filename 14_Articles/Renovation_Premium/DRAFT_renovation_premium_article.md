@@ -13,6 +13,10 @@ Sources: 16_Valuation/Renovation_Premium/results_24m.json, results_12m.json;
          16_Valuation/Market_Regime_Mix/results_regime_mix.json
 Editorial checks: no advice ✓ no predictions ✓ no single-property valuation ✓
   exact figures ✓ limitations stated ✓ scrape sources unnamed ✓ forbidden words absent ✓
+Gallery images: 3 sold-Robina kitchens (original / partial / full), labels burned in,
+  NO addresses shown; served from our blob (property-images/articles/renovation-grades/);
+  source docs 690bd7f08b8f546592609486, 690bd7df8b8f5465926031dd, 690bd7de8b8f546592602c60.
+  Visually verified against grades 2026-09-09 (vision read of composites).
 -->
 
 # We Compared 578 Renovated and Unrenovated House Sales. The Suburb Changes Everything.
@@ -54,7 +58,7 @@ to a fair test.
 *"Typical house" here means the middle sale in our data — half sold for more, half for
 less: $1,845,000 in Burleigh Waters, $1,491,944 in Robina, $1,351,000 in Varsity Lakes.*
 
-A note on those figures, because honesty matters more to us than tidy numbers. No study
+A note on those figures. No study
 of real sales can nail a premium to the decimal point — there's always a margin around
 it. Robina's margin is fairly tight: the true premium is very likely somewhere between
 6% and 18%, with 12% the best estimate. Burleigh Waters sits confidently in positive
@@ -80,6 +84,33 @@ suburb, sits in one grade: fully renovated.
 
 The market pays for finished. New floors under an old kitchen, one bathroom done and
 one dated — homes like that priced as if nobody had touched them.
+
+## See the grading for yourself
+
+Fair question at this point: how good is an AI model at judging a kitchen from photos?
+You can check its work. Below are three real Robina kitchens from the sales we studied,
+each with the grade and condition score our model gave that home. If your eye lands
+where the model did, you've understood the method.
+
+![Original-condition Robina kitchen, graded original, kitchen condition 6 out of 10](https://blobs.fieldsestate.com.au/property-images/articles/renovation-grades/kitchen-original.jpg)
+
+*Original: the layout works and everything functions — but the laminate benchtops,
+tile splashback and cabinetry are as built. Sold May 2026.*
+
+![Partially renovated Robina kitchen, graded partially renovated, kitchen condition 8 out of 10](https://blobs.fieldsestate.com.au/property-images/articles/renovation-grades/kitchen-partially-renovated.jpg)
+
+*Partially renovated: new stone benchtops, new cabinet fronts and updated floor tiles —
+but the original windows, lighting and appliances are still in place. The work stopped
+part-way. Sold May 2026.*
+
+![Fully renovated Robina kitchen, graded fully renovated, kitchen condition 9 out of 10](https://blobs.fieldsestate.com.au/property-images/articles/renovation-grades/kitchen-fully-renovated.jpg)
+
+*Fully renovated: stone island bench, glass splashback, integrated appliances, pendant
+lighting — nothing left from the original kitchen. Sold November 2025.*
+
+Notice the middle kitchen scored 8 out of 10 for condition — genuinely good work — yet
+its home still sold in the grade the market doesn't pay extra for. Condition and
+completeness are different things, and the market's premium follows completeness.
 
 ## No single room carries it
 
