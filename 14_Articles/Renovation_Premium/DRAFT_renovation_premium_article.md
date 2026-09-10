@@ -58,12 +58,20 @@ to a fair test.
 *"Typical house" here means the middle sale in our data — half sold for more, half for
 less: $1,845,000 in Burleigh Waters, $1,491,944 in Robina, $1,351,000 in Varsity Lakes.*
 
-A note on those figures. No study
-of real sales can nail a premium to the decimal point — there's always a margin around
-it. Robina's margin is fairly tight: the true premium is very likely somewhere between
-6% and 18%, with 12% the best estimate. Burleigh Waters sits confidently in positive
-territory too. Varsity Lakes had only 26 fully renovated sales in the window — not
-enough to be certain of anything, which is why we say "maybe."
+<iframe src="https://blobs.fieldsestate.com.au/article-charts/renovation-premium.html?v=20260910"
+        scrolling="no" style="width:100%;aspect-ratio:820/470;border:0;"
+        title="What a full renovation adds to the sale price — interval chart by suburb"></iframe>
+<noscript><img src="https://blobs.fieldsestate.com.au/article-charts/renovation-premium.png?v=20260910"
+     alt="Chart of the estimated renovation premium by suburb with uncertainty ranges"
+     style="width:100%;height:auto;"></noscript>
+
+A note on those figures. No study of real sales can nail a premium to the decimal
+point — there's always a margin around it, and the bars in the chart show exactly that:
+the dot is the best estimate, the bar is where the true premium very likely sits.
+Robina's bar is fairly tight — very likely between 6% and 18%, with 12% the best
+estimate. Burleigh Waters sits confidently in positive territory too. Varsity Lakes had
+only 26 fully renovated sales in the window — not enough to be certain of anything,
+which is why its bar is drawn faded and we say "maybe."
 
 One thing the data *is* emphatic about: the gap between suburbs is real. Burleigh
 Waters rewards a full renovation by around 10 percentage points more than Robina, and
