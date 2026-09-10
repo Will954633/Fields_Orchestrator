@@ -69,10 +69,11 @@ Times are **video seconds** (M:SS) from the transcript. `→` = page action. Anc
 
 - **A1 · 0:00** — STAGE, centred, page at top. Personal hook: *"I really wanted to do a video on median house prices… easily presented in a way that's misleading."* No ink.
 - **A2 · 0:16** — STAGE. `wkBoxNote` title card forming: **"4 traps"** (foreshadow). *"…how it's calculated and four different traps."*
-- **A3 · 0:25 → 0:36** — STAGE. **`numRow([…8 sales…])`** draws on; when he says *"the median is simply the middle number"*, **highlight the two middle values (1.48M & 1.55M)**. `bracePair` under them.
-- **A4 · 0:43** — STAGE. Write **`= 1.49M`** (÷2). *"add those two up, divide by two."*
-- **A5 · 0:50 → 1:16** — STAGE. **Insert a `$12M` outlier** into the row (animate it sliding to the far right); median stays ≈ **1.49M**; then **remove it** → **1.48M**. `value("median barely moves: 1.49 → 1.48 (−$10k)")`. This is the whole point of "median resists outliers" — let it land.
-- **A6 · 1:30 → 2:11** — STAGE. Switch the SAME row to **average**: with $12M in → **2.75M**; pull it out → **1.43M**. `value("average lurches: 2.75 → 1.43")` beside it, next to the median's tiny move. Contrast is the payoff → *"that's why median is the good measure for property."*
+- **A3 · 0:25 → 0:36** — STAGE. **`numRow`** draws on the **8‑sale set, sorted cheapest→dearest** (exact figures in **§8.1**: `1.20 · 1.34 · 1.40 · 1.48 · 1.50 · 1.55 · 1.55 · 12.00`), the **$12m sitting at the far right as the visible outlier**. When he says *"the median is the middle number"*, **highlight the two middle values `$1.48m` & `$1.50m`** and `bracePair` them.
+  ⚠ **Audio/onscreen mismatch to resolve:** Will's audio says *"between 1.48 and 1.55"*, but sorted the true middle pair is **1.48 & 1.50** (that's what averages to 1.49). Onscreen MUST be correct (the whole video teaches median literacy). Options: live with the tiny wording slip, keep the onscreen focus on the **`= $1.49m`** result rather than belabouring which two, or re‑record the line. **Flagged in §6.6.**
+- **A4 · 0:43** — STAGE. Under the brace write **`(1.48 + 1.50) ÷ 2 = $1.49m`**. *"add those two up, divide by two."*
+- **A5 · 0:50 → 1:16** — STAGE. Point at the **$12m** as the extreme outlier (it's already in the row). **Pull it out** (animate it leaving) and re‑find the middle of the remaining 7 → **`$1.48m`**. `value("median barely moves: $1.49m → $1.48m (−$10k)")`. This is the whole point — median resists outliers; let it land.
+- **A6 · 1:30 → 2:11** — STAGE. Now run the SAME set as an **average**: with $12m in → **`$2.75m`**; pull it out → **`$1.43m`**. `value("average lurches: $2.75m → $1.43m")` set beside the median's $10k twitch. Contrast is the payoff → *"that's why median is the good measure for property."* (Exact working in **§8.1**.)
 - **A7 · 2:16** — STAGE. *"Math out of the way — the core issue: four ways we get tricked."* Re‑show the **"4 traps"** card, then → **scroll to Trap 1**.
 
 ### TRAP 1 — the mix changes (2:25 – 5:43) · H2 "Trap 1" + **PNG chart** `median_robina_bedroom_index.png`
@@ -81,10 +82,10 @@ Times are **video seconds** (M:SS) from the transcript. `→` = page action. Anc
 - **B2 · 2:35** — **DOCK** to the PNG (dock bottom‑left; lines rise to the right). `note("Robina · attached dwellings · indexed to 100 (Jun 2024)")`. Establish it's units/duplexes, 2‑bed / 3‑bed / all‑attached.
 - **B3 · 2:56 → 3:16** — **DOCK**, hold. `circle(all‑attached line where it sits ABOVE both others)` + `note("all‑attached > BOTH 2‑bed & 3‑bed — how?")`. The paradox is the hook.
 - **B4 · 3:16 → 3:44** — **HALF**. Answer: *"the mix changed — in 2026 far more large, expensive properties sold."* `note("not prices rising — the MIX rising")`.
-- **B5 · 3:44 → 5:11** — **STAGE** (leave the chart; the article has **no table** for this — Will draws it). Worked example on the whiteboard:
-  - **2024 row:** `numRow(13 sales)` + `swapCount("9×2‑bed · 3×3‑bed · 1×4‑bed")`; highlight the **7th (middle) = 2‑bed \$860k** → `value("2024 median = $860k")`.
-  - **2026 row:** re‑draw, `swapCount("5×2‑bed · 8× 3‑bed+")`; highlight middle **= 3‑bed \$1.118M** → `value("2026 median = $1.118M")`.
-  - `value("+30%")` bridging them, with `note("…but 2‑bed only +18%, 3‑bed only +25% — the MIX did the rest")`.
+- **B5 · 3:44 → 5:11** — **STAGE** (leave the chart; the article has **no table** for this — Will draws it). Worked example on the whiteboard — **exact 13‑sale sets in §8.2**, and it **must carry the label "simplified example"** (top‑corner) unless/until swapped for real Robina sales. Colour‑code each sale chip by bedroom count (2‑bed / 3‑bed / 4+).
+  - **June qtr 2024 row:** `numRow(13)` sorted; `swapCount("9 × 2‑bed · 3 × 3‑bed · 1 × 4+")`; highlight the **7th (middle) = a 2‑bed at `$860k`** → `value("2024 combined median = $860k")`.
+  - **June qtr 2026 row:** re‑draw; `swapCount("5 × 2‑bed · 6 × 3‑bed · 2 × 4+")`; highlight the **7th (middle) = a 3‑bed at `$1.118m`** → `value("2026 combined median = $1.118m")`.
+  - `value("+30%")` bridging the two combined medians, then the reveal `note("but 2‑bed only +18% ($810k→$956k), 3‑bed only +25% ($1.10m→$1.375m) — the MIX did the other work")`.
 - **B6 · 5:27** — STAGE takeaway card: **`Trick 1 — break the median down: attached vs detached, then by bedrooms.`**
 
 ### TRAP 2 — different cities have different mixes (5:43 – 7:31) · H2 "Trap 2" (text‑only → STAGE)
@@ -143,11 +144,12 @@ Full verbatim is in **`median-house-prices_2026-09_walk_segments.txt`** (128 seg
 
 ## 6. Open questions / decisions for Will before we build
 
-1. **The two big STAGE‑drawn examples (intro math + Trap‑1 13‑sale table).** The article has no table/graphic for these; the plan is for Will to hand‑draw them on the dim stage (§3.1). Happy with that, or do you want those small graphics **added to the article** (so they're there without the video too)? *(Recommendation: hand‑draw them — it's the strongest teaching moment and keeps the article clean.)*
+1. ✅ **RESOLVED (Will, 2026‑09‑10):** the two big examples are **hand‑drawn on the STAGE**, using the exact datasets Will supplied — now locked in **§8**.
 2. **Driving the interactive iframes (Trap 3 & 4).** They're cross‑origin blob HTML, so the walkthrough can't click their pills or read their geometry. Options: (a) narrate the pill switch and just draw ink over the iframe at authored positions; (b) add a tiny `postMessage` API to the two blob charts so the walkthrough can flip 12‑mo↔3‑mo and highlight a point. *(Recommendation: (a) for v1 — simplest, robust; upgrade to (b) only if the pill‑switch really needs to be live.)*
 3. **Anchoring ink over a PNG / iframe by position.** No geometry to read, so circles are placed by fraction‑of‑box and verified by eye per beat (like the early Robina beats). Fine? *(It means a bit more manual tuning + headless verification per beat.)*
 4. **Naming SQM Research + David Koch / Ross Greenwood** (Trap 4). Factual data‑source citation — keep as spoken, or soften to "a widely‑used asking‑price data source"? Confirm spelling is **SQM Research**.
 5. **Length.** 15:23 is long for an overlay. Ship as one, or offer chapter skips (the transport already supports `⏮/⏭` chapters — I'd set marks at the 4 traps + close)?
+6. **Median‑calc audio slip (§8.1).** Sorted, the middle pair is **$1.48m & $1.50m** (→ $1.49m); Will's audio says "1.48 and **1.55**". Onscreen will show the correct 1.48/1.50 and keep the eye on the **$1.49m** result. OK to live with the small wording slip, or re‑record that one line?
 
 ---
 
@@ -168,3 +170,71 @@ Order on the page (for scroll targets):
 | 8 | H2 **How to read a median** | text (close) |
 
 **Engineering note (for later, not this doc):** porting the `#walkLayer` runtime to `ArticlePage` + a versioned/gated flag (`?walkthrough=1`) mirrors the `MarketFlowProto` setup; the reusable pieces are the overlay layer, `wkStage/wkDock`, ink primitives, the `wkCamera` viewBox zoom, captions/beat clock. The **new** work is: the STAGE worked‑example primitives (§3.1), position‑anchored ink over img/iframe, optional iframe `postMessage`, and scroll‑to‑anchor against article DOM instead of chart hosts.
+
+---
+
+## 8. STAGE illustration data — exact on‑screen content (locked, Will 2026‑09‑10)
+
+These are the numbers the hand‑drawn STAGE sequences render. Verified to produce every figure Will speaks.
+
+### 8.1 Median‑calc explainer (beats A3–A6)
+
+**The 8‑sale set — display SORTED, cheapest → dearest** (the $12m is the visible extreme outlier at the right):
+
+`$1.20m · $1.34m · $1.40m · [ $1.48m · $1.50m ] · $1.55m · $1.55m · $12.00m`
+
+- Middle pair (positions 4 & 5) = **$1.48m & $1.50m** → `(1.48 + 1.50) ÷ 2` = **median $1.49m**.
+- **Pull out the $12m** (7 sales left) → middle is the 4th = **median $1.48m**. Median moved just **−$10k**.
+- **Same set as an AVERAGE:** with $12m in → **$2.75m**; pull $12m out → **$1.43m** (moves ~$1.3m). → median resists the outlier; the average doesn't.
+
+⚠ Audio says "1.48 and 1.55"; onscreen is the correct **1.48 & 1.50** — see §6.6. *(Will's raw list was `1.20, 1.34, 1.40, 1.48, 1.55, 1.50, 1.55, 12`; sorting is what makes it a median.)*
+
+### 8.2 Trap 1 — mix‑shift worked example (beat B5) · label **"simplified example"**
+
+13 sales each year, sorted; colour chips by bedroom count. **MEDIAN = the 7th (middle) sale.**
+
+**June quarter 2024** — median **$860k** (a 2‑bed)
+
+| # | Sale | Beds |
+|--:|---|:--:|
+| 1 | $700k | 2 |
+| 2 | $740k | 2 |
+| 3 | $770k | 2 |
+| 4 | $790k | 2 |
+| 5 | $810k | 2 |
+| 6 | $840k | 2 |
+| **7** | **$860k — MEDIAN** | **2** |
+| 8 | $890k | 2 |
+| 9 | $920k | 2 |
+| 10 | $1.02m | 3 |
+| 11 | $1.10m | 3 |
+| 12 | $1.18m | 3 |
+| 13 | $1.35m | 4+ |
+
+Summary chip: **9 × two‑bed · 3 × three‑bed · 1 × four‑plus · combined median $860,000**
+
+**June quarter 2026** — median **$1.118m** (a 3‑bed)
+
+| # | Sale | Beds |
+|--:|---|:--:|
+| 1 | $900k | 2 |
+| 2 | $930k | 2 |
+| 3 | $956k | 2 |
+| 4 | $980k | 2 |
+| 5 | $1.02m | 2 |
+| 6 | $1.08m | 3 |
+| **7** | **$1.118m — MEDIAN** | **3** |
+| 8 | $1.28m | 3 |
+| 9 | $1.47m | 3 |
+| 10 | $1.52m | 3 |
+| 11 | $1.60m | 3 |
+| 12 | $1.72m | 4+ |
+| 13 | $1.90m | 4+ |
+
+Summary chip: **5 × two‑bed · 6 × three‑bed · 2 × four‑plus · combined median $1.118m**
+
+**The reveal (all verified):**
+- Combined median **$860k → $1.118m = +30%**
+- Two‑bed median **$810k → $956k = +18%**
+- Three‑bed median **$1.10m → $1.375m = +25%**
+- The combined rose faster than *either* category — because the **mix** shifted to larger, dearer homes, not because comparable homes rose 30%.
