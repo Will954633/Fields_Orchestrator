@@ -1304,3 +1304,199 @@ def chart_renovation_premium_png():
                  "Fully renovated vs comparable unrenovated houses · 578 sales, 24 months to September 2026",
                  loc="left", fontsize=12, pad=14)
     return _save(fig, "renovation-premium.png")
+
+
+# ── Premium-tier two-panel chart (renovation article §Burleigh Waters, 2026-09) ──
+# Top: one dot per house sale (year x ratio-to-suburb-year-median), 1.5x threshold.
+# Bottom: yearly share of sales above 1.5x per suburb, 2022-23 rate-rise band shaded.
+# Data from the same union+dedupe extraction as the regime-mix study
+# (16_Valuation/Market_Regime_Mix/regime_mix_study.py); houses only, 2015-2026.
+
+_PT_SUBURBS = [("burleigh_waters", "Burleigh Waters", "#2e6b4c", True),
+               ("robina", "Robina", "#b87333", True),
+               ("varsity_lakes", "Varsity Lakes", "#40607f", False)]
+_PT_CLIP = 3.0
+
+
+def _premium_tier_data():
+    import sys
+    import numpy as np
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, "/home/fields/Fields_Orchestrator")
+    from seasonality_analysis import extract_sales
+    from shared.db import get_client
+    db = get_client()["Gold_Coast"]
+    data = {}
+    for key, label, color, on in _PT_SUBURBS:
+        rows = [r for r in extract_sales(db, key)
+                if r["property_type"] == "House" and 2015 <= r["year"] <= 2026]
+        by_year = {}
+        for r in rows:
+            by_year.setdefault(r["year"], []).append(r["price"])
+        med = {y: float(np.median(v)) for y, v in by_year.items()}
+        pts, clipped, shares = [], 0, []
+        for r in rows:
+            ratio = r["price"] / med[r["year"]]
+            if ratio > _PT_CLIP or ratio < 0.4:
+                clipped += 1
+                continue
+            x = r["year"] + (r["month"] - 0.5) / 12.0
+            pts.append([round(x, 2), round(ratio, 3)])
+        for y in sorted(by_year):
+            arr = [r["price"] / med[y] for r in rows if r["year"] == y]
+            shares.append([y, round(sum(1 for a in arr if a > 1.5) / len(arr) * 100, 1),
+                           len(arr)])
+        data[key] = {"label": label, "color": color, "on": on,
+                     "pts": pts, "clipped": clipped, "shares": shares}
+    return data
+
+
+_PT_HTML_TEMPLATE = r"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The premium end of the market, 2015-2026</title>
+<style>__CSS__</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <svg id="chart" viewBox="0 0 820 760" preserveAspectRatio="xMidYMid meet" role="img"
+       aria-label="Two-panel chart of 8,647 house sales 2015 to 2026. Top: every sale plotted against its suburb's typical price for that year, with a threshold line at one and a half times. Bottom: the share of each suburb's sales above that threshold per year — Burleigh Waters rises from about 9 percent to about 14 percent including through the 2022 to 2023 rate rises; Robina stays near 6 to 8 percent. Use the pills to toggle suburbs; hover for yearly figures."></svg>
+  <div class="tip" id="tip"></div>
+</div>
+<script>
+const DATA=__DATA__;
+const VBW=820, VBH=760;
+const T={l:56,r:20,t:118,b:0,h:330};        // top panel (scatter)
+const B={l:56,r:20,t:512,b:44,h:190};       // bottom panel (share)
+const X0=2015.0, X1=2026.99, CLIP=__CLIP__;
+const svg=document.getElementById('chart'), tip=document.getElementById('tip'), wrap=document.getElementById('wrap');
+const NS='http://www.w3.org/2000/svg';
+function el(n,a){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;}
+const INK='#1a120e', MUTED='#6b5d52', GRID='#e4dccf';
+const PW=VBW-T.l-T.r;
+const xOf=v=>T.l+(v-X0)/(X1-X0)*PW;
+const yT=v=>T.t+T.h-(v-0.4)/(CLIP-0.4)*T.h;        // ratio 0.4..CLIP
+const yB=v=>B.t+B.h-v/16*B.h;                       // share 0..16%
+const ttl=el('text',{x:6,y:24,'font-size':16,'font-weight':700,fill:INK});
+ttl.textContent='The premium end of the market, 2015–2026';svg.appendChild(ttl);
+const sub=el('text',{x:6,y:44,'font-size':12.5,fill:MUTED});
+sub.textContent='8,647 house sales · each dot is one sale, priced against its suburb’s typical (median) price that year';
+svg.appendChild(sub);
+// rate-rise band in both panels
+[[T.t,T.h],[B.t,B.h]].forEach(([t,h])=>{
+  svg.appendChild(el('rect',{x:xOf(2022.0),y:t,width:xOf(2024.0)-xOf(2022.0),height:h,fill:'#1a120e','fill-opacity':0.05}));
+});
+// top panel frame
+for(const v of [0.5,1.0,1.5,2.0,2.5,3.0]){
+  const y=yT(v), th=v===1.5;
+  svg.appendChild(el('line',{x1:T.l,y1:y,x2:VBW-T.r,y2:y,stroke:th?INK:GRID,'stroke-width':th?1.4:1,'stroke-dasharray':th?'6 4':''}));
+  const tx=el('text',{x:T.l-8,y:y+4,'text-anchor':'end','font-size':11.5,fill:th?INK:MUTED,'font-weight':th?700:400});
+  tx.textContent=v.toFixed(1)+'×'; svg.appendChild(tx);
+}
+const thLab=el('text',{x:VBW-T.r-6,y:yT(1.5)-7,'text-anchor':'end','font-size':11.5,'font-weight':700,fill:INK});
+thLab.textContent='1.5× the year’s median — “premium”';svg.appendChild(thLab);
+const pLab1=el('text',{x:T.l,y:T.t-10,'font-size':12,fill:MUTED});
+pLab1.textContent='Every sale vs its year’s median';svg.appendChild(pLab1);
+// bottom panel frame
+for(const v of [0,4,8,12,16]){
+  const y=yB(v);
+  svg.appendChild(el('line',{x1:B.l,y1:y,x2:VBW-B.r,y2:y,stroke:GRID,'stroke-width':1}));
+  const tx=el('text',{x:B.l-8,y:y+4,'text-anchor':'end','font-size':11.5,fill:MUTED});
+  tx.textContent=v+'%'; svg.appendChild(tx);
+}
+const pLab2=el('text',{x:B.l,y:B.t-10,'font-size':12,fill:MUTED});
+pLab2.textContent='Share of the year’s sales above 1.5×';svg.appendChild(pLab2);
+const bandLab=el('text',{x:(xOf(2022)+xOf(2024))/2,y:B.t+16,'text-anchor':'middle','font-size':11,fill:MUTED});
+bandLab.textContent='rate rises 2022–23';svg.appendChild(bandLab);
+// shared year axis
+for(let yr=2015; yr<=2026; yr++){
+  if(yr%2){continue}
+  const x=xOf(yr+0.5);
+  const tx=el('text',{x:x,y:VBH-14,'text-anchor':'middle','font-size':12,fill:MUTED});
+  tx.textContent=yr; svg.appendChild(tx);
+}
+// series
+const groups={};
+for(const key in DATA){
+  const s=DATA[key];
+  const g=el('g',{});
+  s.pts.forEach(p=>{
+    const prem=p[1]>1.5;
+    g.appendChild(el('circle',{cx:xOf(p[0]),cy:yT(p[1]),r:prem?2.2:1.8,fill:s.color,'fill-opacity':prem?0.8:0.18}));
+  });
+  let d=''; s.shares.forEach((r,i)=>{d+=(i?' L':'M')+xOf(r[0]+0.5)+' '+yB(r[1]);});
+  g.appendChild(el('path',{d:d,fill:'none',stroke:s.color,'stroke-width':2.4,'stroke-linejoin':'round'}));
+  s.shares.forEach(r=>{g.appendChild(el('circle',{cx:xOf(r[0]+0.5),cy:yB(r[1]),r:3.2,fill:s.color,stroke:'#fff','stroke-width':1}));});
+  const last=s.shares[s.shares.length-1];
+  const lab=el('text',{x:xOf(last[0]+0.5)-8,y:yB(last[1])-9,'text-anchor':'end','font-size':12,'font-weight':700,fill:s.color});
+  lab.textContent=s.label; g.appendChild(lab);
+  svg.appendChild(g); groups[key]=g;
+}
+const clippedTotal=Object.values(DATA).reduce((a,s)=>a+s.clipped,0);
+const clipLab=el('text',{x:VBW-T.r-6,y:T.t+14,'text-anchor':'end','font-size':11,fill:MUTED});
+clipLab.textContent='▲ '+clippedTotal+' outlier sales beyond the 0.4×–3× window not shown';svg.appendChild(clipLab);
+__HELPERS__
+const DEFS=Object.keys(DATA).map(k=>({key:k,label:DATA[k].label,color:DATA[k].color,on:DATA[k].on,g:groups[k]}));
+buildPills(DEFS,58,()=>{});
+DEFS.forEach(s=>paintPill(s));
+// year crosshair spanning both panels
+const cross=el('line',{y1:T.t,y2:B.t+B.h,stroke:INK,'stroke-width':1,'stroke-dasharray':'3 3',opacity:0});
+svg.appendChild(cross);
+const hit=el('rect',{x:T.l,y:T.t,width:PW,height:B.t+B.h-T.t,fill:'transparent'});
+svg.appendChild(hit);
+function showYear(evX){
+  const rect=svg.getBoundingClientRect();
+  const vx=(evX-rect.left)/rect.width*VBW;
+  let yr=Math.floor(X0+(vx-T.l)/PW*(X1-X0));
+  yr=Math.max(2015,Math.min(2026,yr));
+  const x=xOf(yr+0.5);
+  cross.setAttribute('x1',x);cross.setAttribute('x2',x);cross.setAttribute('opacity',0.5);
+  let html='<div class="d">'+yr+(yr===2026?' (part-year)':'')+'</div>';
+  DEFS.forEach(s=>{
+    if(!s.on)return;
+    const r=DATA[s.key].shares.find(q=>q[0]===yr);
+    if(r) html+='<span style="color:'+s.color+'">●</span> '+s.label+': <b>'+r[1]+'%</b> of '+r[2]+' sales above 1.5×<br>';
+  });
+  tip.innerHTML=html;
+  placeTip(x,T.t+40);
+}
+hit.addEventListener('mousemove',e=>showYear(e.clientX));
+hit.addEventListener('touchstart',e=>{showYear(e.touches[0].clientX);e.preventDefault();},{passive:false});
+hit.addEventListener('mouseleave',()=>{tip.style.opacity=0;cross.setAttribute('opacity',0);});
+</script>
+</body>
+</html>
+"""
+
+
+def chart_premium_tier_html():
+    import json as _json
+    data = _premium_tier_data()
+    html = (_PT_HTML_TEMPLATE
+            .replace("__CSS__", _CHART_CSS)
+            .replace("__HELPERS__", _CHART_JS_HELPERS)
+            .replace("__DATA__", _json.dumps(data, separators=(",", ":")))
+            .replace("__CLIP__", str(_PT_CLIP)))
+    return _write_html("premium-tier-two-panel.html", html)
+
+
+def chart_premium_tier_png():
+    """Static noscript fallback: bottom panel only (the claim itself)."""
+    data = _premium_tier_data()
+    fig, ax = plt.subplots(figsize=(9.2, 4.2))
+    ax.axvspan(2022.0, 2024.0, color="#1a120e", alpha=0.05)
+    for key, label, color, on in _PT_SUBURBS:
+        s = data[key]["shares"]
+        ax.plot([r[0] + 0.5 for r in s], [r[1] for r in s], color=data[key]["color"],
+                linewidth=2.2, marker="o", markersize=4.5, markeredgecolor="white",
+                label=data[key]["label"])
+    ax.set_ylim(0, 16)
+    ax.set_ylabel("share of sales above 1.5× the year's median (%)")
+    ax.legend(frameon=False, fontsize=10)
+    _style(ax)
+    ax.set_title("The premium end of the market, 2015–2026\n"
+                 "Share of each suburb's house sales above 1.5× its typical price that year",
+                 loc="left", fontsize=12, pad=14)
+    return _save(fig, "premium-tier-two-panel.png")
