@@ -1167,3 +1167,140 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ── Renovation premium chart (renovation article, 2026-09) ─────────────────────
+# Data baked from 16_Valuation/Renovation_Premium/results_24m.json (hedonic leg2 +
+# matched-twins leg3). Single-hue interval chart: bar = 95% interval, dot = best
+# estimate; Varsity Lakes drawn muted/dashed (26 treated sales — inconclusive).
+
+_RENO_ROWS = [
+    {"suburb": "Burleigh Waters", "est": 16.1, "lo": 4.2, "hi": 29.5,
+     "twins": "+22.9%", "n": "70 renovated sales",
+     "dollars": "≈ $297,000–$423,000 on the typical $1,845,000 house", "solid": True},
+    {"suburb": "Robina", "est": 11.7, "lo": 5.7, "hi": 18.0,
+     "twins": "+10.5%", "n": "71 renovated sales",
+     "dollars": "≈ $175,000 on the typical $1,491,944 house", "solid": True},
+    {"suburb": "Varsity Lakes", "est": 6.9, "lo": -0.4, "hi": 14.8,
+     "twins": "+8.3%", "n": "26 sales — too few to be sure",
+     "dollars": "≈ $93,000 on the typical $1,351,000 house", "solid": False},
+]
+
+_RENO_HTML_TEMPLATE = r"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What a full renovation adds to the sale price</title>
+<style>__CSS__</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <svg id="chart" viewBox="0 0 820 470" preserveAspectRatio="xMidYMid meet" role="img"
+       aria-label="Interval chart of the estimated sale-price premium for fully renovated houses: Burleigh Waters best estimate 16.1 percent, range 4.2 to 29.5; Robina 11.7 percent, range 5.7 to 18; Varsity Lakes 6.9 percent, range minus 0.4 to 14.8, based on too few sales to be sure. Hover or tap a row for details."></svg>
+  <div class="tip" id="tip"></div>
+</div>
+<script>
+const ROWS=__ROWS__;
+const VBW=820, VBH=470, M={l:170,r:34,t:96,b:46};
+const PW=VBW-M.l-M.r, PH=VBH-M.t-M.b;
+const svg=document.getElementById('chart'), tip=document.getElementById('tip'), wrap=document.getElementById('wrap');
+const NS='http://www.w3.org/2000/svg';
+function el(n,a){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;}
+const GREEN='#2e6b4c', INK='#1a120e', MUTED='#6b5d52', GRID='#e4dccf';
+const x0=-5, x1=30;
+const xOf=v=>M.l+(v-x0)/(x1-x0)*PW;
+const rowH=PH/ROWS.length;
+const ttl=el('text',{x:6,y:24,'font-size':16,'font-weight':700,fill:INK});
+ttl.textContent='What a full renovation adds to the sale price';svg.appendChild(ttl);
+const sub=el('text',{x:6,y:44,'font-size':12.5,fill:MUTED});
+sub.textContent='Fully renovated vs comparable unrenovated houses · 578 sales, 24 months to September 2026';
+svg.appendChild(sub);
+const key=el('text',{x:6,y:64,'font-size':12,fill:MUTED});
+key.textContent='Bar = the range the true premium very likely sits in · dot = best estimate · hover or tap a row';
+svg.appendChild(key);
+for(let v=x0;v<=x1;v+=5){
+  const x=xOf(v), zero=v===0;
+  svg.appendChild(el('line',{x1:x,y1:M.t,x2:x,y2:M.t+PH,stroke:zero?INK:GRID,'stroke-width':zero?1.6:1}));
+  const tx=el('text',{x:x,y:VBH-16,'text-anchor':'middle','font-size':12,fill:zero?INK:MUTED,'font-weight':zero?700:400});
+  tx.textContent=(v>0?'+':'')+v+'%'; svg.appendChild(tx);
+}
+ROWS.forEach((r,i)=>{
+  const cy=M.t+rowH*i+rowH/2;
+  const name=el('text',{x:M.l-14,y:cy-4,'text-anchor':'end','font-size':14,'font-weight':700,fill:INK});
+  name.textContent=r.suburb; svg.appendChild(name);
+  const nn=el('text',{x:M.l-14,y:cy+14,'text-anchor':'end','font-size':11,fill:MUTED});
+  nn.textContent=r.n; svg.appendChild(nn);
+  const bx=xOf(r.lo), bw=xOf(r.hi)-xOf(r.lo);
+  const bar=el('rect',{x:bx,y:cy-7,width:bw,height:14,rx:7,
+    fill:GREEN,'fill-opacity':r.solid?0.16:0.07,stroke:GREEN,
+    'stroke-width':1.2,'stroke-opacity':r.solid?1:0.65});
+  if(!r.solid) bar.setAttribute('stroke-dasharray','5 4');
+  svg.appendChild(bar);
+  const dot=el('circle',{cx:xOf(r.est),cy:cy,r:7,fill:GREEN,'fill-opacity':r.solid?1:0.55,stroke:'#fff','stroke-width':2});
+  svg.appendChild(dot);
+  const lab=el('text',{x:xOf(r.est),y:cy-16,'text-anchor':'middle','font-size':13.5,'font-weight':700,fill:r.solid?INK:MUTED});
+  lab.textContent='+'+r.est+'%'; svg.appendChild(lab);
+  const hit=el('rect',{x:0,y:M.t+rowH*i,width:VBW,height:rowH,fill:'transparent'});
+  svg.appendChild(hit);
+  const show=()=>{
+    tip.innerHTML='<div class="d">'+r.suburb+'</div>'
+      +'Best estimate: <b>+'+r.est+'%</b><br>'
+      +'Very likely between '+(r.lo>0?'+':'')+r.lo+'% and +'+r.hi+'%<br>'
+      +'Second method (matched twins): '+r.twins+'<br>'
+      +'<span class="n">'+r.dollars+'</span>';
+    placeTip(xOf(r.est), cy-10);
+  };
+  hit.addEventListener('mousemove',show);
+  hit.addEventListener('touchstart',e=>{show();e.preventDefault();},{passive:false});
+  hit.addEventListener('mouseleave',()=>{tip.style.opacity=0;});
+});
+__HELPERS__
+</script>
+</body>
+</html>
+"""
+
+
+def chart_renovation_premium_html():
+    import json as _json
+    html = (_RENO_HTML_TEMPLATE
+            .replace("__CSS__", _CHART_CSS)
+            .replace("__HELPERS__", _CHART_JS_HELPERS)
+            .replace("__ROWS__", _json.dumps(_RENO_ROWS)))
+    return _write_html("renovation-premium.html", html)
+
+
+def chart_renovation_premium_png():
+    """Static noscript fallback for the interactive chart."""
+    fig, ax = plt.subplots(figsize=(9.2, 4.6))
+    ax.set_xlim(-5, 30)
+    ax.set_ylim(-0.6, len(_RENO_ROWS) - 0.4)
+    ax.invert_yaxis()
+    ax.axvline(0, color=INK, linewidth=1.4, zorder=2)
+    for v in range(-5, 31, 5):
+        if v:
+            ax.axvline(v, color=GRID, linewidth=1, zorder=0)
+    for i, r in enumerate(_RENO_ROWS):
+        a = 1.0 if r["solid"] else 0.55
+        ax.barh(i, r["hi"] - r["lo"], left=r["lo"], height=0.28,
+                color=GREEN, alpha=0.16 if r["solid"] else 0.07, zorder=2)
+        ax.plot([r["lo"], r["hi"]], [i, i], color=GREEN, alpha=a, linewidth=1.4,
+                linestyle="-" if r["solid"] else (0, (5, 4)), zorder=3)
+        ax.plot(r["est"], i, "o", markersize=11, color=GREEN, alpha=a,
+                markeredgecolor="white", markeredgewidth=2, zorder=4)
+        ax.annotate(f'+{r["est"]}%', (r["est"], i - 0.22), ha="center",
+                    fontsize=11, fontweight="bold", color=INK if r["solid"] else MUTED)
+        ax.annotate(r["suburb"], (-5.6, i - 0.08), ha="right", fontsize=11.5,
+                    fontweight="bold", color=INK, annotation_clip=False)
+        ax.annotate(r["n"], (-5.6, i + 0.22), ha="right", fontsize=8.5,
+                    color=MUTED, annotation_clip=False)
+    ax.set_yticks([])
+    ax.set_xticks(range(-5, 31, 5))
+    ax.set_xticklabels([f'{"+" if v > 0 else ""}{v}%' for v in range(-5, 31, 5)])
+    _style(ax)
+    ax.grid(False)
+    ax.set_title("What a full renovation adds to the sale price\n"
+                 "Fully renovated vs comparable unrenovated houses · 578 sales, 24 months to September 2026",
+                 loc="left", fontsize=12, pad=14)
+    return _save(fig, "renovation-premium.png")
