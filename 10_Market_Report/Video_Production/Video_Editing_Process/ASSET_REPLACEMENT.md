@@ -211,3 +211,25 @@ timepoint sticks — use a shooter that waits for the `seeked` event (`_shotwalk
 sleep, or late frames screenshot blank at 0:00.
 
 See **WALKTHROUGH_EXPERIENCE.md** for the choreography/design rules the beats implement.
+
+---
+
+## Swapping only the INTRO of an existing walkthrough (done 2026-09-10, Robina v2 + Burleigh v2)
+
+When the editor delivers a re-recorded intro clip (`assets/<S>/…/<slug>_intro_v2.mp4` + its
+`_walk_segments.txt`), you do NOT re-time the whole video — everything after the intro keeps its
+relative timing, shifted by one constant.
+
+1. **Find the cut point** = start time of the first post-intro caption segment in the LIVE
+   `WALK_SEGMENTS_*` array (Robina v3: 20.63; Burleigh: 20.43). **Splice from the live
+   `public/walkthrough/` mp4**, not the assets copy (post-delivery trims live only there).
+2. **Splice + re-encode in one ffmpeg** (concat filter: intro full, main `trim=start=<cut>`,
+   both re-encoded 512²/30fps/crf29/faststart — formats already match so this is safe).
+3. **delta = introLen − cut** (+2.27s Robina, +2.40s Burleigh). Captions: new intro segs +
+   old segs ≥ cut shifted by exact delta. Beats: shift every `t>0` by round(delta) — the
+   choreography is unchanged, so a shifted-map wrapper works (`walkBeatsBurleighV2`).
+   Chapters: shift all but 0; `end` = oldEnd − cut + introLen.
+4. New FILENAME for the video (CDN staleness), verify both versions headlessly, deploy.
+
+Script that did it: session scratchpad `patch_engine.py` pattern — extract array via regex,
+splice in JSON, patch `{ t:N,` within the one function's span, assert the replacement count.
