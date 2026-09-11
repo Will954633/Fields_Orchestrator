@@ -146,11 +146,12 @@ def build(db):
         # Mint/reuse the durable ?lead= token (same shape email-track.mjs mints on click).
         token = None
         if smsable or emailable:
-            doc = crm.find_one({"_id": c["id"]}, {"link_token": 1})
+            doc = crm.find_one({"_id": c["id"]}, {"link_token": 1, "messenger": 1, "contact_status": 1})
             if doc is None:
                 from bson import ObjectId
                 if re.fullmatch(r"[a-f0-9]{24}", c["id"]):
-                    doc = crm.find_one({"_id": ObjectId(c["id"])}, {"link_token": 1})
+                    doc = crm.find_one({"_id": ObjectId(c["id"])},
+                                       {"link_token": 1, "messenger": 1, "contact_status": 1})
             if doc is None:
                 skipped.append((c["id"], "crm contact not found"))
                 continue
@@ -159,8 +160,21 @@ def build(db):
                 token = uuid.uuid4().hex
                 crm.update_one({"_id": doc["_id"]}, {"$set": {"link_token": token}})
 
+        # ⭐ CHANNEL PREFERENCE (Will, 2026-09-11): someone who has WRITTEN TO US on
+        # Messenger gets the message there — that's where they demonstrably engage
+        # (the Sep-4 messenger repliers all ignored their campaign email). Messenger
+        # drafts are pasted by Will from the Business inbox (Meta's messaging window
+        # bars API sends on old threads), so --send-all lists them instead of sending;
+        # log the paste with --mark-messenger-sent. Declined/spam threads never qualify
+        # (their contact_status suppresses them at the send stage anyway).
+        msgr = (doc or {}).get("messenger") or {}
+        messenger_pref = bool(msgr.get("has_inbound")) and \
+            (doc or {}).get("contact_status") not in ("do_not_contact", "not_interested", "spam")
+
         email_link, sms_link = links_for(suburb, token)
         subject, email_body, sms_body = compose(first_name(c.get("name") or ""), suburb, email_link, sms_link)
+        msgr_link = sms_link.replace("utm_source=crm_sms", "utm_source=crm_messenger")
+        _, _, msgr_body = compose(first_name(c.get("name") or ""), suburb, email_link, msgr_link)
 
         draft = {
             "_id": c["id"],
@@ -173,7 +187,8 @@ def build(db):
             "link_token": token,
             "email_draft": {"subject": subject, "body": email_body} if emailable else None,
             "sms_draft": {"body": sms_body} if smsable else None,
-            "recommended_channel": "email" if emailable else "sms",
+            "messenger_draft": {"body": msgr_body, "thread_link": msgr.get("thread_link")} if messenger_pref else None,
+            "recommended_channel": "messenger" if messenger_pref else ("email" if emailable else "sms"),
             "flags": flags,
             "source": c.get("source"),
             "built_at": datetime.now(timezone.utc).isoformat(),
@@ -297,8 +312,12 @@ def send_all(db):
                if d["_id"] != SELF_TEST_ID and d.get("status") == "draft"]
     print(f"bulk send: {len(pending)} pending drafts")
     sent = failed = consec_fail = 0
+    manual = []
     for d in pending:
         ch = d["recommended_channel"]
+        if ch == "messenger":
+            manual.append(d)
+            continue
         draft = d.get(f"{ch}_draft")
         if not draft:
             print(f"  SKIP {d['name'] or d['_id']}: no {ch} draft")
@@ -333,8 +352,45 @@ def send_all(db):
                          f"{len(pending) - sent - failed} untouched. Investigate before resuming.")
         time.sleep(1.5)
     print(f"\ndone: {sent} sent, {failed} failed")
-    if sent == 0 and pending:
-        raise RuntimeError("0 of the pending drafts sent — endpoint or auth is broken")
+    if manual:
+        print(f"\n⚠ {len(manual)} MESSENGER-preferred contacts NOT sent (Meta bars API sends on old"
+              f" threads) — Will pastes these from the Business inbox, then run"
+              f" --mark-messenger-sent --contact <name>:")
+        for d in manual:
+            print(f"\n  {d['name']} — {d['messenger_draft'].get('thread_link')}\n"
+                  f"    {d['messenger_draft']['body']}")
+    if sent == 0 and pending and len(manual) < len(pending):
+        raise RuntimeError("0 of the sendable drafts sent — endpoint or auth is broken")
+
+
+def mark_messenger_sent(db, needle: str):
+    """Record a manual Messenger paste: draft → sent, plus a communications[] timeline
+    entry on the contact (the inbox has no API hook, so honesty is on us here)."""
+    from bson import ObjectId
+    d = find_draft(db, needle) or db["walkthrough_outreach_drafts"].find_one(
+        {"campaign": CAMPAIGN, "name": {"$regex": re.escape(needle.strip()), "$options": "i"}})
+    if not d or not d.get("messenger_draft"):
+        sys.exit(f"no messenger draft matches {needle!r}")
+    now = datetime.now(timezone.utc).isoformat()
+    db["walkthrough_outreach_drafts"].update_one({"_id": d["_id"]}, {
+        "$push": {"sends": {"channel": "messenger", "at": now, "result": {"ok": True, "manual": True}}},
+        "$set": {"status": "sent"},
+    })
+    crm = db["crm_contacts"]
+    q = {"_id": d["_id"]}
+    if crm.find_one(q) is None and re.fullmatch(r"[a-f0-9]{24}", d["_id"]):
+        q = {"_id": ObjectId(d["_id"])}
+    r = crm.update_one(q, {
+        "$set": {"last_contact_at": now, "updated_at": now},
+        "$push": {"communications": {
+            "type": "messenger", "direction": "out", "date": now,
+            "body": d["messenger_draft"]["body"], "outcome": "sent",
+            "channel": "messenger", "by": "will",
+        }},
+    })
+    if r.matched_count != 1:
+        sys.exit(f"draft updated but CRM contact not matched for {d['name']!r} — investigate")
+    print(f"marked messenger-sent + timeline entry: {d['name']}")
 
 
 def report(db):
@@ -408,6 +464,8 @@ def main():
     mode.add_argument("--preview", action="store_true")
     mode.add_argument("--send", action="store_true")
     mode.add_argument("--send-all", action="store_true", help="bulk: every pending draft, recommended channel")
+    mode.add_argument("--mark-messenger-sent", action="store_true",
+                      help="log a manual Messenger paste (draft→sent + timeline entry)")
     mode.add_argument("--report", action="store_true")
     ap.add_argument("--contact", help="--send target: contact id, email, or phone")
     ap.add_argument("--channel", choices=["email", "sms", "both"])
@@ -431,6 +489,10 @@ def main():
         send(db, args.contact, args.channel)
     elif args.send_all:
         send_all(db)
+    elif args.mark_messenger_sent:
+        if not args.contact:
+            sys.exit("--mark-messenger-sent requires --contact <name|id>")
+        mark_messenger_sent(db, args.contact)
     elif args.report:
         report(db)
 

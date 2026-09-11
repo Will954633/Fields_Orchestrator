@@ -36,8 +36,15 @@ python3 22_CRM/walkthrough_outreach.py --build
 ```
 
 - Writes one draft per contact to `system_monitor.walkthrough_outreach_drafts`
-  (email draft + SMS draft where reachable; `recommended_channel` = email if they have
-  one, else SMS — **one message per person**, overlap contacts are not double-channelled).
+  (email draft + SMS draft where reachable; **one message per person**, overlap contacts
+  are not double-channelled). `recommended_channel` order (Will's rule, 2026-09-11):
+  1. **Messenger** — if they have WRITTEN TO US on Messenger (`messenger.has_inbound`)
+     and haven't declined: that's where they demonstrably engage (the Sep-4 Messenger
+     repliers all ignored their campaign email). These are listed by `--send-all` for
+     Will to paste from the Business inbox (Meta bars API sends on old threads); log
+     each paste with `--mark-messenger-sent --contact <name>` so the CRM timeline stays
+     truthful.
+  2. **Email** if they have one; 3. **SMS** for phone-only contacts.
 - Mints/reuses `crm_contacts.link_token`; SMS links carry `&lead=<token>` directly
   (email links get the token appended by the click tracker).
 - Writes `campaigns/<slug>/DRAFTS_REVIEW.md` for Will to read.
