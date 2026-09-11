@@ -254,7 +254,9 @@
     return null;
   }
 
-  function marketUrl(sub) { return 'https://fieldsestate.com.au/market-intelligence/' + sub.slug; }
+  /* /market-intelligence/<Suburb> alone defaults to the sell-now tab; the door
+     promises "what's happening", which is the overview category. */
+  function marketUrl(sub) { return 'https://fieldsestate.com.au/market-intelligence/' + sub.slug + '/overview'; }
 
   function setSuburb(key, source) {
     var sub = findSuburb(key);
