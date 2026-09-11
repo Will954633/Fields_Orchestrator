@@ -48,6 +48,7 @@ only difference is stage 02.
 | 02 | `scripts/02_propose_edl.py` | Build the cut list (scaffold, or `--auto`) | `work/edl.draft.json` / `edl.auto.json` |
 | 03 | `scripts/03_build.py` | **The render engine** — cut→crop→grade→denoise→mask→caption→export | `out/<slug>*.{mp4,mov,srt,md}` |
 | 04 | `scripts/04_verify.py` | QC gate (spec, duration, loudness, not-black, captions) | `out/qc_report.json` |
+| 05 | `scripts/05_archive.py` | **Archive off root disk once shipped** — verified copy to `/data/blobs/video_archive/` (GCS-synced nightly) + optional Google Drive, then purge local | `/data/blobs/video_archive/<name>/` |
 
 ## Quick start
 
@@ -70,6 +71,14 @@ Then ship the embed (see [OUTPUT_SPEC.md](OUTPUT_SPEC.md) §Deploy):
 ```bash
 cp out/<slug>.mp4  /home/fields/Feilds_Website/01_Website/public/walkthrough/<slug>.mp4
 #  push public/walkthrough/<slug>.mp4 to the Website repo via gh api (CLAUDE.md §2)
+```
+
+Once the embed is verified live, **archive the project off the root disk** (mandatory —
+see [RUNBOOK.md §Step 7](RUNBOOK.md#step-7--archive-mandatory-once-shipped)):
+
+```bash
+python3 scripts/05_archive.py --project <Project_Folder> --purge --drive
+python3 scripts/05_archive.py --work --purge --drive
 ```
 
 ## What you need to know before touching this
