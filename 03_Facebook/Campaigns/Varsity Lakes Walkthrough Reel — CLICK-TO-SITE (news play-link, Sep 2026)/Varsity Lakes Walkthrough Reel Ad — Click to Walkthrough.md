@@ -5,7 +5,7 @@ _Created 2026-09-11 by `03_Facebook/Reels/Walkthrough_Reels/launch_walkthrough_r
 | | |
 |---|---|
 | **Ad ID** | `120252657094840134` |
-| **Status** | **PAUSED — awaiting Will's go-ahead** |
+| **Status** | ACTIVE — activated 2026-09-11 on Will's go, $15/day |
 | **Created** | 2026-09-11 |
 
 ## Campaign
