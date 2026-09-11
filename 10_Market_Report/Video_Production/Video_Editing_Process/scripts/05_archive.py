@@ -151,14 +151,40 @@ def drive_mkdir(at: str, name: str, parent: str) -> str:
     return r.json()["id"]
 
 
-def drive_upload(at: str, path: Path, parent: str) -> None:
-    """Resumable upload; verifies Drive-reported size matches the local file."""
+def drive_existing(at: str, name: str, parent: str) -> tuple[str, int] | None:
+    import requests
+    q = f"name = '{name}' and '{parent}' in parents and trashed = false"
+    r = requests.get("https://www.googleapis.com/drive/v3/files",
+                     headers={"Authorization": f"Bearer {at}"},
+                     params={"q": q, "fields": "files(id,size)"}, timeout=20)
+    r.raise_for_status()
+    hits = r.json().get("files", [])
+    if not hits:
+        return None
+    return hits[0]["id"], int(hits[0].get("size", -1))
+
+
+def drive_upload(at: str, path: Path, parent: str) -> bool:
+    """Resumable upload; verifies Drive-reported size matches the local file.
+    Idempotent: a file already present with the same name AND size is skipped;
+    a same-name size-mismatch is trashed and re-uploaded. Returns True if the
+    file was already there (skipped)."""
     import requests
     h = {"Authorization": f"Bearer {at}"}
     size = path.stat().st_size
+    existing = drive_existing(at, path.name, parent)
+    if existing:
+        eid, esize = existing
+        if esize == size:
+            return True
+        requests.patch(f"https://www.googleapis.com/drive/v3/files/{eid}",
+                       headers=h, params={"fields": "id"}, json={"trashed": True},
+                       timeout=20).raise_for_status()
     mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    # NB fields=size on the INITIATION url — without it the finalise response
+    # omits size and the verify below reads -1 (the 2026-09-12 first-push bug).
     r = requests.post(
-        "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable",
+        "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,size",
         headers={**h, "X-Upload-Content-Type": mime,
                  "X-Upload-Content-Length": str(size)},
         json={"name": path.name, "parents": [parent]}, timeout=30)
@@ -168,7 +194,7 @@ def drive_upload(at: str, path: Path, parent: str) -> None:
         r = requests.put(session, data=b"", headers={"Content-Range": "bytes */0"},
                          timeout=60)
         r.raise_for_status()
-        return
+        return False
     CHUNK = 32 * 1024 * 1024
     with path.open("rb") as f:
         sent = 0
@@ -181,7 +207,7 @@ def drive_upload(at: str, path: Path, parent: str) -> None:
                 got = int(r.json().get("size", -1))
                 if got != size:
                     raise RuntimeError(f"Drive size mismatch {path.name}: {got} != {size}")
-                return
+                return False
             if r.status_code != 308:
                 raise RuntimeError(f"upload {path.name} failed: {r.status_code} {r.text[:200]}")
             sent = end
@@ -204,16 +230,18 @@ def drive_push(archived: Path, dest_name: str) -> bool:
             folders[d] = drive_mkdir(at, d.name, ensure_folder(d.parent))
         return folders[d]
 
-    ok = fail = 0
+    ok = fail = skipped = 0
     for p in sorted(archived.rglob("*")):
         if p.is_file():
             try:
-                drive_upload(at, p, ensure_folder(p.parent))
-                ok += 1
+                if drive_upload(at, p, ensure_folder(p.parent)):
+                    skipped += 1
+                else:
+                    ok += 1
             except Exception as e:
                 log(f"  FAILED {p.relative_to(archived)}: {e}")
                 fail += 1
-    log(f"Drive: {ok} uploaded, {fail} failed")
+    log(f"Drive: {ok} uploaded, {skipped} already present, {fail} failed")
     return fail == 0
 
 
