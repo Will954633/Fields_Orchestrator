@@ -281,6 +281,61 @@ def send(db, needle: str, channel: str | None):
             sys.exit(f"{ch} send FAILED for {d['_id']}: {res.get('error')}")
 
 
+SELF_TEST_ID = "6a96158a78932e9fc290a09e"  # Will's own contact — excluded from bulk
+
+
+def send_all(db):
+    """Bulk send: every draft not yet sent, via its recommended channel (email where
+    available, SMS for phone-only) — one message per person. Throttled; aborts after
+    5 consecutive failures so a systemic outage doesn't burn the whole list."""
+    import os
+    import time
+    secret = os.environ["REPORT_LINK_SECRET"]
+    col = db["walkthrough_outreach_drafts"]
+    pending = [d for d in col.find({"campaign": CAMPAIGN})
+               if d["_id"] != SELF_TEST_ID and d.get("status") == "draft"]
+    print(f"bulk send: {len(pending)} pending drafts")
+    sent = failed = consec_fail = 0
+    for d in pending:
+        ch = d["recommended_channel"]
+        draft = d.get(f"{ch}_draft")
+        if not draft:
+            print(f"  SKIP {d['name'] or d['_id']}: no {ch} draft")
+            continue
+        k = contact_key(d["_id"], secret)
+        try:
+            if ch == "email":
+                r = requests.post(f"{SITE}/api/v1/crm-contact-send", timeout=30, json={
+                    "id": d["_id"], "k": k, "subject": draft["subject"],
+                    "body": draft["body"], "type": CAMPAIGN})
+            else:
+                r = requests.post(f"{SITE}/api/v1/crm-contact-sms", timeout=30, json={
+                    "id": d["_id"], "k": k, "body": draft["body"]})
+            res = r.json()
+        except Exception as e:  # noqa: BLE001
+            res = {"ok": False, "error": str(e)[:200]}
+        col.update_one({"_id": d["_id"]}, {
+            "$push": {"sends": {"channel": ch, "at": datetime.now(timezone.utc).isoformat(), "result": res}},
+            "$set": {"status": "sent" if res.get("ok") else "send_failed"},
+        })
+        tag = "OK " if res.get("ok") else "FAIL"
+        print(f"  {tag} [{ch}] {d['name'] or '(no name)'} → {d.get(ch) or d.get('phone')}"
+              + ("" if res.get("ok") else f"  ({res.get('error')})"))
+        if res.get("ok"):
+            sent += 1
+            consec_fail = 0
+        else:
+            failed += 1
+            consec_fail += 1
+            if consec_fail >= 5:
+                sys.exit(f"ABORTED after 5 consecutive failures — {sent} sent, {failed} failed, "
+                         f"{len(pending) - sent - failed} untouched. Investigate before resuming.")
+        time.sleep(1.5)
+    print(f"\ndone: {sent} sent, {failed} failed")
+    if sent == 0 and pending:
+        raise RuntimeError("0 of the pending drafts sent — endpoint or auth is broken")
+
+
 def report(db):
     from crm_sync import posthog_query  # noqa: WPS433
 
@@ -351,6 +406,7 @@ def main():
     mode.add_argument("--build", action="store_true")
     mode.add_argument("--preview", action="store_true")
     mode.add_argument("--send", action="store_true")
+    mode.add_argument("--send-all", action="store_true", help="bulk: every pending draft, recommended channel")
     mode.add_argument("--report", action="store_true")
     ap.add_argument("--contact", help="--send target: contact id, email, or phone")
     ap.add_argument("--channel", choices=["email", "sms", "both"])
@@ -372,6 +428,8 @@ def main():
         if not args.contact:
             sys.exit("--send requires --contact <id|email|phone>")
         send(db, args.contact, args.channel)
+    elif args.send_all:
+        send_all(db)
     elif args.report:
         report(db)
 
