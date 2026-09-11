@@ -65,9 +65,22 @@ SUBURBS = {
     "burleigh-waters": {
         "label": "Burleigh Waters",
         "neighborhood_key": "2719184",
+        "video": os.path.join(HERE, "assets", "Burleigh_Waters_Reel_Captions.mp4"),
+        "thumb": os.path.join(HERE, "assets", "Burleigh_Waters_Reel_Cover.jpg"),
         "landing": ("https://fieldsestate.com.au/news/burleigh-waters?play=1"
                     "&utm_source=facebook&utm_medium=paid"
                     "&utm_campaign=walkthrough_reel_burleigh_sep26"),
+        "primary_text": (
+            "The Burleigh Waters property market peaked around December 2025 and has "
+            "largely been flatlining since — but one metric in the data jumped up just "
+            "recently, and it gives us some good insight into what buyer demand looks "
+            "like right now.\n\n"
+            "In my latest Burleigh Waters market update I take a close look at that "
+            "metric, and another that's shown to be a strong signal on where this "
+            "market moves next — chart by chart, on screen. Tap to watch the full "
+            "walkthrough."
+        ),
+        "headline": "Burleigh Waters Market Update — Guided Walkthrough",
     },
 }
 
