@@ -14,7 +14,7 @@ p.on('response',r=>{ if(r.status()>=400) bad.push(`${r.status()} ${r.url()}`); }
 // SSR contract: the four links must be in the HTML before any JS runs
 const raw = await (await fetch(U)).text();
 const inHtml = (raw.match(/class="shelf a"|<a href="https:\/\/fieldsestate\.com\.au\//g)||[]).length;
-console.log('links present in raw HTML (no JS):', (raw.match(/fieldsestate\.com\.au\/(market-intelligence|sold|for-sale|analyse-your-home)/g)||[]).length, '/ 4');
+console.log('links present in raw HTML (no JS):', (raw.match(/fieldsestate\.com\.au\/(news|sold|for-sale|analyse-your-home)/g)||[]).length, '/ 4');
 console.log('raw HTML bytes:', raw.length, '| has <base>:', /<base href="\/fridge\/">/.test(raw), '| noindex:', /noindex/.test(raw));
 
 const t=Date.now();
