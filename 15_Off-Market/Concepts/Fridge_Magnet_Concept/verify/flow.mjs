@@ -13,7 +13,7 @@ let navTo=null;
 await p.setRequestInterception(true);
 p.on('response',r=>{ if(/address-search/.test(r.url())) console.log('  api resp', r.status()); });
 p.on('request',r=>{ const u=r.url();
-  if(/fieldsestate\.com\.au\/(off-market|market-intelligence)\//.test(u) && r.isNavigationRequest() && r.frame()===p.mainFrame()){
+  if(/fieldsestate\.com\.au\/(off-market|news)\//.test(u) && r.isNavigationRequest() && r.frame()===p.mainFrame()){
     navTo=u; r.respond({status:200, contentType:'text/html', body:'stub'}); }
   else r.continue();
 });
