@@ -103,3 +103,4 @@ Delivery ground truth if in doubt: query JustCall's list API directly
 | Headless verification of PostHog | webdriver mask alone is NOT enough — HeadlessChrome UA also kills ingest | mask webdriver AND set a real Chrome UA |
 | Suppression flags | `do_not_sms` absent until first STOP | rely on the endpoint gates, don't infer consent from field absence |
 | Sends look fine, tracking dead | the `?lead=` loop has silently broken before | before each campaign: one headless click-through, confirm `lead_link_visit` lands |
+| Messenger contacts look like leads | run 1: of 11 Messenger-only "leads", 1 was real — 7 had already declined in-thread (one "leave me alone") and 3 were phishing bots | **read the thread before drafting**: check `messenger.last_inbound_text` on the contact, and pull full history via Graph API (page token derived from `FACEBOOK_ADS_TOKEN`, see `messenger_leads_sync.py`) for anyone you intend to message |
