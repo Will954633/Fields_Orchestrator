@@ -128,6 +128,35 @@ screenshot `/news/<suburb>?walkthrough=1`, read the PNG, confirm the avatar play
 Log it: fix-history entry if you fixed anything, and an ops note that the month's video
 shipped.
 
+## Step 7 — Archive (mandatory once shipped)
+
+**The root disk is 97G and shared with the production database — finished video does
+not live on it.** (5.4G of shipped video was part-cause of the 2026-09-11 disk incident
+that corrupted three nights of MongoDB backups.) The moment Step 6 is verified live:
+
+```bash
+# the month's raw-footage/project folder (repeat per folder if several):
+python3 scripts/05_archive.py --project <Project_Folder> --purge --drive
+
+# then the shared scratch (work/ + qa/ + out/) for the shipped slug:
+python3 scripts/05_archive.py --work --purge --drive
+```
+
+What it does: copies to `/data/blobs/video_archive/<name>/` (738G disk, synced
+off-site nightly to `gs://fields-blob-backup` at 03:00), **verifies the copy
+byte-for-byte, and only then deletes the local copy**. `--drive` additionally pushes
+the same bundle to the shared [Video_Archive Drive folder](https://drive.google.com/drive/folders/1cIrw53ggePRR0eVZ0Jf8nq43NsHdAJ8D)
+for browser access.
+
+Notes:
+- `out/` is included in `--work` deliberately — the social circle `.mov`s ship
+  nowhere else (the website repo only receives the web mp4).
+- The Drive OAuth token dies every 7 days (Testing-mode app — see memory
+  `gdrive_oauth_7day_expiry`). A dead token fails only the Drive leg with a
+  re-auth pointer; the blob+GCS copy is the durable one. Catch Drive up later with
+  `--drive-only`.
+- Retrieval for a re-cut: `rsync -a /data/blobs/video_archive/<Project>/ assets/<Project>/`.
+
 ## If something looks wrong
 
 | Symptom | Knob |
