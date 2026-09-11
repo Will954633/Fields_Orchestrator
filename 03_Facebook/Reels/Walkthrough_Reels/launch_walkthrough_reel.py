@@ -53,14 +53,26 @@ SUBURBS = {
         ),
         "headline": "Robina Market Update — Guided Walkthrough",
     },
-    # Varsity Lakes + Burleigh Waters: Will is still editing those reels (2026-09-11).
-    # Add "video"/"thumb" once their finals land in the Drive folder, then run per suburb.
     "varsity-lakes": {
         "label": "Varsity Lakes",
         "neighborhood_key": "2674227",
+        "video": os.path.join(HERE, "assets", "Varsity_Lakes_Reel_Captions.mp4"),
+        "thumb": os.path.join(HERE, "assets", "Varsity_Lakes_Reel_Cover.jpg"),
         "landing": ("https://fieldsestate.com.au/news/varsity-lakes?play=1"
                     "&utm_source=facebook&utm_medium=paid"
                     "&utm_campaign=walkthrough_reel_varsity_sep26"),
+        "primary_text": (
+            "The Varsity Lakes property market has been one of the stronger performers "
+            "on the Southern Gold Coast, but so far this year prices have largely "
+            "flatlined — and there's one metric in the data which has just popped up "
+            "quite strongly, giving us some insight into what buyer demand looks like "
+            "right now.\n\n"
+            "In my latest Varsity Lakes market update I take a close look at that "
+            "metric, and another that's been shown to be a strong signal on where "
+            "property prices are headed next — chart by chart, on screen. Tap to watch "
+            "the full walkthrough."
+        ),
+        "headline": "Varsity Lakes Market Update — Guided Walkthrough",
     },
     "burleigh-waters": {
         "label": "Burleigh Waters",
