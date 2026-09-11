@@ -311,20 +311,28 @@ def report(db):
         print(f"   {m['phone']}: status={m.get('status')} at={m.get('sent_at')}")
 
     # Walkthrough engagement, bound via ?lead= token (token becomes the PostHog distinct_id
-    # after identify; lead_link_visit confirms the click landed)
-    if by_token:
+    # after identify; lead_link_visit confirms the click landed). Scoped to AFTER the first
+    # campaign send: link_tokens are reused from earlier tracked emails, so an unscoped query
+    # surfaces pre-campaign activity as if it were campaign engagement.
+    first_send = None
+    for d in drafts:
+        for s in d.get("sends", []):
+            if s.get("result", {}).get("ok") and (first_send is None or s["at"] < first_send):
+                first_send = s["at"]
+    if by_token and first_send:
         toks = ",".join(f"'{t}'" for t in by_token)
+        since = first_send[:19].replace("T", " ")
         rows = posthog_query(
             "SELECT distinct_id, event, count(), max(toInt(coalesce(properties.video_t, '0'))) "
             "FROM events "
-            f"WHERE distinct_id IN ({toks}) "
+            f"WHERE distinct_id IN ({toks}) AND timestamp >= toDateTime('{since}') "
             "AND event IN ('lead_link_visit','$pageview','walkthrough_start','walkthrough_progress',"
             "'walkthrough_film','walkthrough_complete','walkthrough_exit','walkthrough_unmute',"
             "'walkthrough_cta_shown','walkthrough_fb_follow_click','walkthrough_subscribe_click') "
             "GROUP BY distinct_id, event ORDER BY distinct_id, event LIMIT 500",
             soft=True,
         )
-        print("\n— WALKTHROUGH ENGAGEMENT (via lead token):")
+        print(f"\n— WALKTHROUGH ENGAGEMENT (via lead token, since {since} UTC):")
         if not rows:
             print("   no bound sessions yet")
         cur = None
