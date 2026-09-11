@@ -215,9 +215,9 @@
 
   /* ── Whose fridge is this? ────────────────────────────────────────────
      The suburb used to be hardcoded to Burleigh Waters, which was arbitrary and
-     wrong for two thirds of the target market. There is no suburb-neutral
-     market page either — /market-intelligence 301s to Robina, which is just
-     somebody else's arbitrary choice.
+     wrong for two thirds of the target market. The news pages are per-suburb
+     too (/news/<suburb>), so picking one for the visitor is just somebody
+     else's arbitrary choice.
 
      So: ask. /api/v1/my-home is read-only and address-only, and recognises
      anyone who has used Analyse Your Home or landed on their own /off-market
@@ -226,24 +226,21 @@
 
      ?suburb=<slug> overrides both — for testing, and for the per-magnet codes
      in the scoping doc's v2 rung. */
-  /* Only three suburbs have market pages, plus a Gold Coast aggregate for
-     everyone else. The URL slug is Title-Case ON PURPOSE: the page echoes the
-     slug straight into its own <title>, so /market-intelligence/robina renders
-     "robina Market Intelligence". Lowercase renders, it just looks broken. */
+  /* Only three suburbs have news pages, plus a Gold Coast aggregate for
+     everyone else. The key doubles as the /news/<suburb> URL slug. */
   var SUBURBS = [
-    { key: 'robina',          slug: 'Robina',          name: 'Robina' },
-    { key: 'varsity-lakes',   slug: 'Varsity-Lakes',   name: 'Varsity Lakes' },
-    { key: 'burleigh-waters', slug: 'Burleigh-Waters', name: 'Burleigh Waters' },
-    { key: 'gold-coast',      slug: 'Gold-Coast',      name: 'the Gold Coast' }
+    { key: 'robina',          name: 'Robina' },
+    { key: 'varsity-lakes',   name: 'Varsity Lakes' },
+    { key: 'burleigh-waters', name: 'Burleigh Waters' },
+    { key: 'gold-coast',      name: 'the Gold Coast' }
   ];
   var PICK_KEY = 'fields_fridge_suburb';
   var picker = document.getElementById('suburbPick');
   var optMarket = document.getElementById('optMarket');
 
   /* True once we know the visitor's suburb (they chose it, chose it last time, or
-     my-home recognised them). Until then the market option must ASK — never fall
-     through to /market-intelligence, which 301s to Robina, i.e. somebody else's
-     suburb. */
+     my-home recognised them). Until then the market option must ASK — never
+     silently default to somebody else's suburb. */
   var suburbResolved = false;
   /* Set when the market option was tapped with no suburb yet: picking one then
      navigates straight away, instead of making them tap the shelf a second time. */
@@ -254,9 +251,10 @@
     return null;
   }
 
-  /* /market-intelligence/<Suburb> alone defaults to the sell-now tab; the door
-     promises "what's happening", which is the overview category. */
-  function marketUrl(sub) { return 'https://fieldsestate.com.au/market-intelligence/' + sub.slug + '/overview'; }
+  /* "What's happening" = the News & Research page (/news/<suburb>), NOT the
+     charts page — /market-intelligence/<Suburb> lands on the sell-now tab,
+     which is a seller pitch, not news. /news slugs are the lowercase keys. */
+  function marketUrl(sub) { return 'https://fieldsestate.com.au/news/' + sub.key; }
 
   function setSuburb(key, source) {
     var sub = findSuburb(key);
@@ -359,7 +357,7 @@
        market   — needs a suburb. If we already know it (chosen / remembered /
                   recognised) the link is live and we let it through. If we do
                   NOT, we intercept and open the picker rather than let the href
-                  fall through to /market-intelligence, which 301s to Robina.
+                  fall through to the gold-coast aggregate news page.
 
        address  — sold / for-sale / worth all live on ONE page: the visitor's own
                   /off-market/<slug>. We intercept, ask for the address, and send
