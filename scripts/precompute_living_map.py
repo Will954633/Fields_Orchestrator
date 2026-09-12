@@ -652,6 +652,16 @@ def build_one(gc, suburb, doc, key, geocode_cache, shared_tiles, area_pois=None)
             geo = doc.get("geocoded_coordinates") or {}
             lat, lon = geo.get("latitude"), geo.get("longitude")
         if lat is None or lon is None:
+            # Units/townhouses scraped via onthehouse carry their point here and
+            # nowhere else (9 of the 26 stuck residue docs, 2026-09-12).
+            geo = doc.get("onthehouse_data") or {}
+            lat, lon = geo.get("latitude"), geo.get("longitude")
+        if lat is None or lon is None:
+            # Written by scripts/backfill_parcel_boundary.py for addresses it
+            # geocodes but cannot resolve to a parcel.
+            geo = doc.get("address_geocode") or {}
+            lat, lon = geo.get("latitude"), geo.get("longitude")
+        if lat is None or lon is None:
             return None, "no parcel geometry and no coordinates"
         center = {"lat": float(lat), "lon": float(lon)}
         gaps.append("parcel: no cadastre geometry on file")
@@ -871,6 +881,7 @@ def run(args):
                         continue
                     if lm is None:
                         result.failed += 1
+                        print(f"  – {d.get('address','?')}: {info}")
                         continue
                     gaps, tiles_fetched = info
                     result.n += 1
@@ -933,8 +944,10 @@ def main():
         if result.eligible and result.n == 0:
             raise RuntimeError(
                 f"{result.eligible} listings eligible but 0 living_maps built "
-                f"({result.failed} failed) — upstream (cadastre / Static Maps key / "
-                f"valuation output) is broken, not empty")
+                f"({result.failed} failed) — see the per-property – lines above: "
+                f"'no parcel geometry and no coordinates' means the residue needs "
+                f"backfill_parcel_boundary; anything else means an upstream service "
+                f"(cadastre / Static Maps / OSRM) is broken")
         beat.detail = (f"{result.n} built ({result.gaps} partial), "
                        f"{result.tiles} tiles, {result.failed} failed")
         print(f"\n  built {result.n} · partial {result.gaps} · "
