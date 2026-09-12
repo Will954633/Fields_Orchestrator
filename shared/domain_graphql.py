@@ -53,6 +53,7 @@ import time
 from typing import Optional, Dict, List, Any
 
 from curl_cffi import requests as cffi_requests
+from curl_cffi.curl import CurlHttpVersion
 
 BRIGHTDATA_ENDPOINT = 'https://api.brightdata.com/request'
 GRAPHQL_URL = 'https://www.domain.com.au/graphql'
@@ -118,11 +119,15 @@ def execute(query: str, variables: Optional[Dict] = None,
             'headers': _BROWSER_HEADERS,
         }
         try:
+            # http_version 1.1 for the Bright Data API hop only — their relay
+            # started emitting an HTTP/2-illegal `proxy-connection` response
+            # header (2026-09-12), which curl_cffi hard-fails as curl error 92.
             resp = cffi_requests.post(
                 BRIGHTDATA_ENDPOINT,
                 headers={'Content-Type': 'application/json',
                          'Authorization': f'Bearer {api_key}'},
-                json=payload, timeout=timeout)
+                json=payload, timeout=timeout,
+                http_version=CurlHttpVersion.V1_1)
             text = resp.text or ''
             if not text.strip():
                 if debug:
