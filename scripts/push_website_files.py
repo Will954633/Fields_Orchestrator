@@ -92,24 +92,38 @@ def push(repo, root, message, rel_paths, branch="main"):
        {"sha": commit["sha"]})
     print(f"\n  commit {commit['sha'][:8]}  ({len(rel_paths)} files, 1 build)")
 
-    # 4. verify bytes actually landed
+    # 4. verify bytes actually landed. The contents API returns EMPTY content for files >1MB,
+    #    so large files verify by git blob sha instead (same bytes-integrity guarantee — the sha
+    #    covers content; 2026-09-12, false MISMATCH on a 32MB walkthrough mp4).
+    def _git_blob_sha(raw: bytes) -> str:
+        return hashlib.sha1(b"blob %d\0" % len(raw) + raw).hexdigest()
+    local_blob = {}
+    for rel in rel_paths:
+        with open(root + rel, "rb") as fh:
+            local_blob[rel] = _git_blob_sha(fh.read())
     print()
     ok = True
     for rel in rel_paths:
         remote = "?"
         for attempt in range(VERIFY_ATTEMPTS):
             try:
-                content = gh([f"repos/{repo}/contents/{rel}", "--jq", ".content"], raw=True)
-                remote = hashlib.md5(base64.b64decode(content)).hexdigest() if content else "?"
+                meta = gh([f"repos/{repo}/contents/{rel}"])
+                content, remote_sha = meta.get("content") or "", meta.get("sha") or "?"
+                if content:
+                    remote = hashlib.md5(base64.b64decode(content)).hexdigest()
+                    good = remote == local_md5[rel]
+                else:  # >1MB: contents API omits bytes — compare git blob sha
+                    remote = remote_sha
+                    good = remote_sha == local_blob[rel]
             except (RuntimeError, ValueError):
-                remote = "?"  # transient read failure; retry below
-            if remote == local_md5[rel]:
-                print(f"  OK    {rel:<58} {local_md5[rel][:8]}")
+                remote, good = "?", False  # transient read failure; retry below
+            if good:
+                print(f"  OK    {rel:<58} {remote[:8]}")
                 break
             if attempt < VERIFY_ATTEMPTS - 1:
                 time.sleep(VERIFY_WAIT_S)  # read-after-write lag, usually clears
         else:
-            print(f"  MISMATCH {rel:<55} local {local_md5[rel][:8]} != remote {remote[:8]}")
+            print(f"  MISMATCH {rel:<55} local {local_md5[rel][:8]}/{local_blob[rel][:8]} != remote {remote[:8]}")
             ok = False
     return ok
 
