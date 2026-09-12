@@ -381,6 +381,16 @@ svg.addEventListener('mousemove',e=>move(e.clientX));
 svg.addEventListener('mouseleave',hideHover);
 svg.addEventListener('touchmove',e=>{if(e.touches[0])move(e.touches[0].clientX);},{passive:true});
 svg.addEventListener('touchstart',e=>{if(e.touches[0])move(e.touches[0].clientX);},{passive:true});
+
+// Walkthrough remote control (2026-09-12): see median_robina_rolling_ci — same postMessage API.
+window.addEventListener('message',function(ev){
+  var m=ev&&ev.data||{}; if(!m||!m.wk) return;
+  try{
+    if(m.wk==='series'&&m.on){ DEFS.forEach(function(s){ if(typeof m.on[s.key]==='boolean'&&s.on!==m.on[s.key]){ s.on=m.on[s.key]; paintPill(s); s.pill.g.setAttribute('aria-pressed',s.on); } }); hideHover(); }
+    if(m.wk==='blink'&&m.key){ var s=null; DEFS.forEach(function(x){ if(x.key===m.key) s=x; });
+      if(s&&s.pill){ var g=s.pill.g,n=0; (function pulse(){ g.style.opacity=(n%2)?'':'0.15'; n++; if(n<=5) setTimeout(pulse,180); else g.style.opacity=''; })(); } }
+  }catch(e){}
+});
 </script>
 </body>
 </html>"""
@@ -477,6 +487,18 @@ svg.addEventListener('mousemove',e=>move(e.clientX,e.clientY));
 svg.addEventListener('mouseleave',hideHover);
 svg.addEventListener('touchmove',e=>{if(e.touches[0])move(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
 svg.addEventListener('touchstart',e=>{if(e.touches[0])move(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
+
+// Walkthrough remote control (2026-09-12): the median-article walkthrough drives the pills via
+// postMessage — {wk:'series',on:{roll,qtr,m3}} applies only the keys present; {wk:'blink',key}
+// pulses that pill 3x. No-op for normal readers; state is only changed when the overlay asks.
+window.addEventListener('message',function(ev){
+  var m=ev&&ev.data||{}; if(!m||!m.wk) return;
+  try{
+    if(m.wk==='series'&&m.on){ DEFS.forEach(function(s){ if(typeof m.on[s.key]==='boolean'&&s.on!==m.on[s.key]){ s.on=m.on[s.key]; paintPill(s); s.pill.g.setAttribute('aria-pressed',s.on); } }); hideHover(); }
+    if(m.wk==='blink'&&m.key){ var s=null; DEFS.forEach(function(x){ if(x.key===m.key) s=x; });
+      if(s&&s.pill){ var g=s.pill.g,n=0; (function pulse(){ g.style.opacity=(n%2)?'':'0.15'; n++; if(n<=5) setTimeout(pulse,180); else g.style.opacity=''; })(); } }
+  }catch(e){}
+});
 </script>
 </body>
 </html>"""
