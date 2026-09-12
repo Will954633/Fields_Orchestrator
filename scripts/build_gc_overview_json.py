@@ -60,14 +60,23 @@ def build(dry_run=False, out_path=DEFAULT_OUT):
     quarters = parent["quarters"]
     qidx = {q: i for i, q in enumerate(quarters)}
 
-    composite, momentum, eligible, _weights, mom_pts = compute_gc_composite(quarters, qidx)
+    gc = compute_gc_composite(quarters, qidx)
+    chained, chain_info, eligible = gc["chained"], gc["chain_info"], gc["eligible"]
 
-    median_series = [
-        {"q": quarters[i], "v": round(composite[i])}
-        for i in range(len(quarters))
-        if composite[i] is not None
-    ]
-    last_i = max(i for i in range(len(quarters)) if composite[i] is not None)
+    median_series = []
+    for i in range(len(quarters)):
+        if chained[i] is None:
+            continue
+        pt = {"q": quarters[i], "v": round(chained[i])}
+        if i in chain_info:  # provisional chained tail — reduced suburb panel
+            pt["n"] = chain_info[i]["n"]
+            pt["panel"] = chain_info[i]["panel"]
+            pt["prov"] = True
+        else:
+            pt["n"] = gc["n_by_q"][i]
+        median_series.append(pt)
+    last_i = max(i for i in range(len(quarters)) if chained[i] is not None)
+    yoy_latest = gc["mom_chained"][last_i]
 
     db = get_client()["Gold_Coast"]
     active_listings, active_suburbs = count_active_listings(db)
@@ -82,7 +91,11 @@ def build(dry_run=False, out_path=DEFAULT_OUT):
     capitals = {}
     for city_key, series in tvd.items():
         pts = [
-            {"q": p["quarter"], "v": p["median_established_house_price"]}
+            {
+                "q": p["quarter"],
+                "v": p["median_established_house_price"],
+                "n": p.get("established_house_transfers"),
+            }
             for p in series
             if p.get("median_established_house_price") and p["quarter"] in qidx
         ]
@@ -92,30 +105,36 @@ def build(dry_run=False, out_path=DEFAULT_OUT):
         print(f"WARNING: only {len(capitals)} capital-city series available "
               f"({sorted(capitals)}) — page will hide the comparison chart")
 
+    snap = {
+        "median": round(chained[last_i]),
+        "median_quarter": quarters[last_i],
+        "yoy_pct": yoy_latest,
+        "suburbs": len(eligible),
+        "active_listings": active_listings,
+        "active_suburbs": active_suburbs,
+    }
+    if last_i in chain_info:
+        snap["prov"] = True
+        snap["panel"] = chain_info[last_i]["panel"]
     out = {
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-        "snapshot": {
-            "median": round(composite[last_i]),
-            "median_quarter": quarters[last_i],
-            "yoy_pct": momentum[mom_pts[-1]],
-            "suburbs": len(eligible),
-            "active_listings": active_listings,
-            "active_suburbs": active_suburbs,
-        },
+        "snapshot": snap,
         "median_series": median_series,
         "capitals": capitals,
         "sources": {
             "gc": f"Fields transaction records — {len(eligible)}-suburb transaction-weighted "
-                  "composite of rolling 12-month medians, houses",
+                  "composite of rolling 12-month medians, HOUSES ONLY",
             "capitals": "ABS Total Value of Dwellings (Table 2, GCCSA established-house "
-                        "median transfer prices), CC BY 4.0",
+                        "median transfer prices — houses only), CC BY 4.0",
         },
     }
 
-    print(f"snapshot: median {out['snapshot']['median']:,} ({out['snapshot']['median_quarter']}) "
-          f"· YoY {out['snapshot']['yoy_pct']}% · {active_listings} active across "
-          f"{active_suburbs} suburbs · capitals: {sorted(capitals)} "
-          f"({', '.join(str(len(v)) for v in capitals.values())} pts)")
+    prov_pts = [p for p in median_series if p.get("prov")]
+    print(f"snapshot: median {snap['median']:,} ({snap['median_quarter']}"
+          f"{' PROV panel=' + str(snap.get('panel')) if snap.get('prov') else ''}) "
+          f"· YoY {snap['yoy_pct']}% · {active_listings} active across "
+          f"{active_suburbs} suburbs · capitals: {sorted(capitals)}")
+    print(f"chained tail: {[(p['q'], p['v'], p['n'], p['panel']) for p in prov_pts]}")
     if dry_run:
         print("(dry run — nothing written)")
         return
