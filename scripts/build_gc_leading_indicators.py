@@ -166,6 +166,11 @@ def build(dry_run=False, out_path=DEFAULT_OUT):
     indicators = []
     r_report = []
     for ind in parent["indicators"]:
+        # rateofsale is EXCLUDED at GC level: its series is sold/(sold+unsold) built from
+        # OUR 3-suburb listing histories — a local gauge, not a QLD/national indicator.
+        # Presenting it on a Gold-Coast-wide board would claim coverage it doesn't have.
+        if ind["key"] == "rateofsale":
+            continue
         new = {k: v for k, v in ind.items() if k != "proj"}  # proj: pooled-validated only
         r, n = r_at_lag(ind["series"], momentum, ind["lag"], n_q)
         if r is None:
