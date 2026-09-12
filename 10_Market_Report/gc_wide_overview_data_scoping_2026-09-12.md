@@ -3,6 +3,8 @@
 **Date:** 2026-09-12
 **Question:** Can we replicate (or partly replicate) the single-suburb market overview (e.g. `/news/robina` + `/market-intelligence/robina/*`) at Gold-Coast-wide level, with comparisons to Brisbane, Sydney and Melbourne? What data do we have, what is freely available, and what would need new scraping?
 
+**STATUS (2026-09-12 evening): v1 SHIPPED — `/news/gold-coast` is live** (picker card, composite median chart, ABS capitals race, GC leading-indicators explorer; website commit `5d025bdf`, see fix-history `[GC-OVERVIEW-PAGE-V1]`). Still open: SQM licensing call → asking/stock/vacancy/rents charts; monthly JSON auto-regeneration (auto-refresh implies auto-publish — Will's call); GC market_pulse.
+
 **Verdict up front:** Yes — a substantial GC-wide overview is buildable, and most of it needs **no new data source**, only extensions of pipelines we already run. The Bris/Syd/Melb comparison layer is the genuinely new part, and nearly all of it is free: some via clean JSON/API/Excel, some via the same inline-JSON scrape pattern our SQM scraper already uses, some via PDF parsing. The two real gaps are (1) **no free daily/monthly price *index* exists for Gold Coast alone** anywhere (Cotality folds GC into Brisbane), and (2) **bulk QLD sales transactions are paid-only** (QVAS brokers). Neither blocks the page — our own 77-suburb transaction series covers the GC side of prices.
 
 ---
