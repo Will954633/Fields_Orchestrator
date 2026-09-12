@@ -447,8 +447,12 @@ def promote_medians(gc, suburb, live, staged, quarterly, rolling, latest, union_
             entry["ci_margin_pct"] = new["ci_margin_pct"]
             entry["transaction_count"] = new["transaction_count"]
         elif not entry.get("ci_low"):
-            # never recomputed on the union basis — leave it out rather than mix bases
-            continue
+            # Pre-union point (timeline precompute, no CI). KEEP it, labelled by
+            # basis — dropping these collapsed every wide suburb's rolling series
+            # to the short union window on 2026-09-12 (helensvale 36 pts → 1).
+            # The original "don't mix bases" concern is answered by the label:
+            # union-recomputed periods carry CIs, older ones visibly don't.
+            entry.setdefault("basis", "domain_timeline")
         merged_rolling.append(entry)
     known_r = {e.get("period") for e in merged_rolling}
     merged_rolling += [r for p, r in roll_by_period.items() if p not in known_r]
@@ -495,6 +499,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--promote", action="store_true",
                     help="also write to the live collection (read the diff first)")
+    ap.add_argument("--all-gc", action="store_true",
+                    help="run for all 82 GC suburbs (onthehouse.suburbs.ALL_GC) instead of the "
+                         "core 3 — requires onthehouse_sold to hold the GC-wide overlay "
+                         "(onthehouse_sold_sync.py --all-gc --deep), added 2026-09-12")
     args = ap.parse_args()
     # cadence 744h ≈ monthly. This job MUST run after precompute_indexed_price_data.py
     # (0 5 1 * *) and recalibrate_charts.py (30 5 1 * *), because the first does a full
@@ -512,7 +520,13 @@ def run(args, beat=None):
     print(f"union window starts {union_from}\n")
     summary, metrics = [], {}
 
-    for suburb in SUBURBS:
+    if getattr(args, "all_gc", False):
+        from onthehouse.suburbs import ALL_GC
+        suburb_scope = [s["collection"] for s in ALL_GC]
+    else:
+        suburb_scope = SUBURBS
+
+    for suburb in suburb_scope:
         counters = defaultdict(int)
         domain = load_domain_history(gc, suburb, counters)
         oth = load_onthehouse(sm, suburb, counters)
