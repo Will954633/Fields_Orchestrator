@@ -189,18 +189,27 @@ All new fetchers get Rule 7/7b heartbeats (`job_run` + zero-output assertions) f
 
 The suburb-page signals board is the **IndicatorsExplorer** (shared engine, mounted by the `/news` split prototype via `MarketFlowProto`). It reads one static file — `public/data/leading_indicators.json` — carrying 82 quarters (2006→2026), price-momentum series (pooled + 3 suburbs), and 10 indicators each with full series + measured lag + r. **The matched-movement circles already exist in the engine**: in Actual-timing mode with one indicator, it circles the indicator's turning points, links each to the price-momentum turn ~lead later ("prices follow ~N mo later"), and draws the "if lead holds" projection — all computed client-side. A GC version therefore needs only a new JSON: GC-wide momentum series + recomputed lag/r. No chart code.
 
-**First-pass GC-wide recomputation (done today):** composite built from `rolling_12m_median_series` across the 50 suburbs with ≥90% coverage 2017-Q3→2026-Q2, fixed transaction-count weights; momentum = YoY of the composite (31 pts, 2018-Q3→2026-Q1; latest +0.5% vs +9.5% a year earlier). Cross-correlated against the indicator series already in the JSON:
+**Recomputation (BUILT 2026-09-12 — `scripts/build_gc_leading_indicators.py`, output staged at `01_Website/public/data/leading_indicators_gc.json`):** composite of `rolling_12m_median_series` across **61 suburbs** (≥90% window coverage after interpolating interior gaps ≤2 quarters), fixed transaction-count weights, and a **composition guard** — any quarter carrying <95% of panel weight is dropped. Momentum = YoY of the composite, 30 contiguous pts **2018-Q3→2025-Q4, latest +8.01%**.
 
-| Indicator | Old (3-suburb pooled, 2008–26) | GC-wide r at same lag | Notes |
+⚠ **Artifact caught during the build:** the first pass showed momentum "collapsing" 8.7% → 0.5% into 2026-Q1 — that was pure composition change (contributors fell from 47 suburbs to 16 at the ragged series tail), not a price move. The composition guard now truncates the tail honestly at 2025-Q4. Related upstream finding: the wide-suburb rolling series end 2025-Q4/2026-Q1 even after the 2026-09-01 refresh (the 3 target suburbs reach 2026-Q2), so the GC explorer tail runs ~2 quarters behind the suburb pages until the wide union backfill catches up. Also: the target suburbs' rolling series carry scattered interior missing quarters (robina 9 in the window) — handled by interpolation here, but worth an upstream look.
+
+Final r values (lags FIXED from the deep 2008–2026 pooled analysis; r recomputed at that lag on the GC series, n=30):
+
+| Indicator | 3-suburb pooled (2008–26) | **GC-wide** | Notes |
 |---|---|---|---|
-| **New housing lending (QLD)** | **+4q, r 0.76** | **r 0.77 (n=31)** | **Survives cleanly — same 4-quarter lead. This is the headline number.** |
-| Rate of sale | +2q, 0.73 | 0.75 | holds |
+| **New housing lending (QLD)** | +4q, r 0.76 | **+4q, r 0.81** | **Headline survives, slightly stronger.** |
+| Rate of sale | +2q, 0.73 | 0.81 | nowcast framing kept |
 | Inflation (QLD CPI) | −3q lag, 0.72 | 0.86 | still a lagger |
-| Unemployment change | −1q, −0.67 | −0.73 @ 0q | holds |
+| Unemployment change | −1q, −0.67 | −0.74 | holds |
+| Cash-rate change | −2q, 0.49 | 0.65 | still lagging |
 | Consumer spending | +7q, 0.56 | 0.64 | holds |
-| Job vacancies | +2q, 0.39 | 0.62 | stronger on short window |
-| ASX / cash rate / cash-rate change / clearance | various | unstable | short-window artifacts (e.g. clearance "r −0.91 @ +7q" on n=18 is spurious); pooled series shows the same drift on the identical window |
+| Job vacancies | +2q, 0.39 | 0.63 | stronger |
+| ASX | +2q, 0.42 | 0.33 | weaker |
+| Cash rate (level) | +4q, −0.43 | −0.38 | weak as before |
+| Auction clearance | 0q, 0.10 | 0.11 | still predicts nothing — page's best line stays true |
 
-**Methodology decisions for production:** (1) keep the lag *structure* from the deep 2008–2026 pooled analysis and recompute r at those fixed lags on the GC series — don't re-pick best lags on a 31-point window; (2) weighting: the volume-weighted composite is dominated by the northern growth corridor (pimpama, upper_coomera, coomera, ormeau are the top weights) — decide whether that's the intended "Gold Coast" or whether to cap/stratify weights; (3) the wide-suburb rolling series start 2017-Q2 — a deep (2006→) GC series needs the union precompute extended, or the page ships with the 2018→ window honestly captioned.
+Best-lag re-picking on the short window was rejected — it produced spurious winners (clearance "r −0.91 @ +7q" on n=18); the identical drift appears on the pooled series over the same window, confirming window artifact.
 
-**Build steps:** extend `precompute_union_prices.py`/aggregate for the GC momentum series → generator script writes `public/data/leading_indicators_gc.json` (same schema, `price.pooled` = GC-wide) → mount IndicatorsExplorer on the GC page. Copy updates: caption r values, and the prototype's existing "tested against Gold Coast house-price momentum" line finally becomes literally true.
+**Design decisions taken (per Will's go-ahead):** volume-weighted composite with the northern-corridor dominance named in the caption; `proj` (forward projection band) dropped — it was validated out-of-sample against the pooled series only (engine guards on its absence, `IndicatorsExplorer.engine.ts:93`); the three suburb momentum series carried through so the explorer's price-seg control keeps working (page build relabels "3-suburb avg" → "Gold Coast"); matched-point circles need nothing — the engine computes turning points client-side (gated |r| ≥ 0.35, so clearance correctly renders none).
+
+**Remaining for page build:** mount IndicatorsExplorer on the GC page pointing at `leading_indicators_gc.json` (held off the website repo until then to avoid an empty deploy — regenerable from the pushed script); wire the generator into `run_monthly_market_precompute.sh` with a `job_run` heartbeat (Rule 7) at that point; caption the 2018→2025-Q4 window and the ~2-quarter tail lag honestly.
