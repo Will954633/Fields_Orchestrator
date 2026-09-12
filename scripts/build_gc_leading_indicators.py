@@ -89,12 +89,12 @@ def r_at_lag(ind_series, mom, lag, n_q):
     return pearson(pairs)
 
 
-def build(dry_run=False, out_path=DEFAULT_OUT):
-    parent = json.loads(PARENT_JSON.read_text())
-    quarters = parent["quarters"]
-    qidx = {q: i for i, q in enumerate(quarters)}
+def compute_gc_composite(quarters, qidx):
+    """Shared GC-wide composite: interpolated panel, fixed tx weights, composition
+    guard. Returns (composite_levels, momentum, eligible, weights). Also imported
+    by build_gc_overview_json.py so the page's median chart and the explorer's
+    momentum series can never drift apart."""
     n_q = len(quarters)
-
     col = get_client()["Gold_Coast"]["precomputed_indexed_prices"]
     docs = col.find(
         {"_id": {"$nin": ["gold_coast", "gold_coast_average"]}},
@@ -162,6 +162,16 @@ def build(dry_run=False, out_path=DEFAULT_OUT):
         raise RuntimeError(
             f"GC momentum has only {len(mom_pts)} points (need {MIN_MOMENTUM_PTS}) — not writing"
         )
+    return composite, momentum, eligible, weights, mom_pts
+
+
+def build(dry_run=False, out_path=DEFAULT_OUT):
+    parent = json.loads(PARENT_JSON.read_text())
+    quarters = parent["quarters"]
+    qidx = {q: i for i, q in enumerate(quarters)}
+    n_q = len(quarters)
+
+    composite, momentum, eligible, weights, mom_pts = compute_gc_composite(quarters, qidx)
 
     indicators = []
     r_report = []
@@ -189,6 +199,9 @@ def build(dry_run=False, out_path=DEFAULT_OUT):
     out = {
         "meta": {
             "scope": "gold_coast_wide",
+            # consumed by IndicatorsExplorer.engine subName() — labels the price
+            # panel "Gold Coast" instead of the default "3-suburb avg"
+            "price_labels": {"pooled": "Gold Coast"},
             "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "price_method": (
                 f"YoY momentum of a transaction-weighted composite of rolling-12m medians "
