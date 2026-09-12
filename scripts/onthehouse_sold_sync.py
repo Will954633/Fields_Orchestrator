@@ -59,6 +59,16 @@ def is_house(rec: dict) -> bool:
     return rec.get("type") == "House"
 
 
+# Attached/unit dwelling classes as onthehouse labels them in the sold index
+# (discovered 2026-09-13). Excludes House, Land, Commercial, Unknown.
+_UNIT_TYPES = {"Unit", "Apartment", "Townhouse", "DuplexSemi-detached",
+               "Semi-Detached", "Villa"}
+
+
+def is_unit(rec: dict) -> bool:
+    return rec.get("type") in _UNIT_TYPES
+
+
 def shape(rec: dict) -> dict | None:
     """Flatten one sold record. None if it carries no usable sale.
 
@@ -107,19 +117,23 @@ def shape(rec: dict) -> dict | None:
     }
 
 
-def sync(db, deep: bool = False, dry_run: bool = False, all_gc: bool = False) -> dict:
+def sync(db, deep: bool = False, dry_run: bool = False, all_gc: bool = False,
+         units: bool = False) -> dict:
     now = datetime.now(timezone.utc)
     coll = db[COLL]
     pages = SOLD_PAGES_DEEP if deep else SOLD_PAGES_NIGHTLY
     budget = BUDGET_DEEP_S if deep else BUDGET_NIGHTLY_S
     scope = ALL_GC if all_gc else CORE
-    stats = {"mode": ("deep" if deep else "shallow") + ("+all_gc" if all_gc else ""),
-             "suburbs_ok": 0, "suburbs_failed": 0,
+    want = is_unit if units else is_house
+    label = "units" if units else "houses"
+    stats = {"mode": ("deep" if deep else "shallow") + ("+all_gc" if all_gc else "")
+             + ("+units" if units else ""),
+             "class": label, "suburbs_ok": 0, "suburbs_failed": 0,
              "seen": 0, "new": 0, "updated": 0, "withheld": 0, "pages": 0}
 
     rows: dict[str, dict] = {}
     for s in scope:
-        recs, meta = oth.crawl_suburb("sold", s["slug"], pages, budget, want=is_house)
+        recs, meta = oth.crawl_suburb("sold", s["slug"], pages, budget, want=want)
         if recs is None:
             stats["suburbs_failed"] += 1
             print(f"{s['slug']}: FETCH FAILED")
@@ -127,7 +141,7 @@ def sync(db, deep: bool = False, dry_run: bool = False, all_gc: bool = False) ->
         stats["suburbs_ok"] += 1
         stats["pages"] += meta.get("pages", 0)
         mine = [r for r in recs if r["_suburb"] == s["slug"]]
-        print(f"{s['slug']}: {len(mine)} sold houses in-suburb (+{len(recs)-len(mine)} nearby) "
+        print(f"{s['slug']}: {len(mine)} sold {label} in-suburb (+{len(recs)-len(mine)} nearby) "
               f"over {meta.get('pages')} page(s), {meta.get('secs')}s")
         for r in recs:
             row = shape(r)
@@ -162,13 +176,17 @@ def main():
                     help="full 12-month backfill (weekly); default is the shallow nightly pass")
     ap.add_argument("--all-gc", action="store_true",
                     help="crawl ALL 82 GC suburbs (onthehouse.suburbs.ALL_GC) instead of the core 3")
+    ap.add_argument("--units", action="store_true",
+                    help="capture ATTACHED dwellings (unit/apartment/townhouse/duplex) instead of "
+                         "houses — same collection, distinguished by property_type; own heartbeat")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     db = get_client()["system_monitor"]
+    cls = "units" if args.units else "houses"
 
     if args.dry_run:
-        st = sync(db, deep=args.deep, dry_run=True, all_gc=args.all_gc)
-        print(f"\ndry-run ({st['mode']}): {st['seen']} sold houses, {st['withheld']} price-withheld, "
+        st = sync(db, deep=args.deep, dry_run=True, all_gc=args.all_gc, units=args.units)
+        print(f"\ndry-run ({st['mode']}): {st['seen']} sold {cls}, {st['withheld']} price-withheld, "
               f"{st['pages']} pages, {st['suburbs_failed']} failure(s)")
         return
 
@@ -178,15 +196,20 @@ def main():
     # (last day of month, 03:00 AEST — outside orchestrator hours) and its death
     # must be visible independently of the nightly core-3 heartbeat. This is the
     # process whose absence let wide-suburb capture die silently Nov 2025→Sep 2026.
+    # Units are a THIRD identity again (monthly, own heartbeat) so a units-crawl
+    # failure never hides behind the houses heartbeat.
+    suffix = "_units" if args.units else ""
     if args.all_gc:
-        job_name, cadence, title = ("onthehouse_sold_sync_gc_wide", 31 * 24,
-                                    "onthehouse Sold Houses — GC-WIDE 82 suburbs (monthly)")
+        job_name = f"onthehouse_sold_sync_gc_wide{suffix}"
+        cadence = 31 * 24
+        title = f"onthehouse Sold {cls.title()} — GC-WIDE 82 suburbs (monthly)"
     else:
-        job_name, cadence, title = ("onthehouse_sold_sync", 24,
-                                    "onthehouse Sold Houses (12-month overlay)")
+        job_name = f"onthehouse_sold_sync{suffix}"
+        cadence = 24
+        title = f"onthehouse Sold {cls.title()} (12-month overlay)"
     with job_run(job_name, cadence_hours=cadence, title=title) as beat:
         try:
-            st = sync(db, deep=args.deep, all_gc=args.all_gc)
+            st = sync(db, deep=args.deep, all_gc=args.all_gc, units=args.units)
         except oth.Blocked as e:
             beat.detail = f"BLOCKED by onthehouse — {e}"
             raise
@@ -196,7 +219,7 @@ def main():
             raise RuntimeError(
                 f"sync reached {st['suburbs_ok']} suburb(s) with {st['suburbs_failed']} "
                 f"failure(s) — source or network is broken, not an empty market")
-        beat.detail = (f"{st['mode']}: {st['seen']} sold houses seen across "
+        beat.detail = (f"{st['mode']}: {st['seen']} sold {cls} seen across "
                        f"{st['suburbs_ok']} suburb(s); {st['new']} new, {st['updated']} updated, "
                        f"{st['withheld']} price-withheld, {st['suburbs_failed']} fetch failure(s)")
         beat.metrics = st
