@@ -162,7 +162,60 @@ def compute_gc_composite(quarters, qidx):
         raise RuntimeError(
             f"GC momentum has only {len(mom_pts)} points (need {MIN_MOMENTUM_PTS}) — not writing"
         )
-    return composite, momentum, eligible, weights, mom_pts
+
+    # Per-quarter sample size for the SOLID composite: sum of the contributing
+    # suburbs' rolling-12m transaction counts (interpolated fill-ins carry 0).
+    n_by_q = []
+    for i, q in enumerate(quarters):
+        n_by_q.append(
+            sum(sub[k][q][1] for k in eligible if q in sub[k]) if composite[i] is not None else None
+        )
+
+    # CHAINED EXTENSION — carries the level series past the last full-panel
+    # quarter using matched-panel growth (the standard chain-link construction):
+    # for each later quarter t, take the suburbs present at BOTH t-1 and t,
+    # compute the weighted-mean growth on that matched set only, and roll the
+    # level forward. Composition cannot move a chained point because numerator
+    # and denominator share the identical panel. These points are PROVISIONAL —
+    # the panel shrinks (wide-suburb sold capture stopped Nov 2025, so 2026
+    # quarters rest on 16 then 3 suburbs) — and are flagged for dashed
+    # rendering + per-point n/panel disclosure. Added 2026-09-12 after Will
+    # rejected the series ending at 2025-Q4.
+    # Chaining is composition-safe for ANY suburb holding both quarters (the
+    # matched panel is identical in numerator and denominator), so it draws on
+    # the full suburb set — not just the coverage-eligible panel used for levels.
+    weights_all = {k: sum(tx for _, tx in m.values()) for k, m in sub.items()}
+    chained = list(composite)
+    chain_info = {}  # qidx -> {"n": int, "panel": int}
+    last_solid = max(i for i, v in enumerate(composite) if v is not None)
+    for t in range(last_solid + 1, len(quarters)):
+        qt, qp = quarters[t], quarters[t - 1]
+        matched = [k for k in sub if qt in sub[k] and qp in sub[k]]
+        if len(matched) < 3 or chained[t - 1] is None:
+            break
+        num = sum(weights_all[k] * sub[k][qt][0] for k in matched)
+        den = sum(weights_all[k] * sub[k][qp][0] for k in matched)
+        chained[t] = chained[t - 1] * (num / den)
+        chain_info[t] = {"n": sum(sub[k][qt][1] for k in matched), "panel": len(matched)}
+
+    mom_chained = [
+        round((chained[i] / chained[i - 4] - 1) * 100, 2)
+        if i >= 4 and chained[i] and chained[i - 4]
+        else None
+        for i in range(n_q)
+    ]
+
+    return {
+        "composite": composite,
+        "momentum": momentum,
+        "eligible": eligible,
+        "weights": weights,
+        "mom_pts": mom_pts,
+        "n_by_q": n_by_q,
+        "chained": chained,
+        "chain_info": chain_info,
+        "mom_chained": mom_chained,
+    }
 
 
 def build(dry_run=False, out_path=DEFAULT_OUT):
@@ -171,7 +224,8 @@ def build(dry_run=False, out_path=DEFAULT_OUT):
     qidx = {q: i for i, q in enumerate(quarters)}
     n_q = len(quarters)
 
-    composite, momentum, eligible, weights, mom_pts = compute_gc_composite(quarters, qidx)
+    gc = compute_gc_composite(quarters, qidx)
+    momentum, eligible, mom_pts = gc["momentum"], gc["eligible"], gc["mom_pts"]
 
     indicators = []
     r_report = []
@@ -213,12 +267,14 @@ def build(dry_run=False, out_path=DEFAULT_OUT):
                 "r recomputed at that lag against the GC-wide series"
             ),
             "suburbs_used": len(eligible),
-            "top_weights": sorted(weights, key=weights.get, reverse=True)[:5],
+            "top_weights": sorted(gc["weights"], key=gc["weights"].get, reverse=True)[:5],
             "source": "Gold_Coast.precomputed_indexed_prices + parent leading_indicators.json",
         },
         "quarters": quarters,
         "price": {
-            "pooled": momentum,               # the GC-wide series (explorer default)
+            # Display series: chained past the full-panel cutoff so the line stays
+            # current; r is computed on the SOLID momentum only (see compute_gc_composite)
+            "pooled": gc["mom_chained"],
             "robina": parent["price"]["robina"],
             "burleigh_waters": parent["price"]["burleigh_waters"],
             "varsity_lakes": parent["price"]["varsity_lakes"],
