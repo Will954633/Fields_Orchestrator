@@ -46,7 +46,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from shared.db import get_client
 from job_status import job_run
 from onthehouse import client as oth
-from onthehouse.suburbs import CORE
+from onthehouse.suburbs import CORE, ALL_GC
 
 COLL = "onthehouse_sold"
 SOLD_PAGES_NIGHTLY = 4
@@ -107,16 +107,18 @@ def shape(rec: dict) -> dict | None:
     }
 
 
-def sync(db, deep: bool = False, dry_run: bool = False) -> dict:
+def sync(db, deep: bool = False, dry_run: bool = False, all_gc: bool = False) -> dict:
     now = datetime.now(timezone.utc)
     coll = db[COLL]
     pages = SOLD_PAGES_DEEP if deep else SOLD_PAGES_NIGHTLY
     budget = BUDGET_DEEP_S if deep else BUDGET_NIGHTLY_S
-    stats = {"mode": "deep" if deep else "shallow", "suburbs_ok": 0, "suburbs_failed": 0,
+    scope = ALL_GC if all_gc else CORE
+    stats = {"mode": ("deep" if deep else "shallow") + ("+all_gc" if all_gc else ""),
+             "suburbs_ok": 0, "suburbs_failed": 0,
              "seen": 0, "new": 0, "updated": 0, "withheld": 0, "pages": 0}
 
     rows: dict[str, dict] = {}
-    for s in CORE:
+    for s in scope:
         recs, meta = oth.crawl_suburb("sold", s["slug"], pages, budget, want=is_house)
         if recs is None:
             stats["suburbs_failed"] += 1
@@ -158,25 +160,42 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--deep", action="store_true",
                     help="full 12-month backfill (weekly); default is the shallow nightly pass")
+    ap.add_argument("--all-gc", action="store_true",
+                    help="crawl ALL 82 GC suburbs (onthehouse.suburbs.ALL_GC) instead of the core 3")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     db = get_client()["system_monitor"]
 
     if args.dry_run:
-        st = sync(db, deep=args.deep, dry_run=True)
+        st = sync(db, deep=args.deep, dry_run=True, all_gc=args.all_gc)
         print(f"\ndry-run ({st['mode']}): {st['seen']} sold houses, {st['withheld']} price-withheld, "
               f"{st['pages']} pages, {st['suburbs_failed']} failure(s)")
         return
 
     # Deep and shallow report as the SAME job so the health board tracks one cadence.
     # A shallow run is the normal heartbeat; the weekly deep run just fills more.
-    with job_run("onthehouse_sold_sync", cadence_hours=24,
-                 title="onthehouse Sold Houses (12-month overlay)") as beat:
+    # The GC-WIDE monthly pull is a SEPARATE job identity: it has its own cadence
+    # (last day of month, 03:00 AEST — outside orchestrator hours) and its death
+    # must be visible independently of the nightly core-3 heartbeat. This is the
+    # process whose absence let wide-suburb capture die silently Nov 2025→Sep 2026.
+    if args.all_gc:
+        job_name, cadence, title = ("onthehouse_sold_sync_gc_wide", 31 * 24,
+                                    "onthehouse Sold Houses — GC-WIDE 82 suburbs (monthly)")
+    else:
+        job_name, cadence, title = ("onthehouse_sold_sync", 24,
+                                    "onthehouse Sold Houses (12-month overlay)")
+    with job_run(job_name, cadence_hours=cadence, title=title) as beat:
         try:
-            st = sync(db, deep=args.deep)
+            st = sync(db, deep=args.deep, all_gc=args.all_gc)
         except oth.Blocked as e:
             beat.detail = f"BLOCKED by onthehouse — {e}"
             raise
+        # Rule 7b: a wide run that reaches almost no suburbs is a failure even if
+        # nothing threw — fetch failures print per-suburb but must also gate here.
+        if st["suburbs_ok"] == 0 or (args.all_gc and st["suburbs_failed"] > st["suburbs_ok"]):
+            raise RuntimeError(
+                f"sync reached {st['suburbs_ok']} suburb(s) with {st['suburbs_failed']} "
+                f"failure(s) — source or network is broken, not an empty market")
         beat.detail = (f"{st['mode']}: {st['seen']} sold houses seen across "
                        f"{st['suburbs_ok']} suburb(s); {st['new']} new, {st['updated']} updated, "
                        f"{st['withheld']} price-withheld, {st['suburbs_failed']} fetch failure(s)")
