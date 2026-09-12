@@ -35,6 +35,7 @@ import time
 from typing import Optional, Dict
 
 from curl_cffi import requests as cffi_requests
+from curl_cffi.curl import CurlHttpVersion
 
 BRIGHTDATA_ENDPOINT = 'https://api.brightdata.com/request'
 
@@ -84,7 +85,14 @@ def _post_unlocker(url: str, return_json: bool = False, timeout: int = DEFAULT_T
     }
     debug = os.environ.get('DOMAIN_FETCH_DEBUG')
     try:
-        resp = cffi_requests.post(BRIGHTDATA_ENDPOINT, headers=headers, json=payload, timeout=timeout)
+        # http_version forced to 1.1 for the Bright Data API hop only: on
+        # 2026-09-12 their relay began emitting a `proxy-connection: close`
+        # response header, which is illegal under HTTP/2 and makes curl_cffi
+        # hard-fail every call with curl error 92 before our retry logic runs.
+        # HTTP/1.1 tolerates the header. TLS impersonation toward Domain is
+        # Bright Data's job, not this hop's, so nothing is lost.
+        resp = cffi_requests.post(BRIGHTDATA_ENDPOINT, headers=headers, json=payload,
+                                  timeout=timeout, http_version=CurlHttpVersion.V1_1)
         if resp.status_code != 200:
             if debug:
                 print(f"      [domain_fetch] brightdata API returned HTTP {resp.status_code}: {resp.text[:300]}")
