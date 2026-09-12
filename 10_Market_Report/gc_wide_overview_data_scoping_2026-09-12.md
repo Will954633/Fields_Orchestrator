@@ -182,3 +182,25 @@ All new fetchers get Rule 7/7b heartbeats (`job_run` + zero-output assertions) f
 ---
 
 *Compiled from four parallel research agents (page/code inventory, DB inventory, SQM verification, Cotality/PropTrack/Domain verification, ABS/QLD-gov, banks/auctions) — all external claims verified by fetching actual pages/PDFs/JSON on 2026-09-12 unless marked unverified.*
+
+---
+
+## Addendum (2026-09-12, on Will's request): "Which Signals Actually Lead Prices?" at GC level
+
+The suburb-page signals board is the **IndicatorsExplorer** (shared engine, mounted by the `/news` split prototype via `MarketFlowProto`). It reads one static file — `public/data/leading_indicators.json` — carrying 82 quarters (2006→2026), price-momentum series (pooled + 3 suburbs), and 10 indicators each with full series + measured lag + r. **The matched-movement circles already exist in the engine**: in Actual-timing mode with one indicator, it circles the indicator's turning points, links each to the price-momentum turn ~lead later ("prices follow ~N mo later"), and draws the "if lead holds" projection — all computed client-side. A GC version therefore needs only a new JSON: GC-wide momentum series + recomputed lag/r. No chart code.
+
+**First-pass GC-wide recomputation (done today):** composite built from `rolling_12m_median_series` across the 50 suburbs with ≥90% coverage 2017-Q3→2026-Q2, fixed transaction-count weights; momentum = YoY of the composite (31 pts, 2018-Q3→2026-Q1; latest +0.5% vs +9.5% a year earlier). Cross-correlated against the indicator series already in the JSON:
+
+| Indicator | Old (3-suburb pooled, 2008–26) | GC-wide r at same lag | Notes |
+|---|---|---|---|
+| **New housing lending (QLD)** | **+4q, r 0.76** | **r 0.77 (n=31)** | **Survives cleanly — same 4-quarter lead. This is the headline number.** |
+| Rate of sale | +2q, 0.73 | 0.75 | holds |
+| Inflation (QLD CPI) | −3q lag, 0.72 | 0.86 | still a lagger |
+| Unemployment change | −1q, −0.67 | −0.73 @ 0q | holds |
+| Consumer spending | +7q, 0.56 | 0.64 | holds |
+| Job vacancies | +2q, 0.39 | 0.62 | stronger on short window |
+| ASX / cash rate / cash-rate change / clearance | various | unstable | short-window artifacts (e.g. clearance "r −0.91 @ +7q" on n=18 is spurious); pooled series shows the same drift on the identical window |
+
+**Methodology decisions for production:** (1) keep the lag *structure* from the deep 2008–2026 pooled analysis and recompute r at those fixed lags on the GC series — don't re-pick best lags on a 31-point window; (2) weighting: the volume-weighted composite is dominated by the northern growth corridor (pimpama, upper_coomera, coomera, ormeau are the top weights) — decide whether that's the intended "Gold Coast" or whether to cap/stratify weights; (3) the wide-suburb rolling series start 2017-Q2 — a deep (2006→) GC series needs the union precompute extended, or the page ships with the 2018→ window honestly captioned.
+
+**Build steps:** extend `precompute_union_prices.py`/aggregate for the GC momentum series → generator script writes `public/data/leading_indicators_gc.json` (same schema, `price.pooled` = GC-wide) → mount IndicatorsExplorer on the GC page. Copy updates: caption r values, and the prototype's existing "tested against Gold Coast house-price momentum" line finally becomes literally true.
