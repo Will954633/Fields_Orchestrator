@@ -1572,3 +1572,303 @@ Experiments: first read of `onsite_exp_offmarket_2` — `no_contact` 7.3% (10/13
 across two surfaces; nothing scaled — read 1 of 2 on the deck, and z≈1.9 on the property page.
 Proposed REC-onsite-006 (schedule + heartbeat the index rebuild; crontab is prohibited to domains).
 Doc: `cycles/2026-W36/2026-09-06/onsite_cycle_20260906_1100.md`
+
+## 2026-09-06 — valuation cycle 20260906_1200 (briefing tier: expired → read-only)
+
+Coverage by engine: houses **64.3%** (72/112, up from 53.3% last week — largest single-week
+move recorded, likely composition since `above_design_ceiling` fell 35→25), attached **37.3%**
+(41/110). 61 of 106 unvalued are envelope suppressions, i.e. correct refusals. Integrity
+contradictions: none. Band data clean — 116/116 live valued listings on `empirical_80_band`,
+0 stale (was 1).
+
+Went deep on the sensor's `house_engine_figure_written: 44`, frozen for three weeks against a
+moving denominator. **Rule 8 caught me, not the sensor:** my own count said 20 because I
+enumerated attached ptypes as separate tokens while production stores `unit/apartment` and
+`duplex/semi-detached`. Sensor's open-ended complement was right; leave it alone.
+
+Two real findings in `PropertyPage.tsx`, both raised as REC-valuation-005 (fix, S, reversible):
+(1) lines 1400/1416 hardcode the literal label **"Confidence Range"** — the banned phrase — on up
+to 51 live listings; the 2026-08-30 fix could not catch it because it scans generated `ai_analysis`
+prose and a static JSX label is invisible to it. (2) `/property` applies no dwelling-class gate, so
+16 attached dwellings render a house-engine figure inside a house-only band (a Burleigh Waters
+villa at ±14.0%, the BW *house* figure). The off-market surface already does this correctly.
+
+Withdrew REC-valuation-004 — substantively fixed by the 2026-08-30 entries. Ledger 1/2 open.
+Record: `16_Valuation/experiments/2026-09-06-confidence-range-label-and-dwelling-class-gate.md`.
+
+## 2026-09-06 — Samantha weekly brief 2026-W36 (cycle 5)
+
+**Will answered 0 of 5.** Verified through both channels per the cycle contract, not the chat
+alone: all five approval tokens from 08-30 still read `awaiting`, no `will_verdict` landed on any
+ledger row, and `ceo_chat_messages` holds no unactioned user message since 08-27. So the buttons
+worked (that was last cycle's fix) and the questions still went unanswered — the channel is not
+the cause. Context that is not rejection: ~40 fix-history entries landed 08-30→09-06, almost all
+Will's own CRM/lead work (Resend migration, SMS channel, CRM timeline, Priority tab, mailer batch).
+No verdicts to record, and **no briefing updates written** — there was no reply to write in, and
+inventing §4 direction would be authorising work in his name.
+
+**7 of 7 domains ran** (third consecutive full sweep). 12 items open, 5 briefed, 7 held.
+
+**Two merges, both across domains:** REC-articles-006 + REC-valuation-005 → one decision (both are
+`/property` publishing a valuation claim its own engine contradicts); REC-ops-005 + REC-onsite-006
+→ one decision (both are "this needs a crontab line only Will may add"). Six IDs marked briefed for
+four questions.
+
+**Independently re-verified before spending a decision** — every load-bearing number, not the
+domains' word for it: live API for 14 Manakin Ave (module $1,642,348 vs editorial $1,945,573, on a
+home asking $1,950,000 — a three-way contradiction); `grep` for the hardcoded "Confidence Range" at
+PropertyPage.tsx:1400/1416; `om_needs_manual_link` = 4 and all three promised links 200 OK;
+`owns_gc_home` 0 of 52; all nine unscheduled jobs still 0 across crontab/cron.d/timers, plus
+`build-address-index` 0; and a direct OAuth refresh probe returning `invalid_grant`.
+
+**One self-correction, and it was mine.** Last week's Health section reported step 105 as processing
+zero properties nightly while exiting 0, pointed at Azure blob DNS, and assigned it to ops. The run
+log reads `Already processed: 393 / Unprocessed: 0`, errors=0 — a genuinely empty queue, which is
+Rule 7b's legitimate success path, not a silent failure. The blob DNS failure is separately real and
+unexplained but is not the cause. I also assigned that work in a document ops has no obligation to
+read, and ops did not pick it up; that is a process failure of mine, not ops's.
+
+**The week's structural finding.** Six of seven briefs are 24 days expired, and this cycle was the
+clean experiment: the six expired domains shipped **zero** changes between them — each having
+diagnosed a live defect to the file and line — while the one domain with a current brief (onsite)
+shipped the largest fix of the week (address index built once in March, 1,843 core addresses
+missing, silent zero-result UI). Last week I asked for a 30–40 minute briefing session and got
+silence; that was too expensive an ask, so item 5 replaces it with a single yes/no on standing
+authorisation.
+
+Briefed: REC-ads-006 [#70C2] · REC-ads-008 [#FC74] · REC-articles-006 + REC-valuation-005 [#92FE] ·
+REC-ops-005 + REC-onsite-006 [#78D1] · plus the standing-authorisation question (no ledger id — it
+is a briefing decision, so it carries no button and says so).
+Held: REC-geo-004 (licence wording — first in the queue next week), REC-seo-006/REC-geo-005,
+REC-articles-007, REC-seo-007, REC-ops-007, and geo's `/property` brand-name defect (no decision
+needed — a rename with no owner permitted to type it, which is evidence for item 5).
+Graded by domains this week: REC-ads-005, REC-articles-005, REC-ops-004 — all `worked`. Track
+record 3 of 4 shipped items moved their claimed metric.
+
+One Telegram sent, 4,056 chars, four-row inline keyboard.
+Doc: `cycles/2026-W36/2026-09-06/weekly_brief_20260906_1600.md`
+
+## 2026-09-13 — ops weekly cycle (RECOMMEND-ONLY, briefing expired 31d)
+
+Board: 39 actionable, ERROR=15 STALE=23. **Fixed nothing — zero Tier 1 actions, by rule:**
+`briefing_status.py` puts ops at `expired`, which is sensors-and-analysis only. Read-only cycle.
+
+Three findings, all measured rather than inferred:
+
+1. **The 5-row Google OAuth cluster is only 1 real problem.** Probes ran 09-11 22:20; `.env` was
+   re-authed 09-12 08:36, so the board shows a pre-fix snapshot. Live-tested all three tokens:
+   Ads **alive**, Indexing **alive**, Gmail **still dead**. Root cause is the 51-day-old open item —
+   `fields-estate-ads` consent screen in Testing = 7-day refresh expiry. New this week: every real
+   consumer has now left that path (indexing→SA, GSC→SA, all 13 senders→Resend on 09-04), so
+   `cred_liveness_gmail` and `fpf_preflight_gmail` are probes on a **decommissioned transport** and
+   can never go green. `fpf_preflight_gmail` already produced a proven false alarm — wrote
+   `dead: invalid_grant` on 09-10 while `fpf_friday_batch` delivered 13 shortlists the same night.
+   Also caught: `GOOGLE_INDEXING_REFRESH_TOKEN` is byte-identical to the Ads token again (3rd
+   recurrence of `[INDEXING-SILENT-ZERO]`), so that row measures the wrong credential. Changed
+   nothing — monitoring code is forbidden in every tier.
+2. **REC-ops-005 grew 9 → 15 confirmed-unscheduled jobs** in the 22 days it has sat open. Also
+   corrected my own method mid-cycle: first pass tested job names against cron and returned a false
+   19/19: cron references *script filenames*. Re-ran properly; 2 of the 23 STALE rows are in fact
+   scheduled, 2 remain unresolved and are reported as unresolved, not as absent (Rule 8).
+3. **REC-ops-007 is N=3, not N=1.** Cycle docs exist for 08-23, 08-30 and 09-06 while
+   `job_runs.rl_weekly_ops` is frozen at 08-15 — three successful cycles invisible on the board.
+
+4. **The `Terminal states` ERROR row describes a bug fixed 39 days ago.** Its text — *"sold- and
+   under-contract-detection both query for_sale only"* — is a verbatim description of the pre-fix
+   state that `[UC-TRAP-FIX]` (2026-08-05) corrected; `search_based_sold_monitor.py` queries
+   `{"$in": ["for_sale", "under_contract"]}` at lines 366/548 today. The absorption claim is right
+   in conclusion but inverted in mechanism: under_contract is in no published numerator, but a stuck
+   listing never reaches the `sold` count, suppressing the denominator — `[UC-TRAP-FIX]` measured
+   resolving just 9 moving robina 15.1%→11.4%, varsity_lakes 25.3%→22.9%, burleigh_waters
+   15.2%→12.5%. Age distribution of all 653 (`under_contract_detected_at`, 653/653 parseable) shows
+   a hard gap — **37 at 0–30d, ZERO at 31–90d, 616 at 91–181d** — the signature of a working
+   pipeline plus a stranded pre-fix block that cannot self-heal (Domain's sold scan covers only
+   `SOLD_PAGES_TO_CHECK = 3`). The 48-vs-653 gap is widened coverage from `[GC-WIDE-SOLD-BACKFILL]`
+   (09-12), **not** growth — worth stating so it is not misread as an emergency. Row text comes from
+   `main_site_health_check.py`; cannot correct it. Tier 3. The live decision is the one
+   `[UC-TRAP-FIX]` already escalated to Will.
+
+Also noted: the board's longest-standing red, **`Schedule membership` at 38.9d**, is cosmetic —
+step 6 is the RETIRED CatBoost valuation model, still in `execution_order` but in no schedule set.
+
+Graded **REC-ops-002 → `worked`**: 10 consecutive post-fix GSC runs, all non-zero (127–286 rows),
+zero `invalid_scope` recurrences in 26 days. The Ads leg threw `invalid_grant` 3× in the same
+window while GSC kept collecting — proof the SA migration was structural, not a lucky re-auth.
+
+**Proposed nothing** — at cap 2/2 and both open items outrank the new finding, so nothing was
+superseded. Did not re-raise the consent-screen publish for a fourth time.
+
+Doc: `cycles/2026-W37/2026-09-13/ops_cycle_20260913_0600.md`
+
+## 2026-09-13 07:00 — seo cycle (briefing tier: EXPIRED, 31d — recommend-only)
+
+Graded both recommendations that shipped 2026-08-15; neither appeared in `due-for-grading`
+despite being due 09-12 (flagged as a process defect).
+
+- **REC-seo-001 `no_effect`** — property `<title>` hybrid. `/property/` CTR 1.61% → 1.43%
+  (28d pre/post, GSC `dims='page'`); target was 1.57% → ~2.5%. Constant panel n=62:
+  HOOK −1.15pp vs GENERIC +0.09pp, net DiD −1.23pp — not called `backfired`, confounded by
+  regression-to-mean (hook group started at 2.73%) and a larger position loss (+1.4 vs +0.6).
+  Partial win: 7 of 16 page-1 zero-click hook pages now earn clicks.
+- **REC-seo-002 `worked`** — `/building/` coverage-in-progress noindex eliminated, 6/20 → 0/20;
+  total noindex share 11/20 → 5/20. Traffic claim not met (−9.3% impr vs site −8%).
+  Residual documented not raised: 46 URLs / 1,408 impr 301'd into a noindex `/property/` page —
+  mechanism confirmed in code + live curl, **harm not demonstrated** (affected buckets fell
+  *less* than the indexed control; my first test selected on the outcome and was discarded).
+
+**Finding — 3 live SERP titles breach Rule 5.** Audited all 110 published pages against the live
+API: 75 hooks evaluated, 8 flagged, **3 confirmed**. Worst is 3 Corina Cl "Estimate $1,840,000"
+against a served band of $1,177,098–$1,504,218 ($335,782 above its own band) — and it is one of
+only six converting organic pages. This corrects the "Rule 5 scan: 0 flags" assurance I gave Will
+when he approved REC-seo-001. Rejected 5 of 8 as comparables/past sales, applying the articles
+domain's 2026-09-02 warning.
+
+- Withdrew **REC-seo-006** (`/about`, already-correct live pages) to free a cap slot.
+- Raised **REC-seo-008** — Rule 5 guard in `src/lib/propertyTitle.ts`; blast radius simulated,
+  8 of 75 hooks fall back to the generic title, 67 keep their hook. Real ask is the briefing
+  refresh: §4 already grants titles/meta, the `expired` tier is what blocked shipping it.
+- Two directives to **articles**: generator-side fix (emit a range; revalidate against the served
+  band; API flattens valuation fields to top level) and an A/B contamination check — **zero
+  overlap** with their 14 pre-registered addresses.
+- Wrote `DRAFT_brand_serp_seller_entry_copy.md` against the conductor's standing brand-SERP
+  directive. Brand SERP entity names now **1, down from 3**; `thin_same_as` and
+  `buyer_skewed_copy` remain.
+- 10 actions logged to `system_monitor.rl_seo_actions`.
+
+## 2026-09-13 08:00 — geo cycle (tier: expired, RECOMMEND-ONLY)
+
+Sensors: AI chat 13 users / 0 conv. Ledger 1,238 users / 19 conv / base 0.015; 22 organic
+conv at ~$0 vs 2 paid at $1,333.14/conv (GC). Bing InIndex 2,090 -> 4,883 since 09-01
+(+134%) with impressions FLAT at ~60/day — indexation is no longer the binding constraint.
+
+MAIN FINDING (new mechanism). Two AI-surface probes retrieved 9 Fields URLs, 0 of them
+/about, and both described Fields as a data/analytics company — brief s1 req 2 still unmet
+17 days after REC-geo-003 shipped. Sitemap explains it: 16,713 /off-market (90.7%) +
+1,555 /property (8.4%) vs 3 identity URLs (0.016%). The identity fix landed on pages the
+engines do not retrieve. This PARTLY REFUTES last cycle's stale-cache theory: probe 2's
+seven /off-market URLs are freshly crawled (current brand name) and still produced the
+wrong description, so cache clearing alone will not fix requirement 2.
+
+DISPATCHED: /property retired-brand-name defect (1,555 URLs, 24/24 sampled, root cause
+propertyTitle.ts:28 + property.$id.tsx:510) handed to seo as a conductor directive
+--from geo. Named-but-undispatched last cycle; Rule 9.
+
+Proposed nothing (at cap + expired). Graded nothing (REC-geo-002/003 due 09-19; flagged in
+advance that REC-geo-003's honest verdict is likely no_effect for retrieval-composition
+reasons). Doc: cycles/2026-W37/2026-09-13/geo_cycle_20260913_0800.md
+
+## 2026-09-13 09:00 — ADS cycle (20260913_0900) — brief EXPIRED (31d), RECOMMEND-ONLY
+
+Sensors: ads_signal 14d $816.29 / 18 conv / GC $45.35. Ledger 1,238 users / 19 conv;
+submitted_address lift 51.79, searched_address 45.16; paid conv 2 at $1,333.14 (GC).
+
+THE RELAUNCH HAPPENED. Three Walkthrough Reel campaigns live 09-11 ($15/day each,
+click-to-site /news/<suburb>?play=1, geo-targeted to each suburb's own residents);
+everything else paused. Read at AD-SET level because florabella + I-Have-A-Buyer were
+moved INTO the Subscriber campaign — campaign-level CPL now blends three offers. (Checked
+a suspected fb_leads misattribution bug against the Meta API on all 3 suspect ad_ids —
+NO BUG, the ads really were moved.)
+
+MAIN FINDING, two halves. The creative WORKS: $0.50-$1.59 per landing-page visit at
+4.5-7.0% CTR vs $1.31 and 1.8-3.3% for the Owner Market carousel it replaced — half the
+cost, double the click rate, best traffic buy this account has made. But nobody can raise
+their hand: PostHog HogQL on the paid cohort (utm_campaign=walkthrough_reel*) gives 133
+arrive -> 102 walkthrough_start -> 14 pass 25% -> 8 cta_shown -> 0 chat_open. Median dwell
+14.7s. walk.ctaFrom is the LAST film start (engine.ts:2617), so the Chat pill is gated
+behind ~9:40 of an 11:00 video. Ruled out the technical causes first: 20-23MB faststart
+mp4 (moov at 0x22), accept-ranges, TTFB 0.435s on an iOS FB-webview UA; muted-autoplay
+fallback shipped and working; all 102 starts carry autostart=true. It is the CTA's
+position, not the delivery.
+
+CORRECTED MYSELF. REC-ads-008 claimed owns_gc_home had never appeared on a lead, from
+$regex against a DICT field — a Rule 8 false absence. Truth: {'fields.owns_gc_home':
+{'$exists':True}} = 13 leads, 7 answered YES, ran 07-16 -> 07-29, then DELETED when the
+florabella form was rebuilt 08-28. The ask is restore, not add — and it has a prior.
+
+Cost per identified SELLER: $711.38 / 0. Third consecutive fortnight undefined. Owner
+Market carousel post-mortem: $216.89, 165 LPV, 0 leads in 14 days (now paused).
+
+Proposed REC-ads-009 superseding REC-ads-008 (cap holds 2/2): move the chat pill to 60s,
+restore owns_gc_home, retarget the ~125 who bounced with the address submit as the offer.
+Deliberately NOT shipped: the 60s constant — one line, reversible, defeats no stated
+intent, but the brief is 31d expired. Second consecutive cycle where the expired brief is
+the only thing between a measured defect and its fix. Closed the obsolete 2026-07-30
+conductor directive (Will's relaunch overtook its plan); DEAD DNA list preserved in the
+doc and in rl_ads_actions. Graded nothing (due-for-grading empty).
+Doc: cycles/2026-W37/2026-09-13/ads_cycle_20260913_0900.md
+
+## 2026-09-13 10:00 — ARTICLES cycle (tier: expired, 31d)
+
+CORRECTED MY OWN STANDING NARRATIVE. "100 articles, 0 conversions" — led with for three
+cycles, and written into brief §6 as settled fact — is NOT evidence. At the site organic
+base rate (14/989 = 1.42%), 46 article sessions predict 0.65 conversions; observing 0 has
+p=0.52. A zero needs ~212 sessions to mean anything. This also kills REC-007 on its own
+terms: the CTA A/B I asked Will to approve would have carried ~9 sessions in the treatment
+arm. He sat on an unreadable test for a week. Superseded by REC-009.
+
+THE REAL PROBLEM IS TRAFFIC, AND AGE DOES NOT EXCUSE IT. 90d+ cohort (n=53) median 2
+impressions, 15 with zero; 31-60d (n=19) averages 26.3. Articles here never accumulate.
+Per-format yield, n=101 on page_type: major-projects n=5 -> 2.20 sess/art; how-it-sold
+n=42 -> 0.12 sess/art. 18x. Mechanism: how-it-sold attaches to exact-address queries and
+DOES rank page-1 — brief §1's "rank #1" goal is met and worth ~nothing, because nobody
+searches an address. 42% of the library proves it. major-projects is DIRECTIONAL only
+(n=5, one article = 57% of its impressions). Live now: brief §7 asks whether to publish 15
+MORE how-it-sold drafts, which would take the weakest format to half the library.
+
+SIX LIVE SERP TITLES ARE UNTRUE. meta_title has been the live <title> since 2026-08-15.
+20 of 110 published titles claim "No Guide"; 6 are now false — the listing has since been
+priced. Googlebot-verified: /property/690bd8138b8f546592616459 returns "<title>9 Auriga
+Court — No Guide, But 8 Sales Say ~$1,900,000</title>" on a listing priced $1,949,000
+while our page serves $1,605,112. Third surface of REC-006's root cause. Reclassified 2 of
+seo's 3 examples (9 Auriga is factual falsity, not Rule 5 form; 3 Corina unattributable —
+no domain_valuation_at_listing field) and handed them a threshold-free detector.
+
+MY FEEDBACK LOOP HAS BEEN DEAD 15 DAYS. article_performance.py last wrote 2026-08-29; no
+job_runs heartbeat at all (collector healthy, 108 rows/3d). Cause: crontab line 343 uses
+relative `source .env` with NO preceding cd; cron cwd is /home/fields and /home/fields/.env
+does not exist, so the && chain short-circuits. Only 1 of 17 such lines missing its cd.
+Routed to 'all' — crontab and monitoring are never autonomous. Every per-format figure
+above is therefore an 08-29 snapshot (~25% under live GSC); I rely on ratios.
+
+EVIDENCE AGAINST MYSELF, sent to seo unprompted: ai_analysis.generated_at is NOT updated on
+regeneration (6 Moorhen Pl stamped 07-21 cites "Since 1 Aug"), so the written-then-drifted
+ordering I gave them for 5 of 6 titles is indicated, not proven. The 6-false count stands —
+it is a fact about today. Three Rule 8 errors, all self-caught: API-flattened
+valuation_range_low/high vs real valuation_data.confidence.range.low/high (73 of 110
+populated — I nearly reported "no page serves a band"); performance.search.impressions not
+.gsc_impressions; page_type not category/topic.
+
+Shipped nothing (expired tier). Superseded both slots rather than adding: REC-008 (frozen
+copy on 3 surfaces, 6 untrue SERP titles) and REC-009 (hold the 15 drafts, redirect topic
+mix; CTA as correctness fix not experiment). Closed both directives addressed to me. Graded
+nothing (none due; REC-002/003 due 09-20). Second consecutive cycle where the 31-day-expired
+brief is the only thing between a measured defect — this time a live falsehood in Google —
+and its fix.
+Doc: cycles/2026-W37/2026-09-13/articles_cycle_20260913_1000.md
+
+## 2026-09-13 11:00 — ONSITE cycle (briefing tier: stale / NARROWED)
+- **Friction sensor said "0 incidents" while carrying two live defects in its CLIENT_ERROR line.**
+  Both fixed, one batched commit `08fc6bd5`, one Netlify build, deploy `ready`.
+  - `[OFFMARKET-DECK-HYDRATION-418]` **2nd occurrence of our own July fix.** React #418 on the
+    off-market deck stepped from 0–1.4 to **12.4–16.3 per 100 pageviews** (pageviews flat) the week
+    of 08-23 and stayed there. Cause: `WhatsChangedSection` computes `new Date()` during render on
+    an SSR'd, CDN-cached page; it never adopted the loader-captured `asOfMs` that fixed this exact
+    bug for `computeGainVerdict` on 2026-07-24. Ruled out my own `PersonalizationSlot` mount first
+    (it renders `null` on SSR and first paint — cannot mismatch) despite a strong date coincidence.
+  - `[WALK-NULL-STYLE-AFTER-TEARDOWN]` — 9 null-deref `.style` errors on `/news` in the week the
+    v2 split layout shipped, 0 before. Walkthrough engine dereferences `#wkAvatar`/`#wkCap` from a
+    780ms deferred callback after `endWalk()` removed `#walkLayer`. Guarded 6 sites.
+- **Built `scripts/address_search_regression.py`** (`0c46aa55`) — the harness owed from 2026-09-06.
+  Samples the suburb collections (never the index), types addresses as an owner would, asserts
+  found ≥97% / first ≥80% with Rule 7b on every zero-output path. **240/240 found, 239/240 first,
+  p95 1.69s.** Two self-inflicted bugs found and recorded first: guessed `UNIT_NO` (real field is
+  `UNIT_NUMBER`), and a comparator that scored 0/24 against a healthy site by not stripping
+  punctuation. Not scheduled — crontab is off-limits; `stale_hours` suppressed until `--scheduled`.
+- **`no_contact` replicated across two surfaces** — pooled 39/553 vs 22/563 = 1.80×, **z=2.31**;
+  the replication was pre-registered in last cycle's doc. Not scaled (NARROWED tier) →
+  **REC-onsite-007**. Ledger now 2/2, at cap.
+- **Checked and was wrong:** suspected the hot-individual list was contaminated by Will's own
+  testing (`onsite_signal.py` lacks the `is_internal` filter its sibling has). None of the top 8
+  carry the flag. Latent gap documented, not fixed — `organic_journeys` has no such field at all.
+- **Not done, named so it is not lost:** the friction sensor's CLIENT_ERROR channel needs a
+  per-surface error-rate threshold. Bounded, does not need Will, first thing under a fresh brief.
