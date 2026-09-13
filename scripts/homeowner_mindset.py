@@ -2,6 +2,13 @@
 """
 homeowner_mindset.py — shared access to the Gold Coast homeowner mindset report.
 
+⚠️ SUPERSEDED 2026-09-13 by the Market Context Engine (`14_Articles/Market_Research/`). This
+module + `refresh_homeowner_mindset.py` are the FIRST (2026-07-30/08-02), un-scheduled,
+quarterly version. Audience psychology is now MCE Stage 3, refreshed fortnightly. See the
+full banner in `refresh_homeowner_mindset.py`. Read from
+`14_Articles/Market_Research/briefs/current/` or `system_monitor.market_research_briefs`;
+kept here only for history + the `fields_data_pack` helper.
+
 WHAT THIS IS FOR
 The monthly Market Pulse prose must be written for the psychological state of an actual
 homeowner in the target market — what they are seeing, worrying about, and being influenced by —
