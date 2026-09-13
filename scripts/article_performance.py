@@ -362,7 +362,24 @@ def main():
     ap.add_argument("--top", type=int, default=12)
     a = ap.parse_args()
 
-    rows, written = build(a.dry_run, a.slug, verbose=bool(a.slug))
+    if a.dry_run or a.slug:
+        # Manual/targeted runs: no production heartbeat.
+        rows, written = build(a.dry_run, a.slug, verbose=bool(a.slug))
+    else:
+        # Rule 7/7b: the nightly full run heartbeats its OUTCOME and asserts it actually did
+        # work. Finding 0 articles is upstream breakage (the corpus has ~100 published), not
+        # an empty queue — so raise on it rather than record a hollow success. This job died
+        # silently 2026-08-29 → 2026-09-13 (cron missing its `cd`) with NO heartbeat to catch
+        # it; see fix-history [ARTICLE-PERF-CRON-CD-AND-HEARTBEAT].
+        from job_status import job_run  # noqa: E402
+        with job_run("article_performance", cadence_hours=24,
+                     title="Article performance (GSC/PostHog/FB → content_articles.performance)") as beat:
+            rows, written = build(False, None, verbose=False)
+            if not rows:
+                raise RuntimeError("processed 0 articles — the GSC/PostHog/DB join is broken, "
+                                   "not an empty corpus")
+            beat.metrics = {"articles": len(rows), "written": written}
+            beat.detail = f"{len(rows)} articles rolled up, {written} performance blocks written"
 
     grades = defaultdict(int)
     for _, b, _, _ in rows:
