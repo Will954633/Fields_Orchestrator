@@ -209,12 +209,19 @@ def fetch_timeline(url: str, retries: int = 3) -> list[dict] | None:
 
 
 def refresh_suburb(gc_db, suburb, limit=None, dry_run=False, stale_only=False, sold_since_days=None,
-                    houses_only=False, skip_refreshed=False):
+                    houses_only=False, skip_refreshed=False, on_market=False, workers=1):
     """Refresh property timelines for all properties in a suburb."""
     coll = gc_db[suburb]
 
     # Build query — all properties that have an address
     query = {"address": {"$exists": True, "$ne": None}}
+
+    if on_market and sold_since_days is None:
+        # GC-wide refresh scope: only properties that have actually been on-market
+        # (for-sale / sold / withdrawn), NOT the ~40K cadastral stubs per suburb.
+        # This is the set whose recent outcome — including "Listed - not sold" —
+        # we need current for the fail-to-sell analysis.
+        query["listing_status"] = {"$in": ["for_sale", "sold", "withdrawn"]}
 
     if sold_since_days is not None:
         # Target only recently-sold properties — much smaller set than the full
@@ -262,57 +269,54 @@ def refresh_suburb(gc_db, suburb, limit=None, dry_run=False, stale_only=False, s
     docs = list(coll.find(query, {"address": 1, "url_slug": 1, "_id": 1}).limit(limit or 0))
     print(f"    Fetched {len(docs)} candidate docs into memory (cursor closed)")
 
-    for i, doc in enumerate(docs):
-        address = doc.get("address", "")
-        url = build_profile_url(address)
-
-        if not url:
-            skipped += 1
-            continue
-
-        if i > 0 and i % 20 == 0:
-            print(f"    Progress: {i}/{total} ({updated} updated, {failed} failed)")
-
-        # Fetch from Domain
-        timeline = fetch_timeline(url)
-        time.sleep(RATE_LIMIT_DELAY)
-
-        if timeline is None:
-            failed += 1
-            continue
-
-        if dry_run:
-            sold_count = len([t for t in timeline if t.get("is_sold")])
-            print(f"    [DRY] {address[:50]}: {len(timeline)} events ({sold_count} sales)")
-            updated += 1
-            continue
-
-        # Write to MongoDB
-        try:
-            coll.update_one(
-                {"_id": doc["_id"]},
-                {"$set": {
+    def _write(doc, timeline):
+        for attempt in range(2):
+            try:
+                coll.update_one({"_id": doc["_id"]}, {"$set": {
                     "scraped_data.property_timeline": timeline,
-                    "timeline_updated_at": datetime.now(),
-                }},
-            )
-            updated += 1
-        except Exception as e:
-            if "16500" in str(e):
-                time.sleep(COSMOS_RETRY_DELAY)
-                try:
-                    coll.update_one(
-                        {"_id": doc["_id"]},
-                        {"$set": {
-                            "scraped_data.property_timeline": timeline,
-                            "timeline_updated_at": datetime.now(),
-                        }},
-                    )
-                    updated += 1
-                except Exception:
-                    failed += 1
-            else:
-                failed += 1
+                    "timeline_updated_at": datetime.now()}})
+                return True
+            except Exception as e:
+                if "16500" in str(e) and attempt == 0:
+                    time.sleep(COSMOS_RETRY_DELAY)
+                else:
+                    return False
+        return False
+
+    def _process(doc):
+        """Fetch + write one property. Returns 'updated' | 'skipped' | 'failed'."""
+        url = build_profile_url(doc.get("address", ""))
+        if not url:
+            return "skipped"
+        timeline = fetch_timeline(url)
+        if timeline is None:
+            return "failed"
+        if dry_run:
+            return "updated"
+        return "updated" if _write(doc, timeline) else "failed"
+
+    if workers > 1 and not dry_run:
+        # Bright Data is a proxy pool (many exit IPs), so concurrent fetches don't
+        # trip Domain's per-IP rate limit the way sequential 2s spacing did. pymongo
+        # clients are thread-safe. Each worker still self-paces inside fetch_timeline.
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        done = 0
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futs = {ex.submit(_process, d): d for d in docs}
+            for fut in as_completed(futs):
+                r = fut.result()
+                updated += r == "updated"; skipped += r == "skipped"; failed += r == "failed"
+                done += 1
+                if done % 50 == 0:
+                    print(f"    Progress: {done}/{len(docs)} ({updated} updated, {failed} failed)")
+    else:
+        for i, doc in enumerate(docs):
+            r = _process(doc)
+            updated += r == "updated"; skipped += r == "skipped"; failed += r == "failed"
+            if not dry_run:
+                time.sleep(RATE_LIMIT_DELAY)
+            if i > 0 and i % 20 == 0:
+                print(f"    Progress: {i}/{total} ({updated} updated, {failed} failed)")
 
     print(f"  ✅ {suburb}: {updated} updated, {skipped} skipped, {failed} failed")
     return updated
@@ -327,12 +331,20 @@ def main():
     parser.add_argument("--sold-since-days", type=int, help="Only refresh properties sold within N days (targeted catch-up)")
     parser.add_argument("--houses-only", action="store_true", help="Restrict to property_type=House (skip units/townhouses/duplexes)")
     parser.add_argument("--skip-refreshed", action="store_true", help="Skip anything with timeline_updated_at already set (don't re-fetch known-good ones)")
+    parser.add_argument("--all-gc", action="store_true", help="All 82 GC suburbs (onthehouse.suburbs.ALL_GC collections), not just the core 3")
+    parser.add_argument("--on-market", action="store_true", help="Restrict to for_sale/sold/withdrawn records (skip cadastral stubs) — the GC-wide fail-to-sell refresh scope")
+    parser.add_argument("--workers", type=int, default=1, help="Concurrent Bright Data fetches (proxy pool tolerates it); default 1 (sequential)")
     args = parser.parse_args()
 
     client = get_db()
     gc_db = client["Gold_Coast"]
 
-    suburbs = [args.suburb] if args.suburb else TARGET_SUBURBS
+    if args.all_gc:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from onthehouse.suburbs import ALL_GC
+        suburbs = [s["collection"] for s in ALL_GC]
+    else:
+        suburbs = [args.suburb] if args.suburb else TARGET_SUBURBS
 
     # Rule 7 heartbeat. This job has now been broken TWICE without anyone noticing — first a
     # missing `cd` in the crontab (fixed 2026-07-22), then CursorNotFound on every run (fixed
@@ -350,16 +362,24 @@ def main():
                 sold_since_days=args.sold_since_days,
                 houses_only=args.houses_only,
                 skip_refreshed=args.skip_refreshed,
+                on_market=args.on_market,
+                workers=args.workers,
             )
-            time.sleep(5)  # Pause between suburbs
+            time.sleep(2 if args.all_gc else 5)  # pause between suburbs
         return total
 
     if args.dry_run:
         total_updated = _run()
     else:
-        with job_run("refresh_property_timelines", cadence_hours=24 * 7,
-                     title="Domain property timelines refresh") as beat:
+        # GC-wide run gets its own heartbeat so its cadence/health is tracked apart
+        # from the nightly core-3 refresh.
+        job = "refresh_property_timelines_gc_wide" if args.all_gc else "refresh_property_timelines"
+        with job_run(job, cadence_hours=24 * 30 if args.all_gc else 24 * 7,
+                     title="Domain property timelines refresh" + (" (GC-wide on-market)" if args.all_gc else "")) as beat:
             total_updated = _run()
+            if args.all_gc and total_updated < 100:
+                raise RuntimeError(f"only {total_updated} timelines refreshed GC-wide — "
+                                   "Domain/Bright Data likely broken, not an empty market")
             beat.detail = f"{total_updated} timelines refreshed across {len(suburbs)} suburbs"
             beat.metrics = {"updated": total_updated, "suburbs": len(suburbs)}
 
