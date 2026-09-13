@@ -61,8 +61,11 @@ _MONTHS = {m: i + 1 for i, m in enumerate(
     ["January", "February", "March", "April", "May", "June", "July", "August",
      "September", "October", "November", "December"])}
 
-_UNIT_TYPES = {"Unit", "Apartment", "Townhouse", "DuplexSemi-detached",
-               "Semi-Detached", "Villa"}
+# Domain searchListings propertyType strings (differ from onthehouse's sold-index
+# labels — verified 2026-09-13). Attached/unit classes:
+_UNIT_TYPES = {"ApartmentUnitFlat", "Townhouse", "Duplex", "Villa", "SemiDetached",
+               "BlockOfUnits", "Studio", "Penthouse", "Terrace", "NewApartments"}
+_HOUSE_TYPES = {"House", "NewHouseLand", "NewHomeDesigns"}
 
 _QUERY = """query Sold($p: SearchListingsParametersInput!) {
   searchListings(searchParams: $p) {
@@ -99,11 +102,11 @@ def _price(pd: dict | None):
 
 
 def _dwelling(pt: str) -> str:
-    if pt == "House":
+    if pt in _HOUSE_TYPES:
         return "house"
     if pt in _UNIT_TYPES:
         return "unit"
-    return "other"
+    return "other"   # VacantLand, Rural, AcreageSemiRural, DevelopmentSite, …
 
 
 def crawl_suburb(sub: dict, since: str) -> tuple[list[dict] | None, dict]:
