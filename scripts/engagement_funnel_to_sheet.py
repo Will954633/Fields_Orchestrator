@@ -533,14 +533,17 @@ SECTIONS = [
         ("Off-market report opens", "intent_offmarket_open", ["channel", "campaign"]),
     ]),
 ]
-# The RETURN drill-down is special (journeys, not channel/campaign breakdowns).
+# The RETURN + CONVERSION drill-downs are special (journeys, not channel/campaign breakdowns).
 RETURN_TAB = "Attr · Return"
-HISTORY_DAYS = 240          # how far back to reconstruct a returner's content chain
+CONV_TAB = "Attr · Conversion"
+HISTORY_DAYS = 240          # how far back to reconstruct a visitor's content chain
 
 # metric key -> section tab title (for hyperlinking Engagements cells)
 METRIC_TO_TAB = {k: title for _sec, keys, title, _specs in SECTIONS for k in keys}
 METRIC_TO_TAB.update({k: RETURN_TAB for k in
                       ("reach_returning", "ret_2", "ret_3_4", "ret_5p")})
+METRIC_TO_TAB.update({k: CONV_TAB for k in
+                      ("intent_ayh_submit", "intent_offmarket_open", "conv_offmarket_unlock")})
 
 DIM_TITLE = {"channel": "by entry channel", "campaign": "by campaign / source",
              "content": "by content (a visit can read several — may exceed the total)",
@@ -699,13 +702,17 @@ def link_engagement_cells(svc, ssid, gids):
     base = f"https://docs.google.com/spreadsheets/d/{ssid}/edit"
     data = []
     for i, (kind, label, key) in enumerate(GRID):
-        if kind != "computed" and kind != "pct":
-            continue
         title = METRIC_TO_TAB.get(key)
+        # the manual selling-conversations row links to the conversion drill-down too
+        if kind == "manual" and "Selling conversations" in label and CONV_TAB in gids:
+            title = CONV_TAB
+        elif kind not in ("computed", "pct"):
+            continue
         if not title or title not in gids:
             continue
         url = f"{base}#gid={gids[title]}"
         safe = label.replace('"', "'")
+        # a manual row keeps its hand-typed week cells — we only rewrite col A here
         data.append({"range": f"'{TAB}'!{a1(i + 2, 1)}",
                      "values": [[f'=HYPERLINK("{url}","{safe}  ↗")']]})
     if data:
@@ -908,6 +915,200 @@ def write_return_tab(svc, ssid, agg, journeys, back_url):
             "startIndex": 0, "endIndex": 1}, "properties": {"pixelSize": 220}, "fields": "pixelSize"}},
         {"updateDimensionProperties": {"range": {"sheetId": sid, "dimension": "COLUMNS",
             "startIndex": 1, "endIndex": 2}, "properties": {"pixelSize": 190}, "fields": "pixelSize"}},
+        {"updateDimensionProperties": {"range": {"sheetId": sid, "dimension": "COLUMNS",
+            "startIndex": 4, "endIndex": 5}, "properties": {"pixelSize": 900}, "fields": "pixelSize"}},
+        {"repeatCell": {"range": {"sheetId": sid, "startColumnIndex": 4, "endColumnIndex": 5},
+            "cell": {"userEnteredFormat": {"wrapStrategy": "WRAP", "verticalAlignment": "TOP"}},
+            "fields": "userEnteredFormat.wrapStrategy,userEnteredFormat.verticalAlignment"}},
+    ]
+    for i, r in enumerate(rows):
+        head = r[0] if r else ""
+        if head.startswith("▸") or head == "Who":
+            shade = head.startswith("▸")
+            cell = {"textFormat": {"bold": True}}
+            if shade:
+                cell["backgroundColor"] = {"red": 0.90, "green": 0.93, "blue": 0.98}
+            reqs.append({"repeatCell": {
+                "range": {"sheetId": sid, "startRowIndex": i, "endRowIndex": i + 1},
+                "cell": {"userEnteredFormat": cell},
+                "fields": "userEnteredFormat.textFormat.bold" + (
+                    ",userEnteredFormat.backgroundColor" if shade else "")}})
+    svc.spreadsheets().batchUpdate(spreadsheetId=ssid, body={"requests": reqs}).execute()
+    return sid
+
+
+# ============================================================================
+#  CONVERSION JOURNEYS — the path to conversion, from first touch.
+#
+#  A "conversion" here is a DATA-BACKED seller-intent act we can see: an AYH
+#  address submission, an off-market unlock ($ paid), or an off-market report
+#  open. True selling conversations (phone calls) are logged MANUALLY on the
+#  Engagements tab — when a person is named, they can be folded in here the same
+#  way. These are intent proxies, not confirmed listings.
+# ============================================================================
+# type -> (display, priority) — the strongest conversion a person reached anchors them
+CONV_PRIORITY = {
+    "offmarket_unlock": ("$ off-market unlock", 4),
+    "analyse_home_address_submit": ("★ AYH submit", 3),
+    "offmarket_report_view": ("off-market report open", 1),
+}
+
+
+def build_conversion_journeys(sm):
+    ints_set = set(INTERNAL_IDS)
+    ints = ", ".join("'" + i.replace("'", "") + "'" for i in INTERNAL_IDS) or "''"
+    conv: dict[str, dict[str, datetime]] = defaultdict(dict)
+    rows = posthog_query(f"""
+SELECT distinct_id, event, min(timestamp) AS t0
+FROM events
+WHERE event IN ('analyse_home_address_submit', 'offmarket_report_view')
+  AND timestamp > now() - INTERVAL {HISTORY_DAYS} DAY
+  AND distinct_id NOT IN ({ints})
+  AND coalesce(properties.is_internal, '') != 'true'
+GROUP BY distinct_id, event
+""")
+    for r in rows:
+        ts = parse_ts(r[2])
+        if ts:
+            conv[r[0]][r[1]] = ts
+    for o in sm.offmarket_orders.find(
+            {"payment_status": {"$in": ["paid", "succeeded", "captured"]}},
+            {"posthog_distinct_id": 1, "created_at": 1}):
+        did = o.get("posthog_distinct_id")
+        ts = parse_ts(o.get("created_at"))
+        if did and ts:
+            conv[did]["offmarket_unlock"] = ts
+    conv = {d: v for d, v in conv.items() if d not in ints_set and v}
+    if not conv:
+        return {}, []
+
+    persons = list(conv)
+    by_person: dict[str, list[dict]] = defaultdict(list)
+    CHUNK = 120
+    for i in range(0, len(persons), CHUNK):
+        chunk = persons[i:i + CHUNK]
+        id_list = ", ".join("'" + d.replace("'", "") + "'" for d in chunk)
+        hist = posthog_query(f"""
+SELECT distinct_id, timestamp, event, properties.$pathname,
+       properties.$referring_domain, properties.utm_source, properties.suburb
+FROM events
+WHERE distinct_id IN ({id_list})
+  AND event IN ('$pageview','walkthrough_start','offmarket_report_view',
+                'analyse_home_address_submit','address_search')
+  AND timestamp > now() - INTERVAL {HISTORY_DAYS} DAY
+ORDER BY distinct_id, timestamp ASC
+LIMIT 50000
+""")
+        for r in hist:
+            ts = parse_ts(r[1])
+            if ts:
+                by_person[r[0]].append({"ts": ts, "event": r[2], "path": r[3],
+                                         "ref": r[4], "utm": r[5], "suburb": r[6]})
+
+    idmap = build_identity_map(sm, set(persons))
+    agg = {"first_channel": Counter(), "first_content": Counter(), "closing": Counter(),
+           "by_type": Counter(), "days": [], "touches": []}
+    journeys = []
+    for did, ctypes in conv.items():
+        atype = max(ctypes, key=lambda t: CONV_PRIORITY.get(t, ("", 0))[1])
+        conv_ts = ctypes[atype]
+        conv_label, prio = CONV_PRIORITY.get(atype, (atype, 0))
+        agg["by_type"][conv_label] += 1
+        evs = by_person.get(did) or []
+        visits, cur = [], None
+        for e in evs:
+            if cur is None or (e["ts"] - cur[-1]["ts"]) > timedelta(minutes=RETURN_VISIT_GAP_MIN):
+                cur = []
+                visits.append(cur)
+            cur.append(e)
+        pre_vlist, post_visits = [], 0
+        for v in visits:
+            if v[0]["ts"] <= conv_ts + timedelta(seconds=1):
+                touches = []
+                for e in v:
+                    if e["ts"] > conv_ts + timedelta(seconds=1):
+                        break
+                    t = chain_touch(e["event"], e["path"], e["suburb"])
+                    if t and (not touches or touches[-1] != t):
+                        touches.append(t)
+                pre_vlist.append({"start": v[0]["ts"], "end": v[-1]["ts"], "touches": touches,
+                                  "ch": channel_for(v[0]["ref"], v[0]["utm"])})
+            else:
+                post_visits += 1
+        if not pre_vlist:
+            continue
+        first_ch = pre_vlist[0]["ch"]
+        first_content = next((t for v in pre_vlist for t in v["touches"]), None)
+        closing = next((t for v in reversed(pre_vlist) for t in reversed(v["touches"])), None)
+        days = max((conv_ts - pre_vlist[0]["start"]).days, 0)
+        touches_before = sum(len(v["touches"]) for v in pre_vlist)
+        agg["first_channel"][first_ch] += 1
+        if first_content:
+            agg["first_content"][first_content] += 1
+        if closing:
+            agg["closing"][closing] += 1
+        agg["days"].append(days)
+        agg["touches"].append(touches_before)
+        journeys.append({
+            "who": idmap.get(did, f"Anon {did[:8]}"),
+            "conv": f"{conv_label} · {conv_ts.astimezone(AEST):%d %b}",
+            "conv_ts": conv_ts, "prio": prio,
+            "first": f"{first_ch} · {first_content or '—'}",
+            "days": days, "post": post_visits, "vlist": pre_vlist,
+        })
+    # deliberate conversions (unlock, AYH submit) first, then most recent — so the
+    # softer off-market opens don't bury the people who actively raised their hand.
+    journeys.sort(key=lambda j: (j["prio"], j["conv_ts"]), reverse=True)
+    return agg, journeys
+
+
+def write_conversion_tab(svc, ssid, agg, journeys, back_url):
+    sid = ensure_plain_tab(svc, ssid, CONV_TAB)
+    med = lambda xs: round(statistics.median(xs), 1) if xs else 0
+    rows = [
+        ["▸ CONVERSION — the path to conversion, from first touch"],
+        [f'=HYPERLINK("{back_url}","← back to Engagements")'],
+        ["A 'conversion' here = a data-backed seller-intent act we can see (AYH submit, off-market "
+         "unlock, off-market open). True selling conversations (calls) are logged manually on "
+         "Engagements — name the person and they can be added here. Intent proxies, not confirmed listings."],
+        [],
+        ["▸ CONVERSIONS BY TYPE (strongest per person; deliberate acts first)"],
+    ]
+    for v, n in agg.get("by_type", Counter()).most_common():
+        rows.append([f"   ↳ {v}", n])
+    rows += [
+        [],
+        ["▸ WHAT PRODUCES CONVERTERS (cohort aggregate)",
+         f"median {med(agg.get('days', []))} days & {med(agg.get('touches', []))} touches to convert"],
+        ["First touch — entry channel", "converters"],
+    ]
+    for v, n in agg.get("first_channel", Counter()).most_common(8):
+        rows.append([f"   ↳ {v}", n])
+    rows.append(["First touch — content (what starts them)", "converters"])
+    for v, n in agg.get("first_content", Counter()).most_common(10):
+        rows.append([f"   ↳ {v}", n])
+    rows.append(["Closing content (last thing seen before converting)", "converters"])
+    for v, n in agg.get("closing", Counter()).most_common(10):
+        rows.append([f"   ↳ {v}", n])
+    rows.append([])
+    rows.append([f"▸ CONVERTER JOURNEYS — most recent first"
+                 + (f" (top {MAX_JOURNEYS} of {len(journeys)})" if len(journeys) > MAX_JOURNEYS else "")])
+    rows.append(["Who", "Converted", "First touch", "Days", "Path: first touch → conversion"])
+    for j in journeys[:MAX_JOURNEYS]:
+        chain = chain_string(j["vlist"])
+        if j["post"]:
+            chain += f"   [+{j['post']} visit(s) after]"
+        rows.append([j["who"], j["conv"], j["first"], j["days"], chain])
+
+    svc.spreadsheets().values().clear(spreadsheetId=ssid, range=f"'{CONV_TAB}'", body={}).execute()
+    svc.spreadsheets().values().update(
+        spreadsheetId=ssid, range=f"'{CONV_TAB}'!A1", valueInputOption="USER_ENTERED",
+        body={"values": rows}).execute()
+    reqs = [
+        {"updateDimensionProperties": {"range": {"sheetId": sid, "dimension": "COLUMNS",
+            "startIndex": 0, "endIndex": 1}, "properties": {"pixelSize": 220}, "fields": "pixelSize"}},
+        {"updateDimensionProperties": {"range": {"sheetId": sid, "dimension": "COLUMNS",
+            "startIndex": 1, "endIndex": 3}, "properties": {"pixelSize": 170}, "fields": "pixelSize"}},
         {"updateDimensionProperties": {"range": {"sheetId": sid, "dimension": "COLUMNS",
             "startIndex": 4, "endIndex": 5}, "properties": {"pixelSize": 900}, "fields": "pixelSize"}},
         {"repeatCell": {"range": {"sheetId": sid, "startColumnIndex": 4, "endColumnIndex": 5},
@@ -1245,6 +1446,7 @@ def main():
 
             returners = [p for p, ws in person_weeks.items() if len(ws) >= 2]
             ret_agg, ret_journeys = build_return_journeys(sm, returners)
+            conv_agg, conv_journeys = build_conversion_journeys(sm)
 
             total_sessions = sum(metrics["_att_total"].values())
             beat.detail = f"{len(weeks)} weeks, {len(events)} events, {int(total_sessions)} sessions"
@@ -1262,11 +1464,17 @@ def main():
                           f"w{j['wks']} | {chain_string(j['vlist'])[:110]}")
                 if ret_agg.get("trigger"):
                     print("top return triggers:", ret_agg["trigger"].most_common(5))
+                print(f"\n{'='*70}\n{CONV_TAB}: {len(conv_journeys)} converter journeys\n{'='*70}")
+                for j in conv_journeys[:8]:
+                    print(f"{j['who'][:26]:26} {j['conv'][:24]:24} {j['days']}d "
+                          f"| {chain_string(j['vlist'])[:110]}")
+                if conv_agg.get("closing"):
+                    print("top closing content:", conv_agg["closing"].most_common(5))
                 return
 
             svc = get_sheets()
             if args.rebuild:
-                for t in [TAB, RETURN_TAB] + [title for _s, _k, title, _sp in SECTIONS]:
+                for t in [TAB, RETURN_TAB, CONV_TAB] + [title for _s, _k, title, _sp in SECTIONS]:
                     old = tab_id(svc, args.spreadsheet_id, t)
                     if old is not None:
                         svc.spreadsheets().batchUpdate(
@@ -1279,9 +1487,10 @@ def main():
             base = f"https://docs.google.com/spreadsheets/d/{args.spreadsheet_id}/edit"
             back = f"{base}#gid={sid}"
             gids[RETURN_TAB] = write_return_tab(svc, args.spreadsheet_id, ret_agg, ret_journeys, back)
+            gids[CONV_TAB] = write_conversion_tab(svc, args.spreadsheet_id, conv_agg, conv_journeys, back)
             link_engagement_cells(svc, args.spreadsheet_id, gids)
             print(f"Done. '{TAB}' + {len(gids)} attribution tabs updated — {len(weeks)} weeks; "
-                  f"{len(ret_journeys)} returner journeys.")
+                  f"{len(ret_journeys)} returner + {len(conv_journeys)} converter journeys.")
     finally:
         client.close()
 
