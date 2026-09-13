@@ -130,6 +130,13 @@ STEPS = [
          "Returning-known-contact activity ledger. Reads crm_contacts; independent of "
          "the worklist, so it still runs if enrichment failed.",
          needs=["crm_sync"], supports_dry_run=False),
+    Step("engagement_funnel_to_sheet", [PY, f"{ROOT}/scripts/engagement_funnel_to_sheet.py"],
+         "The 'Engagements' tab — a weekly parasocial relationship-progression funnel "
+         "(REACH->ATTENTION->VIDEO->RETURN->DEPTH->IDENTITY->INTENT->CONVERSION) aggregated "
+         "from PostHog on-site behaviour + crm_contacts. Reads crm_contacts, so runs after "
+         "crm_sync; independent of the worklist. Preserves hand-typed manual cells (selling "
+         "conversations, Form 6) across runs.",
+         needs=["crm_sync"]),
     Step("priority_calls_to_sheet", [PY, f"{ROOT}/scripts/priority_calls_to_sheet.py"],
          "The Priority tab — who Will actually rings today, from crm_contacts.follow_up_at. "
          "Runs last because it harvests the Done ticks off the tab and clears them in the "
