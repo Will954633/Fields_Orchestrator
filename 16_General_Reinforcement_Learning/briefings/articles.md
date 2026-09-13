@@ -1,6 +1,6 @@
 # ARTICLES (self-hosted content) — standing brief
 
-**Last updated:** 2026-08-13 by Will + Samantha (first briefing session)
+**Last updated:** 2026-09-13 by Will + Samantha (second briefing session)
 **Review cadence:** weekly
 
 > This document is the domain's **authorisation envelope**, not background reading. Work
@@ -12,21 +12,76 @@
 
 ## 1. Direction — what we are doing here and why
 
-Articles are a **reader-engagement and lead tool**, not a publishing quota. Will's direction:
+Articles are a **reader-engagement, lead, and brand-credibility tool** — not a publishing
+quota. Will's direction, 2026-09-13:
 
-- **Iterate the content.** Articles are not fire-and-forget; existing ones get improved.
-- **Write what we know works.** Brain data and past Facebook performance already show which
-  angles landed. Query them before inventing a topic — this is evidence we already own.
-- **Rank #1.** Almost nobody writes about the southern Gold Coast at suburb level. Will:
-  *"We don't compete with others here."* A local-query article that is not #1 is a defect.
-- **Educate the reader on what Fields does, and give them somewhere to go next.** Will's
-  model is McKinsey: articles carry sections that educate and then route the reader to the
-  commercial offering. Every article should leave the reader knowing what Fields is and with
-  a reason to click deeper.
-- **Google News eligibility** is the medium-term target.
+**This is a pivot from FORMAT to STORY, not away from house stories.** The single biggest
+result this domain has ever produced was
+[*"Someone Paid $1,550,000 for This Burleigh Waters Home. Eighteen Months Later, It Sold for
+$3,465,000."*](https://fieldsestate.com.au/articles/someone-paid-1550000-burleigh-waters-home-sold-3465000)
+— **~7,000 views, driven by Facebook.** That proves stories about individual house sales
+can shoot the lights out. What does NOT work is the formulaic, exact-address `how-it-sold`
+SEO page: it ranks #1 for an address almost nobody searches and returns ~0.12 sessions per
+article. **The subject (a house sale) is right; the treatment (a boring SEO address stub)
+is wrong.** The win was a *story* with a striking, resonant number.
 
-**Work with the SEO domain.** SEO will send you evidenced notes (query gaps, titles losing
-clicks, topics worth extending). Read them at cycle start and reply the same way:
+Three content tracks, all live:
+
+1. **Individual-sale STORIES that resonate with THIS market's audience.** Find recent sales
+   with a striking narrative and go and write the next $3.465M-calibre piece. The market has
+   changed since April 2026, so the stories that land now may be different ones — look for
+   what resonates *now*, not what resonated then. This is a priority, not a legacy format.
+2. **Demand-attached topics** — subjects with independent search demand that exists whether
+   or not we write about them. **Do-now target: the Coomera→Nerang Stage 1 works (Coomera
+   Connector) happening right now — everyone on the Gold Coast will want to know about it.**
+   Major projects, infrastructure, "is the market about to fall"-type queries.
+3. **Whole-of-Gold-Coast brand-credibility content, optimised for likes and comments.** The
+   goal of these is to **build brand credibility**, not traffic or conversion. Judge them on
+   engagement, not sessions.
+
+Constant across all three: keep the **McKinsey pattern** — every article educates the reader
+on what Fields does and gives them a reason to click deeper. Ranking #1 is still nice but is
+**no longer the goal in itself**; attaching to real demand (search or social) is.
+
+**THE OVERARCHING GOAL IS A PARASOCIAL RELATIONSHIP — AND RETURN VIEWERS ARE THE METRIC.**
+(Will, 2026-09-13.) Read and internalise *"Parasocial Relationships – Science & Playbook"*
+(Google Doc `1gX-7QfimUBIT69t9hmCADoQ6SVCYLYgMdJxnYD76nME`; local mirror
+`14_Articles/Market_Research/parasocial_playbook.md`). The strategy: selling is a rare,
+long-delayed, single-agent, trust-first decision (81% of sellers contact only ONE agent;
+median ~11-year tenure), so we are running a multi-year "be the agent they already feel they
+know" campaign. The science says **length of exposure does NOT predict the bond — RETURN,
+DEPTH of consumption, and staged progression over time do.** So:
+- **Optimise for RETURN VIEWERS especially, not just new views.** A piece that brings someone
+  back is worth more than one that spikes new traffic once. New views are top-of-funnel (PSI);
+  returning + deep-reading + video-watching viewers are the bond forming (PSR).
+- **Write content that can later become a "Will walkthrough"** — the direct-address,
+  chart-guided, talk-to-one-person format (see live examples
+  [/news/robina](https://fieldsestate.com.au/news/robina) and
+  [/articles/comparing-median-house-prices](https://fieldsestate.com.au/articles/comparing-median-house-prices)).
+  The playbook calls this format a "direct-address credibility engine" and the bottom-of-funnel
+  PSR converter. Favour topics and structures that give Will something to walk a viewer
+  through on camera; flag in the draft where a walkthrough could attach.
+- **Show, don't sell; warmth before competence; keep CTAs light.** Overt selling triggers
+  "persuasion knowledge" and discounts the trust built by the previous pieces.
+
+**Stay abreast of the market — READ THE MARKET CONTEXT ENGINE BRIEFS EVERY CYCLE.** The live
+source is the **Market Context Engine** (`14_Articles/Market_Research/`), refreshed
+**fortnightly** (Sun-noon cron, next 2026-09-20). At the start of every cycle read:
+  - `14_Articles/Market_Research/INDEX.md` — the current index, and
+  - `14_Articles/Market_Research/briefs/current/` — dated topic briefs: **sentiment**,
+    **psychology** (buyer + seller), affordability, interest-rates, migration, supply,
+    national-market-turn, negative-gearing/CGT;
+  - or programmatically `system_monitor.market_research_briefs` /
+    `data/<cycle>/audience_context_pack.json`.
+This is the researched read on what our audience is seeing in the news, worrying about, and
+being influenced by — national → Brisbane → Gold Coast, grounded per suburb. The individual-
+sale stories and demand-attached topics you choose (§1) must resonate with the mindset these
+briefs describe *now*, not months ago. If the latest cycle is older than ~16 days, say so in
+your cycle doc. ⚠ The old `15_Off-Market/Home_Owner_Perspective/` mindset brief is SUPERSEDED
+(quarterly, unscheduled, last run 2026-08-02) — do **not** use it.
+
+**Work with the SEO domain.** SEO sends evidenced notes (query gaps, titles losing clicks,
+topics worth extending). Read them at cycle start and reply the same way:
 
 ```bash
 python3 conductor_state.py directives --domain articles     # includes from:seo notes
@@ -37,122 +92,171 @@ python3 conductor_state.py directive --domain seo --from articles --text "<...>"
 
 | Thing | State | Why |
 |---|---|---|
-| Publishing | **NOT paused** — publishing is expected | Will: *"publishing is not paused, we should have published articles this week?"* |
-| Recent output | Articles published in the last two weeks, but **there have been workflow errors** | The gap is a pipeline failure, not a decision. Investigate it. |
-| Approval | Every article still needs Will's explicit yes before going live | 2026-07-29 rule, still standing. |
-| Approval mechanism | **BUILT 2026-08-13** — `article_approval.py` + `article_revise.py` | Drafts go to Telegram with YES/NO buttons AND a live preview link. A NO now triggers an automatic revision against Will's feedback and RE-PROPOSES — capped at 3 rounds, then parked `needs_human`. |
-| Authorship | **ALL articles authored by Will Simpson** (Will, 2026-08-13) | Was 73 'Fields Research' / 26 'Will Simpson'; corrected corpus-wide to `author='Will Simpson'`, `author_slug='will'`. |
-| QLD licence number in disclaimers | **4832972** — corrected corpus-wide 2026-08-13 | 68 articles (40 published) carried **4832971**, wrong by one digit. Recurrence of a 2026-06-21 fix that only corrected 3 website pages. ⚠ The GENERATOR still produces it — 28 of the 68 were created in Aug 2026. Source not yet found. |
-| 15 how-it-sold drafts | Exist; format ranks page-1 for exact-address queries | Awaiting Will. |
+| Publishing | **NOT paused** — publishing is expected | Direction is slow + demand-attached, not volume. |
+| Cadence | **Slow, demand-attached** (Will, 2026-09-13) | Traffic, not cadence, is the constraint. Chain only with a real story/topic in hand. Don't churn. |
+| Facebook posting | **AUTHORISED and expected — but had NEVER RUN as of 2026-09-13** | 0 articles carried any FB-post field. The agent must now actively post + learn from posts autonomously. |
+| Performance feedback loop | **WAS DEAD 2026-08-29 → 2026-09-13; now fixed** | `article_performance` cron (line 343) was missing its `cd`; ran from `/home/fields` where `.env` is absent, so it died before Python for 15 days. Fixed + re-run 2026-09-13. ⚠ Rule 7 heartbeat still to be added. |
+| 15 how-it-sold drafts | **Redirect into STORY pieces** (Will, 2026-09-13) | Not published as-is, not binned. Rework them into resonant individual-sale stories per §1. |
+| 6 live FALSE SERP titles | Untrue "No Guide" titles on now-priced listings | Autonomous correction now authorised (§4). |
+| Approval | Every NEW article still needs Will's explicit YES before going live | 2026-07-29 rule, still standing. `article_approval.py propose` → Telegram YES/NO. |
+| Authorship | ALL articles authored by **Will Simpson** | Corrected corpus-wide 2026-08-13. |
+| QLD licence in disclaimers | **4832972** | ⚠ the GENERATOR may still emit 4832971 — watch for recurrence. |
 
 ## 3. Goals — what good looks like
 
-KPIs Will attached to this domain:
-1. **Optimise existing articles** — iterate, don't just add.
-2. **Increase engagement** and **increase return-user behaviour**.
-3. **Rank #1** (or at least highly) for search terms related to each article.
-4. Become a **strong source of website traffic**.
-5. **Educate each reader on what Fields does**, and get them clicking onward.
-6. Move the library towards **Google News eligibility**.
+**The primary metric is RETURN VIEWERS (PSR forming), measured on the "Engagements" tab —
+not one-off new views.** Everything below serves that.
+
+1. **Grow return viewers, deep-reads, and walkthrough watch-depth** week over week on the
+   Engagements ladder (RETURN / DEPTH / VIDEO rows). New views are the top of the funnel;
+   the bond is people coming back.
+2. **Find the next individual-sale story that shoots the lights out** — the $3.465M piece,
+   again, for this market. Judged on reach + onward engagement (incl. Facebook) + whether it
+   brings people back, not just organic search.
+2. **Build brand credibility** with whole-of-Gold-Coast content optimised for likes/comments.
+3. **Attach to real demand** — infrastructure/major projects (Coomera Connector first).
+4. **Learn autonomously from Facebook post performance** — post trials, keep winners.
+5. **Educate each reader on what Fields does** and route them onward (McKinsey pattern).
+6. Optimise/iterate existing articles; retire dead angles; rank highly where demand exists.
 
 ## 4. Standing authorisations — SHIP THESE WITHOUT ASKING
 
+- **⭐ READ THE "ENGAGEMENTS" TAB EVERY CYCLE and reason from it (Will, 2026-09-13).** It is
+  the Live Leads Tracker sheet (`1mRjT_PmjTepF1rDajJlM553Umy47dKa4fHOclrzAKFs`), tab
+  **"Engagements"**, generated by `scripts/engagement_funnel_to_sheet.py` from PostHog — a
+  weekly parasocial-relationship ladder (REACH→ATTENTION→VIDEO→RETURN→DEPTH→IDENTITY→INTENT→
+  CONVERSION) with per-session **entry-channel/campaign attribution** ("BY FUNNEL" block).
+  Use it to judge whether your content is producing RETURN viewers and depth, and **trace
+  every engagement back through its link to its source** so you know what actually brought
+  people back. The underlying attribution is queryable directly via Brain 2
+  (`scripts/brain2/brain2_util.py` `hog_retry`) — session channel/campaign, returning-vs-new,
+  `walkthrough_*` video events. Report what you learn in your cycle doc.
+- **⭐ READ WILL'S WALKTHROUGH TRANSCRIPTS + THE /news CHART DATA (Will, 2026-09-13).** Ground
+  your content in what Will has already said on camera and in the exact charts readers see:
+  - **Walkthrough transcripts** — his actual scripts live at
+    `10_Market_Report/issues/Video/<Month>_<Year>/*_Transcript.md` (August 2026: Robina /
+    Burleigh Waters / Varsity Lakes suburb updates; September 2026: the *Comparing Median House
+    Prices* article walkthrough). For **article** walkthroughs the caption text is authored in
+    the site code (`WALK_SEGMENTS_*` in `MarketFlowProto.engine.ts`), so a transcript can always
+    be regenerated from there if a markdown is missing. Use these to match Will's voice/framing and to write
+    pieces that extend or set up a walkthrough rather than contradict one.
+  - **/news chart data** — read `Gold_Coast.precomputed_market_charts` (e.g.
+    `_id: "robina_sales_volume"`), or the `/api/market-narrative/:suburb` and `/charts`
+    endpoints. Your claims must match the charts on the live page (see
+    [/news/robina](https://fieldsestate.com.au/news/robina)); a stat in an article that
+    disagrees with the chart on the same surface is a defect.
 - Topic research, drafting, and rewriting/optimising the body of EXISTING published articles
   where it serves the goals above (titles/metas coordinate with seo).
-- Retiring dead topics.
-- Fixing slugs, metadata, internal links and on-page structure.
-- Querying Brain 1/2/3 and past Facebook performance for what has worked.
-- **Investigating and reporting the publishing workflow errors** that stopped this week's
-  articles going out.
-- Sending evidenced notes to seo via `--from articles`.
-- **Proposing drafts for approval**: `python3 scripts/article_approval.py propose --id <article_id>`.
-  Will taps YES/NO in Telegram; a poller publishes or records his reason. **Read
-  `will_feedback` on any rejected article before redrafting it** — that field is the
-  clearest statement of what he wants, exactly like a recommendation verdict.
-- **Revising a rejected draft**: `article_revise.py --id <id>` runs automatically on rejection.
-  You may also run it by hand. It never publishes — Will's tap is still the only way live.
+- **⭐ NEW (Will, 2026-09-13): autonomously correct stale or factually FALSE `meta_title`s
+  and on-page copy when the listing state has moved** (e.g. a "No Guide" title on a
+  now-priced listing). This is a Rule 5 factual-accuracy fix restoring stated intent, not
+  new public content — fix it and report it, do not file a recommendation. Six such titles
+  are live in Google right now; start there.
+- **Redirect the 15 how-it-sold drafts into resonant individual-sale STORY pieces** per §1.
+- Retiring dead topics; fixing slugs, metadata, internal links, on-page structure.
+- Querying Brain 1/2/3 and past Facebook performance for what has worked (see below).
+- **⭐ Proposing drafts for approval is AUTHORISED and needs NO recommendation.**
+  `python3 scripts/article_approval.py propose --id <article_id>`. Will's tap IS the
+  decision — do not file a recommendation asking permission to ask him. Drip at **3/day**
+  (enforced in code). Read `will_feedback` on any rejected article before redrafting.
+- **Revising a rejected draft**: `article_revise.py --id <id>` (auto-runs on rejection; never
+  publishes — Will's tap is the only way live).
 - **Reading measured outcomes**: `article_performance.py` (nightly) writes
-  `content_articles.performance` — organic sessions, GSC, **read-depth**, ad CTR, FB clicks.
-  Always check `evidence_grade` before believing a row.
-- **The learning corpora**: `build_hook_corpus.py --show` (92 headlines joined to outcomes)
-  and `build_content_learnings.py --show` (3 archetypes, 26 laws, 36 dead angles). **Read the
-  dead angles before proposing any hook.** ⚠ the hook corpus measures CLICKS ONLY — no
-  lead-optimised ad is annotated, and clicks did not predict conversion in the funnel run.
-- **Posting a published article to Facebook**: `fb_post_article.py --id <slug>` (Rule 5 gate
-  built in). Rank results on `post_clicks` — Meta has deprecated post reach entirely.
-- **⭐ CHAINING YOUR OWN SESSIONS (Will, 2026-08-13).** You are the only domain with this.
-  End EVERY session with one of:
-  `python3 article_chain.py --continue --reason "<the specific next task>"` or
-  `python3 article_chain.py --stop --reason "<why waiting is now better>"`.
-  Chain when real work is in hand; stop when blocked, at cap, or genuinely done — **stopping
-  is the expected end state, not a failure.** Guards you cannot override: 6/day, 20/week,
-  20-minute floor, and a forced stop after 2 consecutive sessions producing no artefact.
-  Chaining to look busy is the worst thing you can do here: it burns Max usage and recreates
-  the churn that got the previous system switched off after 27 cycles in two days.
-- **POSTING PUBLISHED ARTICLES TO THE FACEBOOK PAGE — authorised (Will, 2026-08-13).**
-  *"I still want it posting top performing articles to page and early attempts should post
-  all article trials to page."* So: post every published article to the page as a trial, and
-  keep posting the winners. `fb_post_article.py --id <slug> --post`. Only `status: published`
-  articles — the article approval gate is upstream of this and unchanged. Rank on
-  `post_clicks`; Meta has deprecated post reach. Baseline to beat: all 15 prior organic posts
-  scored **exactly zero** engagement.
-- **THE BRAINS — you may query them at will.** Nobody told you these existed:
-  - **Brain 2 = our own behaviour data** (FB Ads + PostHog). HogQL via
-    `scripts/brain2/brain2_util.py` → `hog_retry(pid, key, sql)`. Capabilities documented in
-    `scripts/brain2/POSTHOG_CAPABILITIES.md`. This is how you answer questions the rolled-up
-    collections cannot — per-event, per-session, arbitrary breakdowns.
-  - **Brain 1** (coaching/sales corpus) and **Brain 3** (internal operational knowledge —
-    fix-logs, CEO memory, past articles): `python3 scripts/samantha/brain_search.py "<q>"
-    --brain all`. Zero-cost recall; use it before assuming something has never been tried.
-- **Your plan lives in `ARTICLES_PLAN.md`** — priorities P1-P6 and the full reference list of
-  every data source with its honest limitation. Read it at the start of every session; keep it
-  updated as you go. You own it now.
+  `content_articles.performance` — organic sessions, GSC, read-depth, **paid ad CTR per
+  headline**, FB. Always check `evidence_grade`. ⚠ See §6 on the FB measurement gap before
+  concluding anything from organic-search numbers alone.
+- **The learning corpora**: `build_hook_corpus.py --show` (headlines→outcomes) and
+  `build_content_learnings.py --show` (archetypes, laws, dead angles). Read the dead angles
+  before proposing any hook. ⚠ the hook corpus measures CLICKS ONLY.
+- **⭐ POSTING PUBLISHED ARTICLES TO FACEBOOK — authorised AND expected (Will, 2026-08-13,
+  reaffirmed 2026-09-13).** Post every published article to the page as a trial, keep posting
+  the winners, and **learn from the results autonomously.** `fb_post_article.py --id <slug>
+  --post`. Only `status: published` articles (approval gate is upstream). Rank on
+  `post_clicks` (Meta deprecated post reach). This had never once run before 2026-09-13 —
+  make it real.
+- **⭐ CHAINING YOUR OWN SESSIONS.** You are the only domain with this. End EVERY session with
+  `article_chain.py --continue --reason "<specific next task>"` or `--stop --reason "<why
+  waiting is better>"`. Given the slow/demand-attached direction, **stopping is the normal
+  end state.** Chain only when a real story or demand-attached topic is in hand — never to
+  look busy. Guards you cannot override: 6/day, 20/week, 20-min floor, forced stop after 2
+  barren sessions.
+- **THE BRAINS — query at will.** Brain 2 (our FB Ads + PostHog behaviour data) via
+  `scripts/brain2/brain2_util.py` `hog_retry(pid,key,sql)`; Brain 1 (coaching/sales) and
+  Brain 3 (internal ops knowledge) via `scripts/samantha/brain_search.py "<q>" --brain all`.
+- **Your plan lives in `ARTICLES_PLAN.md`** — read and keep it updated. You own it.
 
 ## 5. Off-limits — never, regardless of anything else
 
-Global prohibitions always apply and are never granted by a brief: spending money,
-editing the crontab, editing monitoring/health-check code, contacting a real person,
-deleting data, Gold Coast go-live.
+Global prohibitions always apply and are never granted by a brief: spending money, editing
+the crontab, editing monitoring/health-check code, contacting a real person, deleting data,
+Gold Coast go-live.
 
-- **Never publish a new article, or take one live, without Will's explicit approval.**
-  This stands regardless of anything else in this brief (Will, 2026-07-29). Optimising an
-  already-published article is allowed; making something newly public is not.
+- **Never publish a new article, or take one live, without Will's explicit approval** (Will,
+  2026-07-29). Optimising an already-published article is allowed; making something newly
+  public is not.
 
-**DISTRIBUTION CONSTRAINTS (Will, 2026-08-13) — these bind every channel, forever:**
+**DISTRIBUTION CONSTRAINTS (Will, 2026-08-13) — bind every channel, forever:**
 
 - **Never republish an article's full text on a third-party platform without a
-  `rel=canonical` pointing back to `fieldsestate.com.au`.** Medium, LinkedIn native
-  articles, Substack, any syndication. Duplicate content makes us compete against
-  ourselves for the exact-address queries where our articles currently rank 4-10 — the one
-  place organic is actually working. **Excerpt + link is the default; full republication is
-  the exception and needs the canonical tag.** Will's instruction: "we can not hurt SEO".
-- **Never post to a community group, forum or subreddit in breach of its self-promotion
-  rules.** Read the actual rules first and record where you read them. Will is a LICENSED
-  agent posting under a business name: a breach risks a ban from precisely the local
-  audience we need, and may carry QLD conduct implications on top of the platform one.
-  When a group's rules are unclear, treat that as "no".
-- **Never add a channel we cannot MEASURE.** The Facebook lesson: 16 organic posts were
-  made and only likes/comments/shares were ever collected, so all 16 read 0/0/0 and taught
-  us nothing. Before posting anywhere new, establish how performance comes back — platform
-  analytics, or at minimum referral traffic visible in PostHog. A channel with no feedback
-  path is not a trial, it is a guess.
+  `rel=canonical` back to `fieldsestate.com.au`.** Excerpt + link is the default; full
+  republication is the exception and needs the canonical tag. "We can not hurt SEO."
+- **Never post to a community group/forum/subreddit in breach of its self-promotion rules.**
+  Read the rules first and record where. Will is a LICENSED agent posting under a business
+  name — a breach risks a ban and QLD conduct implications. Unclear rules = "no".
+- **Never add a channel we cannot MEASURE.** Establish how performance comes back before
+  posting anywhere new. A channel with no feedback path is a guess, not a trial.
 
 ## 6. Context the agent cannot get from data
 
-- 53 articles published, **0 conversions**, ~9 sessions, ~20 GSC impressions. Volume has not
-  worked. Assume the format, topic selection or onward-routing is wrong rather than the cadence.
+- **⚠ THE FACEBOOK MEASUREMENT GAP — read this before judging any article.** The domain's
+  single biggest hit, the $3.465M Burleigh Waters story (~7,000 views), shows **organic
+  sessions 0, search clicks 0, 10 impressions, `fb` None** in our own `performance` data. Its
+  success came almost entirely through **Facebook**, which our per-article measurement barely
+  captures (only 38 paid sessions + dwell were joined). **Do NOT dismiss individual-sale
+  stories on organic-search numbers — the channel where they win is nearly invisible to
+  you.** Closing this measurement gap is itself valuable work.
+- **The winning article had `page_type: None`** — it was never in the `how-it-sold` bucket.
+  The distinction Will draws is **story vs format**, not house-sales vs other topics.
+- **"0 conversions" is statistically meaningless at current volume.** 46 article sessions at
+  the site's 1.4% base rate predict 0.65 conversions; observing 0 has p≈0.52. You need
+  ~212 sessions before a zero carries information. The old brief's "volume has not worked"
+  claim was **retracted 2026-09-13** — it was never evidenced.
+- **The market has changed since April 2026.** The stories that resonated then may not now.
+- **The parasocial playbook is the strategic frame, and it has hard implications** (doc
+  `1gX-7QfimUBIT69t9hmCADoQ6SVCYLYgMdJxnYD76nME` / `14_Articles/Market_Research/parasocial_playbook.md`):
+  (a) **there is NO magic exposure count** — do not chase volume; the mere-exposure curve
+  peaks ~36 exposures and then *declines*, so over-posting can hurt. (b) Consistency, RETURN,
+  depth and staged progression build the bond; raw view counts do not. (c) The bond is what
+  converts expertise into trust — a single brilliant analysis piece won't win a listing, many
+  ordinary-but-consistent ones will. (d) A "Will walkthrough" (direct address, second-person,
+  eye-to-lens, guiding through a chart) is the best-evidenced single lever — engineer content
+  toward it. (e) Overt CTAs trigger persuasion-knowledge and discount prior goodwill.
+- **The Engagements tab is a RELATIONSHIP ladder, not a traffic dashboard.** Session unit is
+  reliable only from ~2026-08-17; engaged time caps at 300s active (a 40-min open tab is 5 min
+  of reading); CONVERSION / two-way rows are MANUAL (no automated source yet) — don't read a
+  blank there as zero.
 - Two distinct workflows exist and must not be confused: PUBLIC sold-home articles vs
   OWNER-SUBJECT direct-mail assets (memory `two_article_workflows_public_and_posted`).
-- Editorial rules (CLAUDE.md Rule 5) bind everything: no advice, no predictions, comparable
-  ranges not single valuations, cite source and period, forbidden words.
-- The McKinsey pattern Will referenced is the model for onward routing — educate, then offer.
+- Editorial Rule 5 binds everything: no advice, no predictions, comparable ranges not single
+  valuations, cite source + period, forbidden words.
 
 ## 7. Open questions — Will to answer
 
-- [ ] Publish the 15 how-it-sold drafts?
-- [x] Telegram approve/reject-with-feedback flow — **approved and built 2026-08-13.**
+- [x] Pivot away from home stories? **No** — pivot from format to story; keep individual-sale
+  stories, find the next winner. (2026-09-13)
+- [x] The 15 how-it-sold drafts? **Redirect into story pieces.** (2026-09-13)
+- [x] Facebook posting + autonomous learning? **Yes, actively.** (2026-09-13)
+- [x] Autonomous stale/false-title fixes? **Yes.** (2026-09-13)
+- [x] Cadence? **Slow, demand-attached.** (2026-09-13)
+- [x] Whole-of-GC brand-credibility content optimised for likes/comments? **Yes, add it.** (2026-09-13)
 
 ## 8. Changelog
 
 - 2026-08-13 — seeded by Samantha from measured data.
-- 2026-08-13 — **first briefing session held with Will.** §1-§7 written from his words.
+- 2026-08-13 — first briefing session with Will. §1-§7 written from his words.
+- 2026-09-13 — **second briefing session.** Pivot format→story (keep individual-sale stories;
+  next $3.465M-calibre piece is the target). Added demand-attached track (Coomera Connector
+  Stage 1) and whole-of-GC brand-credibility/engagement track. Redirect the 15 how-it-sold
+  drafts into stories. Reaffirmed FB posting + made autonomous learning from it explicit
+  (it had never run). Authorised autonomous correction of stale/false SERP titles. Documented
+  the FB measurement gap and retracted the "volume hasn't worked / 0 conversions" claim.
