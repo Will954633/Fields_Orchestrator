@@ -2,7 +2,32 @@
 """
 refresh_homeowner_mindset.py — re-research the Gold Coast homeowner selling mindset.
 
-WHY THIS EXISTS
+⚠️⚠️ SUPERSEDED 2026-09-13 — DO NOT USE AS THE LIVE AUDIENCE-PSYCHOLOGY SOURCE. ⚠️⚠️
+------------------------------------------------------------------------------------
+This was the FIRST version of the audience-psychology brief (written 2026-07-30 / refreshed
+2026-08-02). It is a standalone QUARTERLY (90-day) brief with NO scheduler — only a reminder
+cron (`rba_mindset_reminder.py`) ever nudged a human to re-run it. It was run essentially
+once and then left; the last real report is 2026-08-02.
+
+It has been REPLACED by the **Market Context Engine (MCE)** in `14_Articles/Market_Research/`,
+which does the same job (buyer + seller psychology) but better and on a live cadence:
+  • FORTNIGHTLY cron — `run_research_cycle.py`, Sundays 12:00 (self-skips off-weeks).
+  • Scans national → Brisbane → Gold Coast headlines, ranks emerging topics, builds
+    psychology, deep-researches the drivers, grounds it per suburb.
+  • Rule-7 heartbeat `market_research_cycle` (336h); the mindset half is now MCE Stage 3.
+  • Read from it, do not re-research here:
+      - Human index:      14_Articles/Market_Research/INDEX.md
+      - Dated briefs:     14_Articles/Market_Research/briefs/current/  (sentiment, psychology, …)
+      - Programmatic:     system_monitor.market_research_briefs  +  data/<cycle>/audience_context_pack.json
+
+Why the MCE won (from its DEV doc, Will 2026-09-03): the standalone mindset brief was "not
+wired in" to the article/market-pulse generators, static-topic, national/QLD-level only.
+The MCE folds psychology in, joins internal data, and contextualises per suburb.
+
+This file is kept for history and its `fields_data_pack` helper only. If you are looking for
+"the current audience-psychology report", it is the MCE — not this.
+
+WHY THIS EXISTS (historical — the original rationale for this first version)
 The monthly Market Pulse prose is written for the psychological state of a homeowner in the
 target market — what they're seeing, worrying about, and being influenced by. That state comes
 from a researched brief under `15_Off-Market/Home_Owner_Perspective/`, which also feeds the market
