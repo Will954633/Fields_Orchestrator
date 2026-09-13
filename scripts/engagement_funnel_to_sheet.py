@@ -450,13 +450,48 @@ def fmt_val(kind: str, v: float | None):
     return int(v) if float(v).is_integer() else v
 
 
+def read_manual_by_week(svc, ssid) -> dict[int, dict[str, str]]:
+    """{grid_index -> {week_label -> hand-typed value}} from the current sheet.
+
+    Manual cells (selling conversations, Form 6, ...) are keyed to their WEEK label, not
+    their column position — because the grid renders newest-week-LEFT, so a given week
+    slides one column right every week. Carrying values by week identity keeps Will's
+    entries attached to the right week across that shift.
+    """
+    try:
+        grid = svc.spreadsheets().values().get(
+            spreadsheetId=ssid, range=f"'{TAB}'!A1:BZ{len(GRID) + 1}").execute().get("values", [])
+    except Exception:  # noqa: BLE001 — tab may not exist yet
+        return {}
+    if not grid:
+        return {}
+    old_labels = grid[0][1:] if grid else []
+    out: dict[int, dict[str, str]] = {}
+    for i, (kind, _lbl, _key) in enumerate(GRID):
+        if kind != "manual":
+            continue
+        r = grid[i + 1] if i + 1 < len(grid) else []
+        cells = r[1:] if r else []
+        vals = {}
+        for j, lab in enumerate(old_labels):
+            v = cells[j] if j < len(cells) else ""
+            if str(v).strip():
+                vals[lab] = v
+        if vals:
+            out[i] = vals
+    return out
+
+
 def write_grid(svc, ssid, sid, weeks: list[date],
                metrics: dict[str, dict[date, float]]):
-    ncol = len(weeks) + 1
+    manual_prev = read_manual_by_week(svc, ssid)
+    # Newest week on the LEFT (col B), oldest on the right — per Will 2026-09-13.
+    render = list(reversed(weeks))
+    labels = [week_label(w) for w in render]
     data = []
     # header row
     data.append({"range": f"'{TAB}'!A1",
-                 "values": [["Metric ↓  /  Week →"] + [week_label(w) for w in weeks]]})
+                 "values": [["Metric ↓  /  ← newer   Week   older →"] + labels]})
     # rows
     for i, (kind, label, key) in enumerate(GRID):
         row = i + 2
@@ -464,10 +499,13 @@ def write_grid(svc, ssid, sid, weeks: list[date],
             data.append({"range": f"'{TAB}'!{a1(row, 1)}", "values": [[label]]})
             continue
         if kind == "manual":
-            # NEVER touch the week cells — Will types those and they must persist.
-            data.append({"range": f"'{TAB}'!{a1(row, 1)}", "values": [[label]]})
+            # Carry Will's hand-typed values forward, keyed by week label so they follow
+            # their week as columns shift right. A week he hasn't filled stays blank.
+            prev = manual_prev.get(i, {})
+            data.append({"range": f"'{TAB}'!{a1(row, 1)}",
+                         "values": [[label] + [prev.get(lab, "") for lab in labels]]})
             continue
-        vals = [label] + [fmt_val(kind, metrics.get(key, {}).get(w)) for w in weeks]
+        vals = [label] + [fmt_val(kind, metrics.get(key, {}).get(w)) for w in render]
         data.append({"range": f"'{TAB}'!{a1(row, 1)}", "values": [vals]})
 
     svc.spreadsheets().values().batchUpdate(
@@ -502,7 +540,7 @@ def write_grid(svc, ssid, sid, weeks: list[date],
 
 
 def print_dry(weeks, metrics):
-    show = weeks[-6:]
+    show = list(reversed(weeks))[:6]   # newest first, matching the sheet
     hdr = "  ".join(week_label(w) for w in show)
     print(f"\n{'Metric':40} {hdr}")
     print("-" * (42 + len(hdr)))
