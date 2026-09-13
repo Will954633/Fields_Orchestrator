@@ -48,7 +48,7 @@ import os
 import sys
 import statistics
 import warnings
-from collections import defaultdict
+from collections import defaultdict, Counter
 from datetime import datetime, timedelta, timezone, date
 
 warnings.filterwarnings("ignore")
@@ -533,8 +533,14 @@ SECTIONS = [
         ("Off-market report opens", "intent_offmarket_open", ["channel", "campaign"]),
     ]),
 ]
+# The RETURN drill-down is special (journeys, not channel/campaign breakdowns).
+RETURN_TAB = "Attr · Return"
+HISTORY_DAYS = 240          # how far back to reconstruct a returner's content chain
+
 # metric key -> section tab title (for hyperlinking Engagements cells)
 METRIC_TO_TAB = {k: title for _sec, keys, title, _specs in SECTIONS for k in keys}
+METRIC_TO_TAB.update({k: RETURN_TAB for k in
+                      ("reach_returning", "ret_2", "ret_3_4", "ret_5p")})
 
 DIM_TITLE = {"channel": "by entry channel", "campaign": "by campaign / source",
              "content": "by content (a visit can read several — may exceed the total)",
@@ -706,6 +712,222 @@ def link_engagement_cells(svc, ssid, gids):
         svc.spreadsheets().values().batchUpdate(
             spreadsheetId=ssid,
             body={"valueInputOption": "USER_ENTERED", "data": data}).execute()
+
+
+# ============================================================================
+#  RETURN JOURNEYS — the content chain each returning visitor was exposed to,
+#  from their FIRST interaction with the brand. Per the parasocial science, it is
+#  the SEQUENCE — not the count of returns — that carries the "why they came back"
+#  signal, so we reconstruct the whole chain rather than aggregate it away.
+# ============================================================================
+RETURN_VISIT_GAP_MIN = 30
+MAX_JOURNEYS = 80          # most-loyal first; note the cap on the tab
+
+
+def chain_touch(ev, path, suburb) -> str | None:
+    """A compact content label for one event; None for navigational noise."""
+    if ev == "walkthrough_start":
+        return f"▶video{(' ' + suburb) if isinstance(suburb, str) else ''}"
+    if ev == "offmarket_report_view":
+        return "off-mkt report"
+    if ev == "analyse_home_address_submit":
+        return "★AYH submit"
+    if ev == "address_search":
+        return "addr search"
+    p = (path or "").rstrip("/")
+    parts = [x for x in p.split("/") if x]
+    if not parts:
+        return None
+    h = parts[0]
+    if h in ("market-intelligence", "market-metrics") and len(parts) >= 2:
+        cat = parts[2] if len(parts) > 2 else "overview"
+        return f"{parts[1].replace('-', ' ')}:{cat}"
+    if h == "articles" and len(parts) > 1:
+        return f"article:{parts[1][:22]}"
+    if h == "news":
+        return "News"
+    if h == "off-market" and len(parts) > 1:
+        return f"off-mkt:{parts[1][:18]}"
+    if h in ("your-home", "building") and len(parts) > 1:
+        return f"home report:{parts[1][:16]}"
+    if h == "property" and len(parts) > 1:
+        return f"listing:{parts[1][:16]}"
+    if h == "analyse-your-home":
+        return "AYH page"
+    return None
+
+
+def build_identity_map(sm, returners: set) -> dict:
+    out = {}
+    for c in sm.crm_contacts.find({}, {"posthog_ids": 1, "primary_posthog_id": 1,
+                                       "name": 1, "email": 1, "property_address": 1,
+                                       "ayh_home": 1}):
+        ids = list(c.get("posthog_ids") or [])
+        if c.get("primary_posthog_id"):
+            ids.append(c["primary_posthog_id"])
+        ids = [i for i in ids if i in returners]
+        if not ids:
+            continue
+        ah = c.get("ayh_home") or {}
+        home = (c.get("property_address") or "").strip() or (
+            ah.get("slug") if isinstance(ah, dict) else "")
+        label = (c.get("name") or "").strip() or (c.get("email") or "").strip() or (
+            f"home: {home}" if home else "")
+        for i in ids:
+            if label and i not in out:
+                out[i] = label
+    return out
+
+
+def build_return_journeys(sm, returners: list):
+    """(aggregate, journeys) for returning visitors. Journeys carry the ordered
+    content chain across visits, first touch → each return."""
+    if not returners:
+        return {}, []
+    ints = ", ".join("'" + i.replace("'", "") + "'" for i in INTERNAL_IDS) or "''"
+    evs_ev = ("'$pageview','walkthrough_start','offmarket_report_view',"
+              "'analyse_home_address_submit','address_search'")
+    by_person: dict[str, list[dict]] = defaultdict(list)
+    CHUNK = 120
+    for i in range(0, len(returners), CHUNK):
+        chunk = returners[i:i + CHUNK]
+        id_list = ", ".join("'" + d.replace("'", "") + "'" for d in chunk)
+        rows = posthog_query(f"""
+SELECT distinct_id, timestamp, event, properties.$pathname,
+       properties.$referring_domain, properties.utm_source, properties.suburb
+FROM events
+WHERE distinct_id IN ({id_list})
+  AND event IN ({evs_ev})
+  AND timestamp > now() - INTERVAL {HISTORY_DAYS} DAY
+  AND distinct_id NOT IN ({ints})
+ORDER BY distinct_id, timestamp ASC
+LIMIT 50000
+""")
+        for r in rows:
+            ts = parse_ts(r[1])
+            if ts:
+                by_person[r[0]].append({"ts": ts, "event": r[2], "path": r[3],
+                                         "ref": r[4], "utm": r[5], "suburb": r[6]})
+
+    idmap = build_identity_map(sm, set(returners))
+    agg = {"first_channel": Counter(), "first_content": Counter(), "trigger": Counter()}
+    journeys = []
+    for did, evs in by_person.items():
+        # split into visits (>30 min gap)
+        visits, cur = [], None
+        for e in evs:
+            if cur is None or (e["ts"] - cur[-1]["ts"]) > timedelta(minutes=RETURN_VISIT_GAP_MIN):
+                cur = []
+                visits.append(cur)
+            cur.append(e)
+        if len(visits) < 2:
+            continue   # not actually a returner within history
+        vlist = []
+        for v in visits:
+            touches = []
+            for e in v:
+                t = chain_touch(e["event"], e["path"], e["suburb"])
+                if t and (not touches or touches[-1] != t):
+                    touches.append(t)
+            vlist.append({"start": v[0]["ts"], "end": v[-1]["ts"], "touches": touches,
+                          "ch": channel_for(v[0]["ref"], v[0]["utm"])})
+        first_ch = vlist[0]["ch"]
+        first_content = next((t for v in vlist for t in v["touches"]), None)
+        trigger = next((t for t in vlist[1]["touches"]), None)  # opens the 1st return
+        wks = len({aest_monday(v["start"]) for v in vlist})
+        agg["first_channel"][first_ch] += 1
+        if first_content:
+            agg["first_content"][first_content] += 1
+        if trigger:
+            agg["trigger"][trigger] += 1
+        journeys.append({
+            "who": idmap.get(did, f"Anon {did[:8]}"),
+            "first": f"{first_ch} · {first_content or '—'}",
+            "wks": wks, "visits": len(vlist), "vlist": vlist,
+        })
+    journeys.sort(key=lambda j: (-j["visits"], -j["wks"]))
+    return agg, journeys
+
+
+def chain_string(vlist) -> str:
+    """'1) Robina:overview → article:x  ⟶ +5d ⟶  2) off-mkt:y → ★AYH submit'
+    Long journeys keep the first two + last three visits (first touch is essential)."""
+    show = vlist
+    elided = False
+    if len(vlist) > 8:
+        show = vlist[:2] + vlist[-3:]
+        elided = True
+    parts, prev_end = [], None
+    for idx, v in enumerate(show):
+        real_i = vlist.index(v)
+        if elided and idx == 2:
+            parts.append(f"  ⟶ …({len(vlist) - 5} more visits)… ⟶  ")
+            prev_end = None
+        gap = (v["start"] - prev_end).days if prev_end else None
+        if gap is not None:
+            parts.append(f"  ⟶ +{gap}d ⟶  ")
+        parts.append(f"{real_i + 1}) " + " → ".join(v["touches"] or ["(browse)"]))
+        prev_end = v["end"]
+    return "".join(parts)
+
+
+def write_return_tab(svc, ssid, agg, journeys, back_url):
+    sid = ensure_plain_tab(svc, ssid, RETURN_TAB)
+    rows = [
+        ["▸ RETURN — why they came back: the content chain"],
+        [f'=HYPERLINK("{back_url}","← back to Engagements")'],
+        ["The chain is the signal (parasocial science): it's the SEQUENCE, not the count of "
+         "returns, that says why. Each row = one returning visitor, first touch → each return. "
+         "Watch what content recurs and what opens a return visit."],
+        [],
+        ["▸ WHAT HOOKS RETURNERS (cohort aggregate)"],
+        ["First touch — entry channel", "returners"],
+    ]
+    for v, n in agg.get("first_channel", Counter()).most_common(8):
+        rows.append([f"   ↳ {v}", n])
+    rows.append(["First touch — content", "returners"])
+    for v, n in agg.get("first_content", Counter()).most_common(10):
+        rows.append([f"   ↳ {v}", n])
+    rows.append(["What opens a return visit (return trigger)", "returners"])
+    for v, n in agg.get("trigger", Counter()).most_common(10):
+        rows.append([f"   ↳ {v}", n])
+    rows.append([])
+    rows.append([f"▸ RETURNER JOURNEYS — most loyal first"
+                 + (f" (top {MAX_JOURNEYS} of {len(journeys)})" if len(journeys) > MAX_JOURNEYS else "")])
+    rows.append(["Who", "First touch", "Wks", "Visits", "Content chain: first → each return"])
+    for j in journeys[:MAX_JOURNEYS]:
+        rows.append([j["who"], j["first"], j["wks"], j["visits"], chain_string(j["vlist"])])
+
+    svc.spreadsheets().values().clear(spreadsheetId=ssid, range=f"'{RETURN_TAB}'", body={}).execute()
+    svc.spreadsheets().values().update(
+        spreadsheetId=ssid, range=f"'{RETURN_TAB}'!A1", valueInputOption="USER_ENTERED",
+        body={"values": rows}).execute()
+    # formatting
+    reqs = [
+        {"updateDimensionProperties": {"range": {"sheetId": sid, "dimension": "COLUMNS",
+            "startIndex": 0, "endIndex": 1}, "properties": {"pixelSize": 220}, "fields": "pixelSize"}},
+        {"updateDimensionProperties": {"range": {"sheetId": sid, "dimension": "COLUMNS",
+            "startIndex": 1, "endIndex": 2}, "properties": {"pixelSize": 190}, "fields": "pixelSize"}},
+        {"updateDimensionProperties": {"range": {"sheetId": sid, "dimension": "COLUMNS",
+            "startIndex": 4, "endIndex": 5}, "properties": {"pixelSize": 900}, "fields": "pixelSize"}},
+        {"repeatCell": {"range": {"sheetId": sid, "startColumnIndex": 4, "endColumnIndex": 5},
+            "cell": {"userEnteredFormat": {"wrapStrategy": "WRAP", "verticalAlignment": "TOP"}},
+            "fields": "userEnteredFormat.wrapStrategy,userEnteredFormat.verticalAlignment"}},
+    ]
+    for i, r in enumerate(rows):
+        head = r[0] if r else ""
+        if head.startswith("▸") or head == "Who":
+            shade = head.startswith("▸")
+            cell = {"textFormat": {"bold": True}}
+            if shade:
+                cell["backgroundColor"] = {"red": 0.90, "green": 0.93, "blue": 0.98}
+            reqs.append({"repeatCell": {
+                "range": {"sheetId": sid, "startRowIndex": i, "endRowIndex": i + 1},
+                "cell": {"userEnteredFormat": cell},
+                "fields": "userEnteredFormat.textFormat.bold" + (
+                    ",userEnteredFormat.backgroundColor" if shade else "")}})
+    svc.spreadsheets().batchUpdate(spreadsheetId=ssid, body={"requests": reqs}).execute()
+    return sid
 
 
 # ---- CRM per-week ------------------------------------------------------------
@@ -1021,6 +1243,9 @@ def main():
                 attr[k] = dims
             whatwedid = what_we_did(sm, weeks)
 
+            returners = [p for p, ws in person_weeks.items() if len(ws) >= 2]
+            ret_agg, ret_journeys = build_return_journeys(sm, returners)
+
             total_sessions = sum(metrics["_att_total"].values())
             beat.detail = f"{len(weeks)} weeks, {len(events)} events, {int(total_sessions)} sessions"
             beat.metrics = {"weeks": len(weeks), "events": len(events),
@@ -1030,11 +1255,18 @@ def main():
             if args.dry_run:
                 print_dry(weeks, metrics)
                 print_dry_attr(weeks, attr, whatwedid)
+                print(f"\n{'='*70}\n{RETURN_TAB}: {len(ret_journeys)} returner journeys "
+                      f"(of {len(returners)} multi-week persons)\n{'='*70}")
+                for j in ret_journeys[:8]:
+                    print(f"{j['who'][:26]:26} {j['first'][:28]:28} v{j['visits']} "
+                          f"w{j['wks']} | {chain_string(j['vlist'])[:110]}")
+                if ret_agg.get("trigger"):
+                    print("top return triggers:", ret_agg["trigger"].most_common(5))
                 return
 
             svc = get_sheets()
             if args.rebuild:
-                for t in [TAB] + [title for _s, _k, title, _sp in SECTIONS]:
+                for t in [TAB, RETURN_TAB] + [title for _s, _k, title, _sp in SECTIONS]:
                     old = tab_id(svc, args.spreadsheet_id, t)
                     if old is not None:
                         svc.spreadsheets().batchUpdate(
@@ -1044,8 +1276,12 @@ def main():
             sid = ensure_tab(svc, args.spreadsheet_id)
             write_grid(svc, args.spreadsheet_id, sid, weeks, metrics)
             gids = write_section_tabs(svc, args.spreadsheet_id, weeks, metrics, attr, whatwedid)
+            base = f"https://docs.google.com/spreadsheets/d/{args.spreadsheet_id}/edit"
+            back = f"{base}#gid={sid}"
+            gids[RETURN_TAB] = write_return_tab(svc, args.spreadsheet_id, ret_agg, ret_journeys, back)
             link_engagement_cells(svc, args.spreadsheet_id, gids)
-            print(f"Done. '{TAB}' + {len(gids)} attribution tabs updated — {len(weeks)} weeks.")
+            print(f"Done. '{TAB}' + {len(gids)} attribution tabs updated — {len(weeks)} weeks; "
+                  f"{len(ret_journeys)} returner journeys.")
     finally:
         client.close()
 
