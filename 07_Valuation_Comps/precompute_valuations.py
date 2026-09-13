@@ -4047,6 +4047,16 @@ def precompute_property_valuation(db, subject_doc, listings_coll, sold_by_suburb
     # Normalize weights across included points only (weights sum to 1.0)
     normalize_weights(included_points)
 
+    # Order the shown comps most-comparable → least, so the card grid reads in
+    # rank order (top-left = closest match). Sort by raw_weight, which is invariant
+    # to any later re-normalisation of shared point objects and ranks by the same
+    # six-factor composite (smaller adjustment, closer, more recent, verified,
+    # better data) that decides each comp's influence on the range. Display-only:
+    # the estimate is computed from the whole pool below, so this does not move the
+    # valuation. See fix-history 2026-09-14 [COMPS-DISPLAY-ORDER].
+    included_points.sort(
+        key=lambda p: (p.get('weight') or {}).get('raw_weight', 0), reverse=True)
+
     # Set excluded points to zero normalized weight (for transparency in UI)
     for pt in all_enriched_points:
         if not pt.get('included_in_valuation', False):
