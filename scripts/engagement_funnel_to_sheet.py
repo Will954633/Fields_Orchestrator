@@ -137,7 +137,8 @@ def fetch_events(hours: int) -> list[dict]:
 SELECT distinct_id, timestamp, event,
        properties.$session_id, properties.$pathname, properties.duration,
        properties.$referring_domain, properties.utm_source,
-       properties.$geoip_city_name, properties.pct
+       properties.$geoip_city_name, properties.pct,
+       properties.utm_campaign, properties.article, properties.suburb
 FROM events
 WHERE event IN ({evs})
   AND timestamp > now() - INTERVAL {int(hours)} HOUR
@@ -155,12 +156,14 @@ LIMIT 50000
         out.append({
             "person": r[0], "ts": ts, "event": r[2], "sid": r[3],
             "path": r[4], "duration": r[5], "ref": r[6], "utm": r[7],
-            "city": r[8], "pct": r[9],
+            "city": r[8], "pct": r[9], "campaign": r[10],
+            "article": r[11], "suburb": r[12],
         })
     return out
 
 
-def build_metrics(events: list[dict], weeks: list[date]) -> dict[str, dict[date, float]]:
+def build_metrics(events: list[dict], weeks: list[date]):
+    """Returns (metrics, sessions, person_weeks) — the latter two feed attribution."""
     wset = set(weeks)
     m: dict[str, dict[date, float]] = defaultdict(lambda: defaultdict(float))
 
@@ -213,12 +216,14 @@ def build_metrics(events: list[dict], weeks: list[date]) -> dict[str, dict[date,
             continue
         s = sessions.get(sid)
         if s is None:
-            s = sessions[sid] = {"person": person, "week": wk, "first_ts": e["ts"],
+            s = sessions[sid] = {"sid": sid, "person": person, "week": wk, "first_ts": e["ts"],
                                  "max_eng": 0.0, "pages": set(), "content_read": False,
-                                 "ref": e["ref"], "utm": e["utm"]}
+                                 "ref": e["ref"], "utm": e["utm"], "campaign": e["campaign"],
+                                 "content_paths": set()}
         if e["ts"] < s["first_ts"]:
             s["first_ts"] = e["ts"]
             s["ref"], s["utm"] = e["ref"], e["utm"]   # entry attribution = first hit
+            s["campaign"] = e["campaign"]
         if ev == "$pageview" and e["path"]:
             s["pages"].add(e["path"])
         if ev == "time_on_page" and e["duration"] is not None:
@@ -230,6 +235,7 @@ def build_metrics(events: list[dict], weeks: list[date]) -> dict[str, dict[date,
             path = e["path"] or ""
             if dur >= 30 and any(path.startswith(p) for p in CONTENT_PREFIXES):
                 s["content_read"] = True
+                s["content_paths"].add(path)
 
     # --- REACH / ATTENTION / DEPTH / funnel from sessions ---
     per_person_week_sessions: dict[tuple, int] = defaultdict(int)
@@ -244,6 +250,8 @@ def build_metrics(events: list[dict], weeks: list[date]) -> dict[str, dict[date,
                   else "att_marathon")
         m[bucket][wk] += 1
         m["_att_total"][wk] += 1
+        if eng >= 30:                       # engaged = read + deep + marathon
+            m["att_engaged"][wk] += 1
 
         npages = len(s["pages"])
         m["_pages_sum"][wk] += npages
@@ -298,13 +306,406 @@ def build_metrics(events: list[dict], weeks: list[date]) -> dict[str, dict[date,
                 if w == wk and len(person_weeks[p]) > 1]
         m["health_saturation"][wk] = round(statistics.median(vals), 1) if vals else 0
 
-    return m
+    return m, sessions, person_weeks
 
 
 def channel_bucket(ref, utm) -> str:
     c = channel_for(ref, utm)
     return {"Facebook / IG": "facebook", "Search": "search",
             "Direct / internal-ref": "direct", "Other referral": "other"}[c]
+
+
+# ============================================================================
+#  ATTRIBUTION LAYER — decompose each metric into the segments that move it.
+#
+#  HONESTY: this is observational. A segment breakdown EXPLAINS a week-over-week
+#  move (you can see which channel/campaign/content gained or lost); it does not
+#  PROVE cause. Only a controlled A/B test proves cause. The "what we did" block
+#  lists our actions that week as cause HYPOTHESES to line up against the moves.
+# ============================================================================
+
+def campaign_label(campaign, utm) -> str:
+    c = (campaign or "").strip()
+    if c:
+        return c[:38]
+    u = (utm or "").strip()
+    if u:
+        return f"(no campaign · {u[:20]})"
+    return "(organic / direct — no campaign)"
+
+
+def content_label(path: str) -> str:
+    """A readable label for a content path, e.g. '/market-intelligence/Robina/sell-now'
+    -> 'Robina · sell-now'; '/articles/robina-market-update-august-2026' -> the slug."""
+    p = (path or "").rstrip("/")
+    parts = [x for x in p.split("/") if x]
+    if not parts:
+        return "(home)"
+    if parts[0] in ("market-intelligence", "market-metrics") and len(parts) >= 2:
+        sub = parts[1].replace("-", " ")
+        cat = parts[2] if len(parts) > 2 else "overview"
+        return f"{sub} · {cat}"
+    if parts[0] == "articles" and len(parts) > 1:
+        return f"article: {parts[1][:34]}"
+    if parts[0] == "news":
+        return "News & Research" + (f" · {parts[1]}" if len(parts) > 1 else "")
+    return p[:38]
+
+
+def _add(store, key, dim, value, wk, unit):
+    store[key][dim].setdefault(value, {}).setdefault(wk, set()).add(unit)
+
+
+def build_attribution(events, weeks, sessions, person_weeks):
+    """attr[metric_key][dim][value][week] -> distinct-unit count."""
+    wset = set(weeks)
+    store: dict = defaultdict(lambda: defaultdict(dict))  # sets, finalised at the end
+    first_week = {p: min(ws) for p, ws in person_weeks.items()}
+
+    # per (person, week): entry channel/campaign = their earliest session that week
+    pw_entry, pw_ts = {}, {}
+    person_first_channel = {}   # person -> channel of earliest session overall (for CRM join)
+    pf_ts = {}
+    for s in sessions.values():
+        ch = channel_for(s["ref"], s["utm"])
+        cam = campaign_label(s["campaign"], s["utm"])
+        k = (s["person"], s["week"])
+        if k not in pw_ts or s["first_ts"] < pw_ts[k]:
+            pw_ts[k] = s["first_ts"]; pw_entry[k] = (ch, cam)
+        if s["person"] not in pf_ts or s["first_ts"] < pf_ts[s["person"]]:
+            pf_ts[s["person"]] = s["first_ts"]; person_first_channel[s["person"]] = ch
+
+    # REACH — unique visitors by entry channel / campaign / new-vs-returning
+    for (person, wk), (ch, cam) in pw_entry.items():
+        if wk not in wset:
+            continue
+        _add(store, "reach_unique", "channel", ch, wk, person)
+        _add(store, "reach_unique", "campaign", cam, wk, person)
+        nr = "new" if wk == first_week[person] else "returning"
+        _add(store, "reach_unique", "newret", nr, wk, person)
+
+    # SESSION metrics — engaged (30s+), content read, multi-page
+    for s in sessions.values():
+        wk = s["week"]
+        if wk not in wset:
+            continue
+        ch = channel_for(s["ref"], s["utm"]); cam = campaign_label(s["campaign"], s["utm"])
+        nr = "new" if wk == first_week[s["person"]] else "returning"
+        eng = s["max_eng"]
+        targets = []
+        if eng >= 30:
+            targets.append("att_engaged")
+        if s["content_read"]:
+            targets.append("depth_content_read")
+        if len(s["pages"]) >= 3:
+            targets.append("depth_multipage")
+        # Attribute by SESSION id, so channel/campaign/new-vs-returning columns sum back
+        # to the metric total (which counts sessions). Content is the exception below —
+        # one session can read several pages, so content columns can exceed the total.
+        for key in targets:
+            _add(store, key, "channel", ch, wk, s["sid"])
+            _add(store, key, "campaign", cam, wk, s["sid"])
+            _add(store, key, "newret", nr, wk, s["sid"])
+        if s["content_read"]:
+            for p in s["content_paths"]:
+                _add(store, "depth_content_read", "content", content_label(p), wk, s["sid"])
+                _add(store, "att_engaged", "content", content_label(p), wk, s["sid"])
+
+    # EVENT metrics — video + intent (attribute by the event's own utm/referrer)
+    ev_map = {"walkthrough_start": "vid_plays", "walkthrough_complete": "vid_complete",
+              "offmarket_report_view": "intent_offmarket_open",
+              "analyse_home_address_submit": "intent_ayh_submit",
+              "address_search": "intent_address_search"}
+    for e in events:
+        key = ev_map.get(e["event"])
+        if not key:
+            continue
+        wk = aest_monday(e["ts"])
+        if wk not in wset:
+            continue
+        ch = channel_for(e["ref"], e["utm"]); cam = campaign_label(e["campaign"], e["utm"])
+        _add(store, key, "channel", ch, wk, e["person"])
+        _add(store, key, "campaign", cam, wk, e["person"])
+        if key in ("vid_plays", "vid_complete"):
+            # article can arrive as a boolean flag on some events — only a real
+            # slug/title string is a content value; otherwise fall back to suburb.
+            art = e["article"] if isinstance(e["article"], str) else None
+            sub = e["suburb"] if isinstance(e["suburb"], str) else None
+            content = art or sub
+            if content:
+                _add(store, key, "content", content[:38], wk, e["person"])
+
+    # finalise sets -> counts
+    attr: dict = {}
+    for key, dims in store.items():
+        attr[key] = {}
+        for dim, values in dims.items():
+            attr[key][dim] = {v: {wk: len(s) for wk, s in byweek.items()}
+                              for v, byweek in values.items()}
+    return attr, person_first_channel
+
+
+def crm_attribution(sm, weeks, person_first_channel):
+    """New-CRM-contact attribution: join each contact to the entry channel of its
+    PostHog person (if we saw a session for them), else 'no on-site session'."""
+    wset = set(weeks)
+    store: dict = defaultdict(lambda: defaultdict(dict))
+    for c in sm.crm_contacts.find({}, {"created_at": 1, "posthog_ids": 1,
+                                        "primary_posthog_id": 1}):
+        wk = aest_monday(parse_ts(c.get("created_at")))
+        if wk not in wset:
+            continue
+        ids = list(c.get("posthog_ids") or [])
+        if c.get("primary_posthog_id"):
+            ids.append(c["primary_posthog_id"])
+        ch = next((person_first_channel[i] for i in ids if i in person_first_channel),
+                  "no on-site session")
+        _add(store, "id_new_contacts", "channel", ch, wk, str(c.get("_id")))
+    return {k: {d: {v: {wk: len(s) for wk, s in bw.items()} for v, bw in vals.items()}
+                for d, vals in dims.items()} for k, dims in store.items()}
+
+
+# ---- "what we did" (cause hypotheses, GLOBAL — same on every section tab) -----
+def what_we_did(sm, weeks):
+    wset = set(weeks)
+    wd = {wk: {"spend": 0.0, "launched": 0, "paused": 0, "changed": 0,
+               "articles": [], "posts": 0, "deploys": []} for wk in weeks}
+    LAUNCH = {"new_campaign", "new_ad", "new_ads_and_pause", "enable"}
+    PAUSE = {"pause", "pruning"}
+    for d in sm.ad_daily_metrics.find({}, {"date": 1, "spend_aud": 1}):
+        wk = aest_monday(parse_ts(d.get("date")))
+        if wk in wset:
+            try:
+                wd[wk]["spend"] += float(d.get("spend_aud") or 0)
+            except (TypeError, ValueError):
+                pass
+    for d in sm.ad_decisions.find({}, {"date": 1, "type": 1, "title": 1}):
+        wk = aest_monday(parse_ts(d.get("date")))
+        if wk not in wset:
+            continue
+        t = d.get("type") or ""
+        if t in LAUNCH:
+            wd[wk]["launched"] += 1
+        elif t in PAUSE:
+            wd[wk]["paused"] += 1
+        else:
+            wd[wk]["changed"] += 1
+    for a in sm.content_articles.find({"status": "published"}, {"published_at": 1, "title": 1}):
+        wk = aest_monday(parse_ts(a.get("published_at")))
+        if wk in wset and a.get("title"):
+            wd[wk]["articles"].append(a["title"][:50])
+    for p in sm.fb_page_posts.find({}, {"posted_at": 1}):
+        wk = aest_monday(parse_ts(p.get("posted_at")))
+        if wk in wset:
+            wd[wk]["posts"] += 1
+    for w in sm.website_change_log.find({}, {"date": 1, "title": 1}):
+        wk = aest_monday(parse_ts(w.get("date")))
+        if wk in wset and w.get("title"):
+            wd[wk]["deploys"].append(w["title"][:50])
+    return wd
+
+
+# ---- section registry: which metrics each drill-down tab attributes ----------
+# (metric label, metric key, [dims to break down])
+SECTIONS = [
+    ("REACH", ["reach_unique"], "Attr · Reach", [
+        ("Unique visitors", "reach_unique", ["channel", "campaign", "newret"]),
+    ]),
+    ("ATTENTION", ["att_read", "att_deep", "att_marathon"], "Attr · Attention", [
+        ("Engaged sessions (30s+ active)", "att_engaged", ["channel", "campaign", "content", "newret"]),
+    ]),
+    ("VIDEO", ["vid_plays", "vid_complete"], "Attr · Video", [
+        ("Video shown (autostart)", "vid_plays", ["channel", "campaign", "content"]),
+        ("Completed", "vid_complete", ["channel", "campaign", "content"]),
+    ]),
+    ("DEPTH", ["depth_content_read", "depth_multipage"], "Attr · Depth", [
+        ("Read market/editorial content (30s+)", "depth_content_read",
+         ["channel", "campaign", "content", "newret"]),
+        ("Multi-page sessions (≥3)", "depth_multipage", ["channel", "campaign", "newret"]),
+    ]),
+    ("IDENTITY", ["id_new_contacts"], "Attr · Identity", [
+        ("New CRM contact records", "id_new_contacts", ["channel"]),
+    ]),
+    ("INTENT", ["intent_address_search", "intent_ayh_submit", "intent_offmarket_open"],
+     "Attr · Intent", [
+        ("Address searched", "intent_address_search", ["channel", "campaign"]),
+        ("Analyse-Your-Home submissions", "intent_ayh_submit", ["channel", "campaign"]),
+        ("Off-market report opens", "intent_offmarket_open", ["channel", "campaign"]),
+    ]),
+]
+# metric key -> section tab title (for hyperlinking Engagements cells)
+METRIC_TO_TAB = {k: title for _sec, keys, title, _specs in SECTIONS for k in keys}
+
+DIM_TITLE = {"channel": "by entry channel", "campaign": "by campaign / source",
+             "content": "by content (a visit can read several — may exceed the total)",
+             "newret": "new vs returning"}
+DIM_CAP = {"campaign": 8, "content": 10, "channel": 8, "newret": 2}
+
+
+def fmt_num(v):
+    if v is None or v == 0:
+        return ""
+    if isinstance(v, float) and not v.is_integer():
+        return round(v, 1)
+    return int(v)
+
+
+def wow_mover(channel_dict: dict, weeks: list[date]) -> str:
+    """Largest single-channel change between the two most recent weeks, in words."""
+    if len(weeks) < 2 or not channel_dict:
+        return ""
+    w0, w1 = weeks[-2], weeks[-1]
+    best = None
+    for v, bw in channel_dict.items():
+        a, b = bw.get(w0, 0), bw.get(w1, 0)
+        d = b - a
+        if best is None or abs(d) > abs(best[1]):
+            best = (v, d, a, b)
+    if not best or best[1] == 0:
+        return ""
+    v, d, a, b = best
+    return (f"{v}: {a}→{b} ({'+' if d > 0 else ''}{d}) between {week_label(w0)} and "
+            f"{week_label(w1)} — the biggest channel move")
+
+
+def section_rows(sec_name, specs, metrics, attr, whatwedid, weeks, back_url):
+    render = list(reversed(weeks))
+    labels = [week_label(w) for w in render]
+    HEADER = "Metric ↓  /  ← newer   Week   older →"
+    rows = [
+        [f"▸ {sec_name} — attribution & cause/effect"],
+        [f'=HYPERLINK("{back_url}","← back to Engagements")'],
+        ["Segments EXPLAIN a week-over-week move (which one gained/lost); they do NOT "
+         "prove cause. 'What we did' below = hypotheses to line up. Only an A/B test proves cause."],
+        [HEADER] + labels,
+    ]
+    for mlabel, key, dims in specs:
+        total = metrics.get(key, {})
+        rows.append([f"■ {mlabel}"] + [fmt_num(total.get(w)) for w in render])
+        mv = wow_mover((attr.get(key, {}) or {}).get("channel", {}), weeks)
+        if mv:
+            rows.append([f"   ▸ biggest recent shift — {mv}"])
+        for dim in dims:
+            vals = (attr.get(key, {}) or {}).get(dim, {})
+            if not vals:
+                continue
+            rows.append([f"   {DIM_TITLE[dim]}:"])
+            ranked = sorted(vals.items(), key=lambda kv: -sum(kv[1].values()))
+            cap = DIM_CAP.get(dim, 8)
+            for v, bw in ranked[:cap]:
+                rows.append([f"      ↳ {v}"] + [fmt_num(bw.get(w)) for w in render])
+            rest = ranked[cap:]
+            if rest:
+                agg = defaultdict(int)
+                for _v, bw in rest:
+                    for w, c in bw.items():
+                        agg[w] += c
+                rows.append([f"      ↳ (+{len(rest)} more)"] + [fmt_num(agg.get(w)) for w in render])
+        rows.append([])
+
+    rows.append(["▸ WHAT WE DID (cause hypotheses — global, same on every attribution tab)"])
+    rows.append([HEADER] + labels)
+    cats = [("FB ad spend $ (week)", "spend"), ("Ads launched", "launched"),
+            ("Ads paused", "paused"), ("Ads changed", "changed"),
+            ("Articles published", "posts_art"), ("FB organic posts", "posts"),
+            ("Site changes shipped", "deploys_n")]
+
+    def cell(wk, ckey):
+        w = whatwedid.get(wk, {})
+        if ckey == "spend":
+            return round(w.get("spend", 0)) or ""
+        if ckey == "posts_art":
+            return len(w.get("articles", [])) or ""
+        if ckey == "deploys_n":
+            return len(w.get("deploys", [])) or ""
+        return w.get(ckey, 0) or ""
+
+    for clabel, ckey in cats:
+        rows.append([clabel] + [cell(w, ckey) for w in render])
+    rows.append([])
+    rows.append(["▸ DETAIL — what shipped each week (newest first)"])
+    for w in render:
+        wd = whatwedid.get(w, {})
+        bits = []
+        if wd.get("articles"):
+            bits.append("Published: " + "; ".join(wd["articles"]))
+        if wd.get("deploys"):
+            bits.append("Site: " + "; ".join(wd["deploys"]))
+        if wd.get("launched") or wd.get("paused") or wd.get("changed"):
+            bits.append(f"Ads: {wd.get('launched', 0)} launched / {wd.get('paused', 0)} paused "
+                        f"/ {wd.get('changed', 0)} changed")
+        if wd.get("spend"):
+            bits.append(f"Spend ${round(wd['spend'])}")
+        if wd.get("posts"):
+            bits.append(f"{wd['posts']} FB posts")
+        rows.append([week_label(w), "  •  ".join(bits) if bits else "—"])
+    return rows
+
+
+def ensure_plain_tab(svc, ssid, title):
+    """A section drill-down tab, created at the far right (appended) if absent."""
+    sid = tab_id(svc, ssid, title)
+    if sid is not None:
+        return sid
+    res = svc.spreadsheets().batchUpdate(spreadsheetId=ssid, body={"requests": [{
+        "addSheet": {"properties": {"title": title, "gridProperties": {
+            "rowCount": 200, "columnCount": 70,
+            "frozenRowCount": 4, "frozenColumnCount": 1}}}}]}).execute()
+    return res["replies"][0]["addSheet"]["properties"]["sheetId"]
+
+
+def write_section_tabs(svc, ssid, weeks, metrics, attr, whatwedid):
+    base = f"https://docs.google.com/spreadsheets/d/{ssid}/edit"
+    eng_gid = tab_id(svc, ssid, TAB)
+    back = f"{base}#gid={eng_gid}"
+    gids = {}
+    for sec_name, _keys, title, specs in SECTIONS:
+        sid = ensure_plain_tab(svc, ssid, title)
+        rows = section_rows(sec_name, specs, metrics, attr, whatwedid, weeks, back)
+        svc.spreadsheets().values().clear(
+            spreadsheetId=ssid, range=f"'{title}'", body={}).execute()
+        svc.spreadsheets().values().update(
+            spreadsheetId=ssid, range=f"'{title}'!A1", valueInputOption="USER_ENTERED",
+            body={"values": rows}).execute()
+        # formatting: bold structural rows, widen col A
+        reqs = [{"updateDimensionProperties": {
+            "range": {"sheetId": sid, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 1},
+            "properties": {"pixelSize": 340}, "fields": "pixelSize"}}]
+        for i, r in enumerate(rows):
+            head = (r[0] if r else "")
+            if head.startswith("▸") or head.startswith("■") or head == "Metric ↓  /  ← newer   Week   older →":
+                shade = head.startswith("▸")
+                cell = {"textFormat": {"bold": True}}
+                if shade:
+                    cell["backgroundColor"] = {"red": 0.90, "green": 0.93, "blue": 0.98}
+                reqs.append({"repeatCell": {
+                    "range": {"sheetId": sid, "startRowIndex": i, "endRowIndex": i + 1},
+                    "cell": {"userEnteredFormat": cell},
+                    "fields": "userEnteredFormat.textFormat.bold" + (
+                        ",userEnteredFormat.backgroundColor" if shade else "")}})
+        svc.spreadsheets().batchUpdate(spreadsheetId=ssid, body={"requests": reqs}).execute()
+        gids[title] = sid
+    return gids
+
+
+def link_engagement_cells(svc, ssid, gids):
+    """Turn each attributed metric's label on Engagements into a link to its section tab."""
+    base = f"https://docs.google.com/spreadsheets/d/{ssid}/edit"
+    data = []
+    for i, (kind, label, key) in enumerate(GRID):
+        if kind != "computed" and kind != "pct":
+            continue
+        title = METRIC_TO_TAB.get(key)
+        if not title or title not in gids:
+            continue
+        url = f"{base}#gid={gids[title]}"
+        safe = label.replace('"', "'")
+        data.append({"range": f"'{TAB}'!{a1(i + 2, 1)}",
+                     "values": [[f'=HYPERLINK("{url}","{safe}  ↗")']]})
+    if data:
+        svc.spreadsheets().values().batchUpdate(
+            spreadsheetId=ssid,
+            body={"valueInputOption": "USER_ENTERED", "data": data}).execute()
 
 
 # ---- CRM per-week ------------------------------------------------------------
@@ -555,6 +956,35 @@ def print_dry(weeks, metrics):
         print(f"{label:40} {cells}")
 
 
+def print_dry_attr(weeks, attr, whatwedid):
+    show = list(reversed(weeks))[:6]
+    for sec_name, _keys, title, specs in SECTIONS:
+        print(f"\n{'='*70}\n{title}   [{sec_name}]\n{'='*70}")
+        hdr = "  ".join(week_label(w) for w in show)
+        print(f"{'':38} {hdr}")
+        for mlabel, key, dims in specs:
+            print(f"■ {mlabel}")
+            mv = wow_mover((attr.get(key, {}) or {}).get("channel", {}), weeks)
+            if mv:
+                print(f"   ▸ {mv}")
+            for dim in dims:
+                vals = (attr.get(key, {}) or {}).get(dim, {})
+                if not vals:
+                    continue
+                print(f"   {DIM_TITLE[dim]}:")
+                ranked = sorted(vals.items(), key=lambda kv: -sum(kv[1].values()))
+                for v, bw in ranked[:DIM_CAP.get(dim, 8)]:
+                    cells = "  ".join(f"{fmt_num(bw.get(w)) or '':>10}" for w in show)
+                    print(f"      ↳ {v[:34]:34} {cells}")
+    print(f"\n{'='*70}\nWHAT WE DID\n{'='*70}")
+    for w in show:
+        wd = whatwedid.get(w, {})
+        print(f"{week_label(w)}: spend ${round(wd.get('spend',0))}, "
+              f"{wd.get('launched',0)}L/{wd.get('paused',0)}P/{wd.get('changed',0)}C ads, "
+              f"{len(wd.get('articles',[]))} articles, {wd.get('posts',0)} posts, "
+              f"{len(wd.get('deploys',[]))} deploys")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--spreadsheet-id", default=LIVE_SPREADSHEET_ID)
@@ -582,30 +1012,40 @@ def main():
                     f"PostHog returned 0 events over {hours}h — refusing to overwrite "
                     "the grid with zeros (query/creds broken, not a quiet week).")
 
-            metrics = build_metrics(events, weeks)
+            metrics, sessions, person_weeks = build_metrics(events, weeks)
             for k, d in crm_metrics(sm, weeks).items():
                 metrics[k] = d
+
+            attr, person_first_channel = build_attribution(events, weeks, sessions, person_weeks)
+            for k, dims in crm_attribution(sm, weeks, person_first_channel).items():
+                attr[k] = dims
+            whatwedid = what_we_did(sm, weeks)
 
             total_sessions = sum(metrics["_att_total"].values())
             beat.detail = f"{len(weeks)} weeks, {len(events)} events, {int(total_sessions)} sessions"
             beat.metrics = {"weeks": len(weeks), "events": len(events),
-                            "sessions": int(total_sessions)}
+                            "sessions": int(total_sessions),
+                            "attributed_metrics": len(attr)}
 
             if args.dry_run:
                 print_dry(weeks, metrics)
+                print_dry_attr(weeks, attr, whatwedid)
                 return
 
             svc = get_sheets()
             if args.rebuild:
-                old = tab_id(svc, args.spreadsheet_id, TAB)
-                if old is not None:
-                    svc.spreadsheets().batchUpdate(
-                        spreadsheetId=args.spreadsheet_id,
-                        body={"requests": [{"deleteSheet": {"sheetId": old}}]}).execute()
-                    print(f"[rebuild] dropped '{TAB}'.")
+                for t in [TAB] + [title for _s, _k, title, _sp in SECTIONS]:
+                    old = tab_id(svc, args.spreadsheet_id, t)
+                    if old is not None:
+                        svc.spreadsheets().batchUpdate(
+                            spreadsheetId=args.spreadsheet_id,
+                            body={"requests": [{"deleteSheet": {"sheetId": old}}]}).execute()
+                print(f"[rebuild] dropped '{TAB}' + section tabs.")
             sid = ensure_tab(svc, args.spreadsheet_id)
             write_grid(svc, args.spreadsheet_id, sid, weeks, metrics)
-            print(f"Done. '{TAB}' updated — {len(weeks)} week columns.")
+            gids = write_section_tabs(svc, args.spreadsheet_id, weeks, metrics, attr, whatwedid)
+            link_engagement_cells(svc, args.spreadsheet_id, gids)
+            print(f"Done. '{TAB}' + {len(gids)} attribution tabs updated — {len(weeks)} weeks.")
     finally:
         client.close()
 
