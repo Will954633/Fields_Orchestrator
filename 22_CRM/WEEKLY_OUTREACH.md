@@ -49,8 +49,31 @@ python3 22_CRM/walkthrough_outreach.py --build
   (email links get the token appended by the click tracker).
 - Writes `campaigns/<slug>/DRAFTS_REVIEW.md` for Will to read.
 
-**Review before sending:** scan the ⚠ flags — suburb-defaulted contacts (no signal →
-Robina), suppressed channels, suspect emails. Re-suburb anything you know better.
+### Suburb rule — never guess (Will, 2026-09-14)
+
+A contact's suburb is resolved in `build()` in this order, and **we never blind-default
+to Robina** any more:
+
+1. **Explicit upstream signal** — `suburb_assignment` from the lead-form area answer, an
+   address in `follow_up_reason`/lead data, or the campaign/form name. Single-suburb message.
+2. **Past on-site views** — `suburb_from_history()` reads `lead_web` (the `landing` URL +
+   the nightly-harvested `activity.pages_visited` / `timeline`) and picks the suburb they've
+   actually looked at, count- and dwell-weighted. A demonstrated view beats a guess. Single
+   message for that suburb, flagged `suburb from past on-site views → X`.
+3. **No signal (or `open_to_all_three`)** → the **all-three chooser**: one message offering
+   all three walkthrough links so the contact picks. Each link carries `&lead=<token>`
+   (SMS/Messenger) so the click both identifies them and records the suburb into `lead_web`
+   — which then feeds step 2 on the *next* build. This closes the loop: unknown → offer all
+   three → they pick → we learn.
+
+**Why:** Mary Webb had no suburb signal, was blind-defaulted to Robina, and opted out of
+SMS. We had no basis for Robina. See fix-history 2026-09-14 `[CRM-SUBURB-BLIND-DEFAULT]`.
+
+⚠ The chooser SMS carries three full URLs (~4 SMS segments). That is inherent to "show all
+three links" — acceptable, but prefer email/Messenger for chooser contacts where available.
+
+**Review before sending:** scan the ⚠ flags — chooser (no-signal) contacts, learned-suburb
+contacts, suppressed channels, suspect emails. Re-suburb anything you know better.
 
 ## 3. Sample send (always, before bulk)
 
