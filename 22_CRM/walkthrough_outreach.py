@@ -155,46 +155,42 @@ def compose(first: str, suburb: str, email_link: str, sms_link: str):
     return subject, email_body, sms_body
 
 
-def chooser_links(token, utm_source):
-    """One deep link per suburb. SMS/Messenger links carry &lead=<token> so the click
-    identifies the contact AND records which suburb they chose (email links get the token
-    appended by the click tracker instead)."""
-    out = {}
-    for suburb, slug in SLUGS.items():
-        url = f"{SITE}/news/{slug}?play=1&utm_source={utm_source}&utm_campaign={CAMPAIGN}"
-        if utm_source != "crm_email" and token:
-            url += f"&lead={token}"
-        out[suburb] = url
-    return out
+def hub_link(token, utm_source):
+    """Single link to the /news hub — News & Research with a suburb picker (Robina,
+    Varsity Lakes, Burleigh Waters). One clean link beats three (Will, 2026-09-14).
+    SMS/Messenger carry &lead=<token> so the click identifies the contact AND their onward
+    click into a suburb lands in lead_web (→ suburb_from_history next build); email links
+    get the token appended by the click tracker instead. No ?play= — that autostarts a
+    per-suburb walkthrough and is meaningless on the multi-suburb hub."""
+    url = f"{SITE}/news?utm_source={utm_source}&utm_campaign={CAMPAIGN}"
+    if utm_source != "crm_email" and token:
+        url += f"&lead={token}"
+    return url
 
 
-def compose_chooser(first, email_links, sms_links, msgr_links):
-    """No-signal / open-to-all-three message: offer all three walkthroughs and let the
-    contact pick (Will, 2026-09-14). Their choice becomes the suburb signal we lacked."""
+def compose_chooser(first, email_link, sms_link, msgr_link):
+    """No-signal / multi-suburb message: point at the /news hub and let the contact pick
+    their own area rather than us guessing (Will, 2026-09-14). Their onward click into a
+    suburb is captured in lead_web and becomes the suburb signal we lacked."""
     greet = f"Hi {first}," if first else "Hi,"
-    subject = "Video walkthroughs of the Gold Coast markets"
-
-    def bullets(links):
-        return "\n".join(f"{s}: {links[s]}" for s in SLUGS)
-
+    subject = "Gold Coast market news & research — pick your suburb"
     email_body = (
         f"{greet}\n\n"
-        f"It's Will here from Fields Real Estate. I've just completed video walkthroughs of "
-        f"the Gold Coast markets I follow most closely. Each one speaks to a metric that shows "
-        f"how buyer demand has changed, and another that's proved to be a leading indicator on "
-        f"where the market goes next.\n\n"
-        f"Pick the one you'd like to watch:\n\n"
-        f"{bullets(email_links)}\n\n"
+        f"It's Will here from Fields Real Estate. I publish original market news and research "
+        f"across the Gold Coast suburbs I follow most closely — Robina, Varsity Lakes and "
+        f"Burleigh Waters. Each one covers how buyer demand has changed and the indicators "
+        f"pointing to where the market goes next.\n\n"
+        f"Have a look and pick your suburb: {email_link}\n\n"
         f"Kind regards,\nWill Simpson\nFields Real Estate"
     )
     sms_greet = f"Hi {first}, it's" if first else "Hi, it's"
-    ask = (
-        f"{sms_greet} Will from Fields Real Estate. I've just completed video walkthroughs of "
-        f"the local markets — pick the one you'd like to watch:\n"
-    )
-    sms_body = ask + bullets(sms_links)
-    msgr_body = ask + bullets(msgr_links)
-    return subject, email_body, sms_body, msgr_body
+
+    def sms_copy(link):
+        return (f"{sms_greet} Will from Fields Real Estate. I publish market news & research "
+                f"across Robina, Varsity Lakes & Burleigh Waters — have a look and pick your "
+                f"suburb: {link}")
+
+    return subject, email_body, sms_copy(sms_link), sms_copy(msgr_link)
 
 
 def build(db):
@@ -279,11 +275,11 @@ def build(db):
         if mode == "chooser":
             subject, email_body, sms_body, msgr_body = compose_chooser(
                 first_name(c.get("name") or ""),
-                chooser_links(token, "crm_email"),
-                chooser_links(token, "crm_sms"),
-                chooser_links(token, "crm_messenger"),
+                hub_link(token, "crm_email"),
+                hub_link(token, "crm_sms"),
+                hub_link(token, "crm_messenger"),
             )
-            suburb_label = "all-three (chooser)"
+            suburb_label = "/news hub (choose)"
             suburbs = list(SLUGS)
         else:
             email_link, sms_link = links_for(suburb, token)
@@ -337,7 +333,7 @@ def write_review(built, skipped):
         f"\nGenerated {datetime.now(timezone.utc).isoformat()} · campaign `{CAMPAIGN}` · {len(built)} drafts",
         "\nSend a sample:  `python3 scripts/walkthrough_outreach.py --send --contact <email|phone|id> [--channel email|sms|both]`\n",
     ]
-    for suburb in ["Robina", "Varsity Lakes", "Burleigh Waters", "all-three (chooser)"]:
+    for suburb in ["Robina", "Varsity Lakes", "Burleigh Waters", "/news hub (choose)"]:
         subset = [d for d in built if d["suburb"] == suburb]
         if not subset:
             continue
