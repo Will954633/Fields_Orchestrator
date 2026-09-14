@@ -1,0 +1,63 @@
+# Template for the 14-Sep property-page videos (8 builds share everything but project/paths).
+# Generate one config per video from this; only project.slug/title and paths.* change.
+#
+# Decisions behind these values (measured 14-Sep, see BUILD_NOTES per video):
+#  - Source is 1920x1080 @ 23.976 fps, indoor, face YAVG ~142 (8-bit) — already well lit.
+#    NO shadow-lift pre-grade: `medium` lifted and flattened it, `standard` washed it out.
+#    03_build.py's own light `look` below is all that is applied.
+#  - face_cx measured 0.493-0.497 across the shoot with <0.03 spread — a static crop is fine
+#    (no per-segment override needed, unlike the 09-Sep shoots).
+#  - assembly.fps is the SOURCE rate, not the usual 30: re-timing 23.976 -> 30 duplicates
+#    frames and judders. crop_geom now reads the clip's real dimensions (1080p-safe).
+#  - snap_to_silence stays OFF (TRANSCRIPT_TIMING §4) — cut points come from word timings.
+project:
+  slug: sale_method_listed_price
+  title: "Sale Methods — Listed Price (Fixed Price)"
+  suburb: ""
+paths:
+  raw_dir: "/Users/projects/Documents/Fields_Videos/:Property Page"
+  work_dir: ./work_property_0914/build/sale_method_listed_price/work
+  out_dir: ./work_property_0914/build/sale_method_listed_price/out
+framing:
+  master_square: 1080
+  web_square: 512
+  zoom: 1.0
+  face_cy_target: 0.42
+  circle_diameter: 820
+  circle_cy_frac: 0.46
+look:
+  brightness: 0.03
+  contrast: 1.06
+  saturation: 1.08
+  gamma: 1.02
+  warmth: 6
+  sharpen: 0.6
+audio:
+  highpass_hz: 80
+  denoise: afftdn
+  denoise_nf: -25
+  target_lufs: -16.0
+  target_tp: -1.5
+assembly:
+  fps: 23.976
+  transition: cut
+  dissolve_sec: 0.2
+  snap_to_silence: false
+  snap_noise_db: -38.0
+  snap_min_silence: 0.12
+  snap_tail_pad: 0.22
+  snap_preroll: 0.18
+  snap_max_extend: 3.0
+captions:
+  font: DejaVu Sans
+  fontsize: 54
+  primary_colour: '&H00FFFFFF'
+  outline_colour: '&H00000000'
+  outline: 3
+  margin_v: 90
+outputs:
+  web_mp4: true
+  circle_mov_nocaps: true
+  circle_mov_caps: true
+  srt: true
+  transcript_md: true

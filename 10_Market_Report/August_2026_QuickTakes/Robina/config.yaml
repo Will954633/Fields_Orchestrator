@@ -1,0 +1,53 @@
+assembly:
+  dissolve_sec: 0.2
+  fps: 23.976
+  snap_max_extend: 3.0
+  snap_min_silence: 0.12
+  snap_noise_db: -38.0
+  snap_preroll: 0.18
+  snap_tail_pad: 0.22
+  snap_to_silence: false
+  transition: cut
+audio:
+  denoise: afftdn
+  denoise_nf: -25
+  highpass_hz: 80
+  target_lufs: -16.0
+  target_tp: -1.5
+captions:
+  font: DejaVu Sans
+  fontsize: 54
+  margin_v: 90
+  outline: 3
+  outline_colour: '&H00000000'
+  primary_colour: '&H00FFFFFF'
+framing:
+  circle_cy_frac: 0.46
+  circle_diameter: 820
+  face_cy_target: 0.42
+  master_square: 1080
+  web_square: 512
+  zoom: 1.0
+look:
+  brightness: 0.03
+  contrast: 1.06
+  gamma: 1.02
+  saturation: 1.08
+  sharpen: 0.6
+  warmth: 6
+outputs:
+  circle_mov_caps: true
+  circle_mov_nocaps: true
+  srt: true
+  transcript_md: true
+  web_mp4: true
+paths:
+  out_dir: /Users/projects/Documents/Fields_Videos/Market-Updates/August_2026/Quick
+    Takes/Edited/Robina
+  raw_dir: /Users/projects/Documents/Fields_Videos/Market-Updates/August_2026/Quick
+    Takes
+  work_dir: ./work_qt_0914/build/robina_2026-09_quick/work
+project:
+  slug: robina_2026-09_quick
+  title: Robina — Quick Market Update, September 2026
+  suburb: Robina
