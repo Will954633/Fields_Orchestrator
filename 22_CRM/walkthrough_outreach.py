@@ -57,7 +57,55 @@ REVIEW_MD = CAMPAIGN_DIR / "DRAFTS_REVIEW.md"
 SITE = "https://fieldsestate.com.au"
 
 SLUGS = {"Robina": "robina", "Varsity Lakes": "varsity-lakes", "Burleigh Waters": "burleigh-waters"}
+SLUG_TO_SUBURB = {v: k for k, v in SLUGS.items()}
+# Legacy DEFAULT_SUBURB is retired for the no-signal path (Will, 2026-09-14). We never
+# guess a suburb now: a contact with no signal gets the all-three CHOOSER so they pick,
+# and their pick then teaches suburb_from_history() for the next campaign. Kept only as a
+# last-ditch label if a caller ever needs one.
 DEFAULT_SUBURB = "Robina"
+
+# Suburb-bearing on-site routes: /news/<slug>, /market-intelligence/<slug>[/cat],
+# and the legacy /market-metrics/<slug>. A viewed suburb is a demonstrated preference.
+_SUBURB_PATH_RE = re.compile(r"/(?:news|market-intelligence|market-metrics)/([a-z-]+)")
+
+
+def suburb_from_history(doc):
+    """Derive the suburb a contact has actually engaged with on-site — a demonstrated
+    view beats a guessed default (Will, 2026-09-14). Reads only verified `lead_web`
+    fields: the current `landing` URL plus the nightly-harvested `activity.pages_visited`
+    (count-weighted) and `activity.timeline` (dwell-weighted). Returns (suburb|None, basis).
+
+    This is the "adjust subsequent content based on past views" half of the loop: the
+    all-three chooser we send a no-signal contact records which suburb they click into
+    `lead_web.landing`/`activity`, and this reads it back on the next --build so they get
+    that suburb's content instead of another chooser."""
+    if not doc:
+        return None, None
+    lw = doc.get("lead_web") or {}
+    score = {}
+
+    def bump(path, weight):
+        if not path:
+            return
+        m = _SUBURB_PATH_RE.search(path)
+        if not m:
+            return
+        sub = SLUG_TO_SUBURB.get(m.group(1))
+        if sub:
+            score[sub] = score.get(sub, 0.0) + weight
+
+    bump(lw.get("landing"), 1.0)
+    act = lw.get("activity") or {}
+    for p in (act.get("pages_visited") or []):
+        bump(p.get("path"), float(p.get("count") or 1))
+    for t in (act.get("timeline") or []):
+        bump(t.get("path"), 1.0 + float(t.get("dwell_minutes") or 0))
+
+    if not score:
+        return None, None
+    best = max(score, key=score.get)
+    total = sum(score.values())
+    return best, f"past on-site views ({score[best]:.0f} of {total:.0f} weight on {best})"
 
 
 def contact_key(contact_id: str, secret: str) -> str:
@@ -107,6 +155,48 @@ def compose(first: str, suburb: str, email_link: str, sms_link: str):
     return subject, email_body, sms_body
 
 
+def chooser_links(token, utm_source):
+    """One deep link per suburb. SMS/Messenger links carry &lead=<token> so the click
+    identifies the contact AND records which suburb they chose (email links get the token
+    appended by the click tracker instead)."""
+    out = {}
+    for suburb, slug in SLUGS.items():
+        url = f"{SITE}/news/{slug}?play=1&utm_source={utm_source}&utm_campaign={CAMPAIGN}"
+        if utm_source != "crm_email" and token:
+            url += f"&lead={token}"
+        out[suburb] = url
+    return out
+
+
+def compose_chooser(first, email_links, sms_links, msgr_links):
+    """No-signal / open-to-all-three message: offer all three walkthroughs and let the
+    contact pick (Will, 2026-09-14). Their choice becomes the suburb signal we lacked."""
+    greet = f"Hi {first}," if first else "Hi,"
+    subject = "Video walkthroughs of the Gold Coast markets"
+
+    def bullets(links):
+        return "\n".join(f"{s}: {links[s]}" for s in SLUGS)
+
+    email_body = (
+        f"{greet}\n\n"
+        f"It's Will here from Fields Real Estate. I've just completed video walkthroughs of "
+        f"the Gold Coast markets I follow most closely. Each one speaks to a metric that shows "
+        f"how buyer demand has changed, and another that's proved to be a leading indicator on "
+        f"where the market goes next.\n\n"
+        f"Pick the one you'd like to watch:\n\n"
+        f"{bullets(email_links)}\n\n"
+        f"Kind regards,\nWill Simpson\nFields Real Estate"
+    )
+    sms_greet = f"Hi {first}, it's" if first else "Hi, it's"
+    ask = (
+        f"{sms_greet} Will from Fields Real Estate. I've just completed video walkthroughs of "
+        f"the local markets — pick the one you'd like to watch:\n"
+    )
+    sms_body = ask + bullets(sms_links)
+    msgr_body = ask + bullets(msgr_links)
+    return subject, email_body, sms_body, msgr_body
+
+
 def build(db):
     data = json.loads(TARGETS_JSON.read_text())
     col = db["walkthrough_outreach_drafts"]
@@ -133,32 +223,47 @@ def build(db):
         if (c.get("phone_norm") or c.get("phone")) and not smsable:
             flags.append(f"phone not an AU mobile ({c.get('phone') or c.get('phone_norm')}) — SMS suppressed")
 
+        # Fetch the CRM doc once — needed for link_token, messenger, contact_status AND
+        # lead_web (past on-site views drive the suburb signal below).
+        doc = crm.find_one(
+            {"_id": c["id"]},
+            {"link_token": 1, "messenger": 1, "contact_status": 1, "lead_web": 1})
+        if doc is None:
+            from bson import ObjectId
+            if re.fullmatch(r"[a-f0-9]{24}", c["id"]):
+                doc = crm.find_one(
+                    {"_id": ObjectId(c["id"])},
+                    {"link_token": 1, "messenger": 1, "contact_status": 1, "lead_web": 1})
+        if doc is None:
+            skipped.append((c["id"], "crm contact not found"))
+            continue
+
+        # ── SUBURB RESOLUTION (Will, 2026-09-14): never guess a suburb. ──
+        # 1) an explicit upstream assignment (form area / address / campaign name) wins;
+        # 2) else what they've ACTUALLY VIEWED on-site (a demonstrated preference);
+        # 3) else the all-three CHOOSER — offer all three and let them pick, rather than
+        #    defaulting them to Robina blind (that mis-sent Mary Webb, who then opted out).
         suburb = c.get("suburb_assignment")
         basis = c.get("suburb_basis") or ""
+        mode = "single"
         if suburb not in SLUGS:
+            learned, learned_basis = suburb_from_history(doc)
             area = (c.get("lead_brief_area") or "").lower()
-            if area == "open_to_all_three":
-                suburb, basis = DEFAULT_SUBURB, "open_to_all_three → defaulted"
+            if learned:
+                suburb, basis = learned, learned_basis
+                flags.append(f"suburb from past on-site views → {learned}")
+            elif area == "open_to_all_three":
+                mode, basis = "chooser", "open to all three → all-three chooser"
+                flags.append("open to all three — sent all-three chooser (let them pick)")
             else:
-                suburb, basis = DEFAULT_SUBURB, "no suburb signal → defaulted"
-                flags.append("no suburb signal — defaulted to Robina, review before sending")
+                mode, basis = "chooser", "no suburb signal → all-three chooser"
+                flags.append("no suburb signal — all-three chooser (let them pick), not defaulted")
 
         # Mint/reuse the durable ?lead= token (same shape email-track.mjs mints on click).
-        token = None
-        if smsable or emailable:
-            doc = crm.find_one({"_id": c["id"]}, {"link_token": 1, "messenger": 1, "contact_status": 1})
-            if doc is None:
-                from bson import ObjectId
-                if re.fullmatch(r"[a-f0-9]{24}", c["id"]):
-                    doc = crm.find_one({"_id": ObjectId(c["id"])},
-                                       {"link_token": 1, "messenger": 1, "contact_status": 1})
-            if doc is None:
-                skipped.append((c["id"], "crm contact not found"))
-                continue
-            token = doc.get("link_token")
-            if not token:
-                token = uuid.uuid4().hex
-                crm.update_one({"_id": doc["_id"]}, {"$set": {"link_token": token}})
+        token = doc.get("link_token")
+        if not token:
+            token = uuid.uuid4().hex
+            crm.update_one({"_id": doc["_id"]}, {"$set": {"link_token": token}})
 
         # ⭐ CHANNEL PREFERENCE (Will, 2026-09-11): someone who has WRITTEN TO US on
         # Messenger gets the message there — that's where they demonstrably engage
@@ -167,14 +272,26 @@ def build(db):
         # bars API sends on old threads), so --send-all lists them instead of sending;
         # log the paste with --mark-messenger-sent. Declined/spam threads never qualify
         # (their contact_status suppresses them at the send stage anyway).
-        msgr = (doc or {}).get("messenger") or {}
+        msgr = doc.get("messenger") or {}
         messenger_pref = bool(msgr.get("has_inbound")) and \
-            (doc or {}).get("contact_status") not in ("do_not_contact", "not_interested", "spam")
+            doc.get("contact_status") not in ("do_not_contact", "not_interested", "spam")
 
-        email_link, sms_link = links_for(suburb, token)
-        subject, email_body, sms_body = compose(first_name(c.get("name") or ""), suburb, email_link, sms_link)
-        msgr_link = sms_link.replace("utm_source=crm_sms", "utm_source=crm_messenger")
-        _, _, msgr_body = compose(first_name(c.get("name") or ""), suburb, email_link, msgr_link)
+        if mode == "chooser":
+            subject, email_body, sms_body, msgr_body = compose_chooser(
+                first_name(c.get("name") or ""),
+                chooser_links(token, "crm_email"),
+                chooser_links(token, "crm_sms"),
+                chooser_links(token, "crm_messenger"),
+            )
+            suburb_label = "all-three (chooser)"
+            suburbs = list(SLUGS)
+        else:
+            email_link, sms_link = links_for(suburb, token)
+            subject, email_body, sms_body = compose(first_name(c.get("name") or ""), suburb, email_link, sms_link)
+            msgr_link = sms_link.replace("utm_source=crm_sms", "utm_source=crm_messenger")
+            _, _, msgr_body = compose(first_name(c.get("name") or ""), suburb, email_link, msgr_link)
+            suburb_label = suburb
+            suburbs = [suburb]
 
         draft = {
             "_id": c["id"],
@@ -182,7 +299,9 @@ def build(db):
             "name": c.get("name") or "",
             "email": email if emailable else None,
             "phone": phone if smsable else None,
-            "suburb": suburb,
+            "suburb": suburb_label,
+            "suburbs": suburbs,
+            "suburb_mode": mode,
             "suburb_basis": basis or c.get("suburb_basis"),
             "link_token": token,
             "email_draft": {"subject": subject, "body": email_body} if emailable else None,
@@ -218,7 +337,7 @@ def write_review(built, skipped):
         f"\nGenerated {datetime.now(timezone.utc).isoformat()} · campaign `{CAMPAIGN}` · {len(built)} drafts",
         "\nSend a sample:  `python3 scripts/walkthrough_outreach.py --send --contact <email|phone|id> [--channel email|sms|both]`\n",
     ]
-    for suburb in ["Robina", "Varsity Lakes", "Burleigh Waters"]:
+    for suburb in ["Robina", "Varsity Lakes", "Burleigh Waters", "all-three (chooser)"]:
         subset = [d for d in built if d["suburb"] == suburb]
         if not subset:
             continue
