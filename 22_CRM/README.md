@@ -94,4 +94,8 @@ read memory `direct_phone_calls_system` (IPA s45 / POA s215) before any call-rel
   records when touched.
 - Data quality: landline numbers in `phone` (07/08 — not SMS-able), one literal `0400`,
   one `@bigpong.com` typo domain.
-- ~37 reachable contacts have **no suburb signal** for personalisation.
+- ~37 reachable contacts have **no suburb signal** for personalisation. These are **no
+  longer blind-defaulted to Robina** (that mis-sent Mary Webb, who then opted out). The
+  walkthrough tool now sends them an **all-three chooser** and learns their suburb from the
+  link they click — see [WEEKLY_OUTREACH.md](WEEKLY_OUTREACH.md) "Suburb rule" and
+  `suburb_from_history()` in `walkthrough_outreach.py`.
