@@ -60,17 +60,19 @@ to Robina** any more:
    the nightly-harvested `activity.pages_visited` / `timeline`) and picks the suburb they've
    actually looked at, count- and dwell-weighted. A demonstrated view beats a guess. Single
    message for that suburb, flagged `suburb from past on-site views → X`.
-3. **No signal (or `open_to_all_three`)** → the **all-three chooser**: one message offering
-   all three walkthrough links so the contact picks. Each link carries `&lead=<token>`
-   (SMS/Messenger) so the click both identifies them and records the suburb into `lead_web`
-   — which then feeds step 2 on the *next* build. This closes the loop: unknown → offer all
-   three → they pick → we learn.
+3. **No signal (or `open_to_all_three`)** → the **/news-hub chooser** (`compose_chooser` +
+   `hub_link`): one message with a single link to `https://fieldsestate.com.au/news` — the
+   News & Research hub with a built-in suburb picker (Robina / Varsity Lakes / Burleigh
+   Waters / Gold Coast city-wide) — so the contact picks their own area. The link carries
+   `&lead=<token>` (SMS/Messenger) so the click identifies them; their onward click into a
+   suburb lands in `lead_web`, which feeds step 2 on the *next* build. Loop closed: unknown
+   → send them the hub → they pick a suburb → we learn. (No `?play=1` on the hub — that
+   autostarts a per-suburb walkthrough and is meaningless on the multi-suburb page.)
 
 **Why:** Mary Webb had no suburb signal, was blind-defaulted to Robina, and opted out of
 SMS. We had no basis for Robina. See fix-history 2026-09-14 `[CRM-SUBURB-BLIND-DEFAULT]`.
-
-⚠ The chooser SMS carries three full URLs (~4 SMS segments). That is inherent to "show all
-three links" — acceptable, but prefer email/Messenger for chooser contacts where available.
+One `/news` link (Will, 2026-09-14) replaced an earlier three-links-in-one-SMS chooser —
+same intent, ~2 SMS segments instead of ~4, and the hub's own picker does the choosing.
 
 **Review before sending:** scan the ⚠ flags — chooser (no-signal) contacts, learned-suburb
 contacts, suppressed channels, suspect emails. Re-suburb anything you know better.
