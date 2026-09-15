@@ -96,7 +96,7 @@ python3 conductor_state.py directive --domain seo --from articles --text "<...>"
 | Cadence | **Slow, demand-attached** (Will, 2026-09-13) | Traffic, not cadence, is the constraint. Chain only with a real story/topic in hand. Don't churn. |
 | Facebook posting | **AUTHORISED and expected — posting has STARTED (3 posts by 2026-09-15) but is measuring nothing** | `performance.fb_organic.posts:1` on 3 articles, all `clicks:0, fan_reach:1` (placeholders). The feedback path is broken — "learn autonomously from FB" is blocked until it's fixed. Fix measurement BEFORE scaling posting. |
 | Performance feedback loop | **WAS DEAD 2026-08-29 → 2026-09-13; fixed 2026-09-13, heartbeat added 2026-09-15** | `article_performance` cron (line 343) was missing its `cd`; ran from `/home/fields` where `.env` is absent, so it died before Python for 15 days. Cron fixed + Rule 7/7b heartbeat wrapped. All 101 articles now carry fresh `performance`. |
-| 15 story drafts | **Regenerated as STORY pieces 2026-09-14 — already the target format** | The "$X paid → sold for $Y" winning pattern, Rule 5 clean. ⚠ Open decision: a conductor directive says HOLD all 15; the brief says publish stories. How many to propose vs hold — **Will to rule** (§7). |
+| 15 story drafts | **Regenerated as STORY pieces 2026-09-14; CLEARED to propose (Will 2026-09-15)** | The "$X paid → sold for $Y" winning pattern, Rule 5 clean. Propose the most promising for approval (drip 3/day per §4), publish on Will's tap, monitor engagement. The old conductor HOLD directive is OVERRIDDEN. |
 | Stale/false SERP titles | Audit "No Guide"-style `ai_analysis.meta_title`s vs live price each cycle | 2026-09-15 live-Googlebot audit: **1 genuinely false** (9 Auriga Ct — serves "No Guide" on a $1,949,000 listing); 2 self-resolved to generic fallback; 3 still true. Autonomous correction authorised (§4). |
 | Approval | Every NEW article still needs Will's explicit YES before going live | 2026-07-29 rule, still standing. `article_approval.py propose` → Telegram YES/NO. |
 | Authorship | ALL articles authored by **Will Simpson** | Corrected corpus-wide 2026-08-13. |
@@ -250,9 +250,9 @@ Gold Coast go-live.
 - [x] Autonomous stale/false-title fixes? **Yes.** (2026-09-13)
 - [x] Cadence? **Slow, demand-attached.** (2026-09-13)
 - [x] Whole-of-GC brand-credibility content optimised for likes/comments? **Yes, add it.** (2026-09-13)
-- [ ] **NEW (from 2026-09-15 preview run): the 15 drafts are already story-format, but a
-  conductor directive says HOLD all 15.** How many to propose for approval vs hold? (Agent
-  proposes a measured 3-and-hold-12 trial.) — Will to rule.
+- [x] **The 15 story drafts** — **Will 2026-09-15: yes — start proposing the most promising
+  ones for approval, publish on my tap, and monitor engagement.** Lead with the strongest
+  (biggest resonant gap), drip 3/day per §4. The old conductor HOLD directive is overridden.
 - [ ] **NEW: Facebook post metrics are placeholders** (`clicks:0, fan_reach:1` on all 3
   posts). Is that Meta's reach deprecation, a token permission, or a collector bug? Until
   known, "rank on `post_clicks`" is unachievable (`post_clicks` is always 0). — needs a call.
