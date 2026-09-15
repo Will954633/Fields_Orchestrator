@@ -253,12 +253,25 @@ Gold Coast go-live.
 - [x] **The 15 story drafts** — **Will 2026-09-15: yes — start proposing the most promising
   ones for approval, publish on my tap, and monitor engagement.** Lead with the strongest
   (biggest resonant gap), drip 3/day per §4. The old conductor HOLD directive is overridden.
-- [ ] **NEW: Facebook post metrics are placeholders** (`clicks:0, fan_reach:1` on all 3
-  posts). Is that Meta's reach deprecation, a token permission, or a collector bug? Until
-  known, "rank on `post_clicks`" is unachievable (`post_clicks` is always 0). — needs a call.
-- [ ] **NEW: no per-article RETURN attribution.** The Engagements tab shows return by
-  channel (`/news` is the #1 return trigger) but not *which article* brought someone back —
-  so the primary metric can't yet be tied to a specific piece. Build it?
+- [~] **Facebook 0-clicks — DIAGNOSED 2026-09-15 (fix pending Will's go).** Not a bug or
+  permission problem: the `clicks:0/fan_reach:1` are REAL Meta values. Two causes: (1) the
+  page has near-zero ORGANIC reach (1–3 fans/post), so organic `post_clicks` are genuinely
+  ~0 — even fully refreshed, total = 1 link click across all 3 posts; (2) a staleness bug
+  freezes each post's insights at 72h (`post-performance-tracker.py` finalizes and never
+  re-fetches unless run with `--refresh-insights`; the 6-hourly cron omits it). The
+  impressions/reach metric family IS deprecated by Meta, but `post_clicks` still works.
+  **Recommended fix (2-part):** (A) add `--refresh-insights` to the 6-hourly cron (one line);
+  (B) — the real answer — **rank on Facebook-referred on-site SESSIONS**, not organic
+  `post_clicks`: source from `system_monitor.organic_journeys` / `organic_landing_affinity`
+  (per-article FB-referral session counts; captures posts+shares+ads, real volume), add
+  `fb_referral_sessions` to `article_performance.py`'s `fb_organic` block and rank on it.
+- [~] **Per-article RETURN attribution — FEASIBLE, ~2h build (pending Will's go).** The slug
+  is already in the PostHog `$pathname`; `engagement_funnel_to_sheet.py` already computes
+  ~90% of it (`top_return_triggers`) but collapses `/news/<suburb>`→"News" and truncates
+  slugs. Fix: add a "RETURN BY ARTICLE" block to the `Attr · Return` tab (un-truncated
+  labels, keep the suburb) — ~2h, no new PostHog pull. ⚠ Volume is thin (60d: 102 returners,
+  only 11 returned to a content page) — a *ranking* signal ("which pieces pull people back",
+  `/news/robina` leads), NOT a precise rate.
 
 ## 8. Changelog
 
