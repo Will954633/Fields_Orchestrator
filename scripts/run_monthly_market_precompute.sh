@@ -58,6 +58,13 @@ run_step "3/6 market charts — dom + cycle" \
 run_step "4/6 market charts — volume + turnover" \
   bash -c "cd '$ENGINE' && $PY precompute_market_charts.py --charts volume turnover"
 
+# GC-wide days-on-market (houses/units) JSON behind /news/gold-coast. Reads the same
+# timeline DOM data step 2 backfilled + step 3 recomputed, so it runs after them.
+# Bakes public/data/gc_dom_by_type.json — push that file to the website repo to deploy
+# (same as gc_overview.json; the git push is not part of this precompute).
+run_step "4b market charts — GC days-on-market by type (houses/units)" \
+  $PY scripts/build_gc_dom_by_type.py
+
 run_step "5/6 PropRadar VOLUME re-anchor" \
   $PY scripts/propradar/recalibrate_charts.py --all --apply
 
