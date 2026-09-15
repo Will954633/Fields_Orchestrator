@@ -207,6 +207,18 @@ Gold Coast go-live.
 - **Never add a channel we cannot MEASURE.** Establish how performance comes back before
   posting anywhere new. A channel with no feedback path is a guess, not a trial.
 
+**⭐ THE WALKTHROUGH EXEMPTION (Will, 2026-09-15) — the one exception to the automated content
+rules.** If Will has personally recorded an on-camera **walkthrough** for an article, that IS
+his editorial sign-off: the article is **approved for publishing and distribution and is NOT
+subject to the automated content gate** (the CLAUDE.md Rule 5 no-advice / no-prediction /
+forbidden-word / number-format checks in `fb_post_article.py` and `article_approval.py`).
+The gates still *log* what they would have flagged (auditable, never silent) — they just don't
+block. Keyed on `content_articles.will_walkthrough`. **When a walkthrough is attached to an
+article, set `will_walkthrough: true` on its `content_articles` doc** (the walkthrough registry
+itself lives in the site's `MarketFlowProto.engine.ts`; the flag is the backend's source of
+truth). This exemption covers ONLY the automated editorial gate — every other rule in §5
+(canonical tags, community-group rules, measurability, no-live-without-approval) still binds.
+
 ## 6. Context the agent cannot get from data
 
 - **⚠ THE FACEBOOK MEASUREMENT GAP — read this before judging any article.** The domain's
