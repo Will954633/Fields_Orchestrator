@@ -309,6 +309,13 @@ def main():
             sys.exit(1)
 
         breaches = check_editorial(message)
+        # WALKTHROUGH EXEMPTION (Will, 2026-09-15). If Will has personally recorded an
+        # on-camera walkthrough for this article, that IS his editorial sign-off on the
+        # content — so the piece is approved for distribution and is NOT subject to the
+        # automated content gate. We still SHOW what would have tripped it (auditable, never
+        # silent), we just don't block. Keyed on content_articles.will_walkthrough, set when
+        # a walkthrough is attached (see the articles brief §5).
+        walkthrough_exempt = bool(article.get("will_walkthrough"))
 
         print(f"Article: {article.get('title')}")
         print(f"Slug:    {article.get('slug')}")
@@ -319,14 +326,21 @@ def main():
         print(message)
         print(f"\n--- ({len(message)} chars) ---")
 
-        if breaches:
+        if breaches and not walkthrough_exempt:
             print("\nREFUSED — the composed copy breaches the editorial rules (CLAUDE.md Rule 5):")
             for b in breaches:
                 print(f"  - {b}")
             print("\nFix the article's excerpt/opening, then re-run. Nothing was posted.")
             sys.exit(2)
 
-        print("\nEditorial check: PASS")
+        if breaches and walkthrough_exempt:
+            print("\nEditorial gate: EXEMPT — this article has a Will walkthrough (his on-camera "
+                  "sign-off), so per the articles-brief rule it is approved for distribution "
+                  "and not subject to the automated content gate. Would-have-flagged (waived):")
+            for b in breaches:
+                print(f"  - {b}")
+        else:
+            print("\nEditorial check: PASS")
 
         if not args.post:
             print("\n(Dry run — add --post to publish)")
