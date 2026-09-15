@@ -404,14 +404,66 @@ def cmd_grade(a):
     print(f"{a.id} → graded: {a.verdict} — {a.note.strip()}")
 
 
+def _due_date_aest(due_val):
+    """The AEST calendar date an outcome_check_due falls on, or None if unset/unparseable.
+
+    outcome_check_due is stored as a full UTC ISO timestamp (the exact instant
+    grade_in_days after shipping). Grading is reasoned about by DATE, not by a
+    sub-day instant, so we collapse it to its AEST calendar date."""
+    if not due_val:
+        return None
+    dt = due_val
+    if isinstance(dt, str):
+        try:
+            dt = datetime.fromisoformat(dt)
+        except ValueError:
+            return None
+    if not isinstance(dt, datetime):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(AEST).date()
+
+
 def cmd_due_for_grading(a):
-    now = _iso()
-    docs = list(_coll().find({"status": "shipped",
-                              "outcome_check_due": {"$lte": now}})
-                .sort("outcome_check_due", 1))
+    # An item is due for grading once its due DATE (in AEST, the operating timezone) is
+    # today or earlier — NOT once a full UTC instant passes. The old code compared
+    # `outcome_check_due` (a UTC timestamp) against the current UTC instant as strings,
+    # so REC-seo-001/002 — shipped 2026-08-15T21:12 UTC, due exactly 28d later at
+    # 2026-09-12T21:12 UTC = 2026-09-13T07:12 AEST — did not surface for a cycle that ran
+    # at 2026-09-13T07:00 AEST, missing an item everyone called "past due" by 12 minutes.
+    # See logs/fix-history/2026-09-15.md [RL-DUE-FOR-GRADING-TZ-BOUNDARY].
+    today_aest = _now().astimezone(AEST).date()
+    shipped = list(_coll().find({"status": "shipped"}))
+    docs, undated = [], []
+    for d in shipped:
+        dd = _due_date_aest(d.get("outcome_check_due"))
+        if dd is None:
+            undated.append(d)
+        elif dd <= today_aest:
+            docs.append(d)
+    docs.sort(key=lambda d: str(d.get("outcome_check_due") or ""))
+
     if a.json:
         print(json.dumps(docs, indent=2, default=str))
+        if undated:
+            # Never let a silent hole pass unremarked, even in JSON mode (Rule 7b).
+            print(f"WARNING: {len(undated)} shipped item(s) have no gradeable "
+                  f"outcome_check_due and can never surface: "
+                  f"{', '.join(d['_id'] for d in undated)}", file=sys.stderr)
         return
+
+    # Rule 7b: a shipped item with no due date is a silent hole — it will never appear
+    # here and its claim will never be graded. Surface it loudly instead of dropping it.
+    if undated:
+        print(f"⚠ {len(undated)} SHIPPED ITEM(S) HAVE NO GRADING DUE DATE — they can "
+              f"NEVER surface for grading. Re-ship them (sets outcome_check_due) or grade "
+              f"them directly:")
+        for d in undated:
+            print(f"    {d['_id']}  [{d['domain']}]  {d.get('title')}  "
+                  f"(shipped {str(d.get('shipped_at') or '')[:10]})")
+        print()
+
     if not docs:
         print("(nothing due for grading)")
         return
