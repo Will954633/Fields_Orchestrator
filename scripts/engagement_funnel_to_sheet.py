@@ -45,11 +45,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import statistics
 import warnings
 from collections import defaultdict, Counter
 from datetime import datetime, timedelta, timezone, date
+from urllib.parse import unquote
 
 warnings.filterwarnings("ignore")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -764,6 +766,43 @@ def chain_touch(ev, path, suburb) -> str | None:
     return None
 
 
+_HEX24 = re.compile(r"^[0-9a-f]{24}$", re.I)
+
+
+def article_label(path: str, id2slug: dict | None = None) -> str | None:
+    """Full, un-truncated, normalised label for an editorial page — for the
+    per-article RETURN breakdown. Returns the canonical path for /articles/* and
+    /news/* pages; None for anything that isn't editorial content.
+
+    Unlike chain_touch (which collapses /news -> 'News' and truncates slugs to 22
+    chars for the compact visit chain), this keeps the FULL path so pieces are
+    distinguishable, and normalises so the same piece doesn't fragment into
+    several rows:
+      * strips query string / fragment / trailing slash and URL-decodes junk
+      * lowercases the /news/<suburb> suburb
+      * maps /articles/<24-hex ObjectId> -> its slug via content_articles (_id->slug)
+        so the ObjectId URL and the slug URL for one article merge. Legacy hex
+        *slugs* (not _ids) are left as-is — already canonical, so still merge.
+    """
+    p = (path or "").split("?")[0].split("#")[0].strip().rstrip("/")
+    if not p:
+        return None
+    parts = [x for x in p.split("/") if x]
+    if not parts:
+        return None
+    h = parts[0]
+    if h == "articles" and len(parts) > 1:
+        slug = unquote(parts[1]).strip().lower()
+        if _HEX24.match(slug) and id2slug and id2slug.get(slug):
+            slug = id2slug[slug]
+        return f"/articles/{slug}"
+    if h == "news":
+        if len(parts) > 1:
+            return f"/news/{unquote(parts[1]).strip().lower()}"
+        return "/news"
+    return None
+
+
 def build_identity_map(sm, returners: set) -> dict:
     out = {}
     for c in sm.crm_contacts.find({}, {"posthog_ids": 1, "primary_posthog_id": 1,
@@ -817,7 +856,20 @@ LIMIT 50000
                                          "ref": r[4], "utm": r[5], "suburb": r[6]})
 
     idmap = build_identity_map(sm, set(returners))
-    agg = {"first_channel": Counter(), "first_content": Counter(), "trigger": Counter()}
+    # ObjectId -> slug so /articles/<_id> and /articles/<slug> for one piece merge.
+    id2slug: dict[str, str] = {}
+    try:
+        for a in sm.content_articles.find({}, {"slug": 1}):
+            s = a.get("slug")
+            if s:
+                id2slug[str(a["_id"]).lower()] = s
+    except Exception:  # noqa: BLE001 — degrade gracefully; unmapped ids just stay hex
+        id2slug = {}
+    agg = {"first_channel": Counter(), "first_content": Counter(), "trigger": Counter(),
+           # per-ARTICLE return breakdown (full, un-collapsed paths), keyed by
+           # DISTINCT returning person; *_pv counters hold total return-pageviews.
+           "ret_by_article": Counter(), "ret_by_article_pv": Counter(),
+           "ret_trigger_article": Counter(), "ret_trigger_article_pv": Counter()}
     journeys = []
     for did, evs in by_person.items():
         # split into visits (>30 min gap)
@@ -847,6 +899,37 @@ LIMIT 50000
             agg["first_content"][first_content] += 1
         if trigger:
             agg["trigger"][trigger] += 1
+
+        # --- per-ARTICLE return breakdown (full paths, from raw visit events) ---
+        # (a) editorial pages this returner came BACK to: viewed on any visit whose
+        #     AEST week is AFTER their first-seen week. Count each person once per
+        #     path (distinct returners) + total return-pageviews.
+        first_week = aest_monday(visits[0][0]["ts"])
+        person_paths: set[str] = set()
+        for v in visits:
+            if aest_monday(v[0]["ts"]) <= first_week:
+                continue
+            for e in v:
+                if e["event"] != "$pageview":
+                    continue
+                lbl = article_label(e["path"], id2slug)
+                if not lbl:
+                    continue
+                agg["ret_by_article_pv"][lbl] += 1
+                if lbl not in person_paths:
+                    agg["ret_by_article"][lbl] += 1
+                    person_paths.add(lbl)
+        # (b) return TRIGGER — the first editorial page in the first return visit
+        #     (visits[1]); one per returner, so returners == pageviews here.
+        for e in visits[1]:
+            if e["event"] != "$pageview":
+                continue
+            lbl = article_label(e["path"], id2slug)
+            if lbl:
+                agg["ret_trigger_article"][lbl] += 1
+                agg["ret_trigger_article_pv"][lbl] += 1
+                break
+
         journeys.append({
             "who": idmap.get(did, f"Anon {did[:8]}"),
             "first": f"{first_ch} · {first_content or '—'}",
@@ -899,6 +982,32 @@ def write_return_tab(svc, ssid, agg, journeys, back_url):
     for v, n in agg.get("trigger", Counter()).most_common(10):
         rows.append([f"   ↳ {v}", n])
     rows.append([])
+
+    # --- RETURN BY ARTICLE: the specific pieces returners came back to ---------
+    # Full, un-collapsed paths (ObjectId URLs mapped to slug), keyed by distinct
+    # returning person. This is the articles domain's primary metric — return
+    # viewers — attributed to the individual piece, not the coarse 'News' bucket.
+    rows.append(["▸ RETURN BY ARTICLE — the specific pieces returners came back to"])
+    ret_art = agg.get("ret_by_article", Counter())
+    ret_art_pv = agg.get("ret_by_article_pv", Counter())
+    rows.append(["Editorial page viewed AFTER week 1 (came back to it)",
+                 "returners", "return views"])
+    if ret_art:
+        for path, n in ret_art.most_common(25):
+            rows.append([f"   ↳ {path}", n, ret_art_pv.get(path, "")])
+    else:
+        rows.append(["   ↳ (none yet — no returner re-viewed an editorial page)"])
+    trig_art = agg.get("ret_trigger_article", Counter())
+    trig_art_pv = agg.get("ret_trigger_article_pv", Counter())
+    rows.append(["Article that opened the return visit (return trigger)",
+                 "returners", "return views"])
+    if trig_art:
+        for path, n in trig_art.most_common(25):
+            rows.append([f"   ↳ {path}", n, trig_art_pv.get(path, "")])
+    else:
+        rows.append(["   ↳ (none yet — first return visit opened on a non-editorial page)"])
+    rows.append([])
+
     rows.append([f"▸ RETURNER JOURNEYS — most loyal first"
                  + (f" (top {MAX_JOURNEYS} of {len(journeys)})" if len(journeys) > MAX_JOURNEYS else "")])
     rows.append(["Who", "First touch", "Wks", "Visits", "Content chain: first → each return"])
@@ -1464,6 +1573,21 @@ def main():
                           f"w{j['wks']} | {chain_string(j['vlist'])[:110]}")
                 if ret_agg.get("trigger"):
                     print("top return triggers:", ret_agg["trigger"].most_common(5))
+                print(f"\n--- RETURN BY ARTICLE (came back to — after week 1) ---")
+                rba = ret_agg.get("ret_by_article", Counter())
+                rba_pv = ret_agg.get("ret_by_article_pv", Counter())
+                if rba:
+                    for path, n in rba.most_common(15):
+                        print(f"  {path:58} {n:>3} returners / {rba_pv.get(path, 0):>3} views")
+                else:
+                    print("  (none yet)")
+                print("--- RETURN TRIGGER BY ARTICLE (opened the return visit) ---")
+                rta = ret_agg.get("ret_trigger_article", Counter())
+                if rta:
+                    for path, n in rta.most_common(15):
+                        print(f"  {path:58} {n:>3} returners")
+                else:
+                    print("  (none yet)")
                 print(f"\n{'='*70}\n{CONV_TAB}: {len(conv_journeys)} converter journeys\n{'='*70}")
                 for j in conv_journeys[:8]:
                     print(f"{j['who'][:26]:26} {j['conv'][:24]:24} {j['days']}d "
