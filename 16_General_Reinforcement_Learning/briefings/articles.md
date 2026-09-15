@@ -94,10 +94,10 @@ python3 conductor_state.py directive --domain seo --from articles --text "<...>"
 |---|---|---|
 | Publishing | **NOT paused** — publishing is expected | Direction is slow + demand-attached, not volume. |
 | Cadence | **Slow, demand-attached** (Will, 2026-09-13) | Traffic, not cadence, is the constraint. Chain only with a real story/topic in hand. Don't churn. |
-| Facebook posting | **AUTHORISED and expected — but had NEVER RUN as of 2026-09-13** | 0 articles carried any FB-post field. The agent must now actively post + learn from posts autonomously. |
-| Performance feedback loop | **WAS DEAD 2026-08-29 → 2026-09-13; now fixed** | `article_performance` cron (line 343) was missing its `cd`; ran from `/home/fields` where `.env` is absent, so it died before Python for 15 days. Fixed + re-run 2026-09-13. ⚠ Rule 7 heartbeat still to be added. |
-| 15 how-it-sold drafts | **Redirect into STORY pieces** (Will, 2026-09-13) | Not published as-is, not binned. Rework them into resonant individual-sale stories per §1. |
-| 6 live FALSE SERP titles | Untrue "No Guide" titles on now-priced listings | Autonomous correction now authorised (§4). |
+| Facebook posting | **AUTHORISED and expected — posting has STARTED (3 posts by 2026-09-15) but is measuring nothing** | `performance.fb_organic.posts:1` on 3 articles, all `clicks:0, fan_reach:1` (placeholders). The feedback path is broken — "learn autonomously from FB" is blocked until it's fixed. Fix measurement BEFORE scaling posting. |
+| Performance feedback loop | **WAS DEAD 2026-08-29 → 2026-09-13; fixed 2026-09-13, heartbeat added 2026-09-15** | `article_performance` cron (line 343) was missing its `cd`; ran from `/home/fields` where `.env` is absent, so it died before Python for 15 days. Cron fixed + Rule 7/7b heartbeat wrapped. All 101 articles now carry fresh `performance`. |
+| 15 story drafts | **Regenerated as STORY pieces 2026-09-14 — already the target format** | The "$X paid → sold for $Y" winning pattern, Rule 5 clean. ⚠ Open decision: a conductor directive says HOLD all 15; the brief says publish stories. How many to propose vs hold — **Will to rule** (§7). |
+| Stale/false SERP titles | Audit "No Guide"-style `ai_analysis.meta_title`s vs live price each cycle | 2026-09-15 live-Googlebot audit: **1 genuinely false** (9 Auriga Ct — serves "No Guide" on a $1,949,000 listing); 2 self-resolved to generic fallback; 3 still true. Autonomous correction authorised (§4). |
 | Approval | Every NEW article still needs Will's explicit YES before going live | 2026-07-29 rule, still standing. `article_approval.py propose` → Telegram YES/NO. |
 | Authorship | ALL articles authored by **Will Simpson** | Corrected corpus-wide 2026-08-13. |
 | QLD licence in disclaimers | **4832972** | ⚠ the GENERATOR may still emit 4832971 — watch for recurrence. |
@@ -113,11 +113,11 @@ not one-off new views.** Everything below serves that.
 2. **Find the next individual-sale story that shoots the lights out** — the $3.465M piece,
    again, for this market. Judged on reach + onward engagement (incl. Facebook) + whether it
    brings people back, not just organic search.
-2. **Build brand credibility** with whole-of-Gold-Coast content optimised for likes/comments.
-3. **Attach to real demand** — infrastructure/major projects (Coomera Connector first).
-4. **Learn autonomously from Facebook post performance** — post trials, keep winners.
-5. **Educate each reader on what Fields does** and route them onward (McKinsey pattern).
-6. Optimise/iterate existing articles; retire dead angles; rank highly where demand exists.
+3. **Build brand credibility** with whole-of-Gold-Coast content optimised for likes/comments.
+4. **Attach to real demand** — infrastructure/major projects (Coomera Connector first).
+5. **Learn autonomously from Facebook post performance** — post trials, keep winners.
+6. **Educate each reader on what Fields does** and route them onward (McKinsey pattern).
+7. Optimise/iterate existing articles; retire dead angles; rank highly where demand exists.
 
 ## 4. Standing authorisations — SHIP THESE WITHOUT ASKING
 
@@ -150,8 +150,9 @@ not one-off new views.** Everything below serves that.
 - **⭐ NEW (Will, 2026-09-13): autonomously correct stale or factually FALSE `meta_title`s
   and on-page copy when the listing state has moved** (e.g. a "No Guide" title on a
   now-priced listing). This is a Rule 5 factual-accuracy fix restoring stated intent, not
-  new public content — fix it and report it, do not file a recommendation. Six such titles
-  are live in Google right now; start there.
+  new public content — fix it and report it, do not file a recommendation. The 2026-09-15
+  audit found **1 live-false title (9 Auriga Ct — "No Guide" on a $1,949,000 listing)**; fix
+  that one first, and re-audit the "No Guide" set each cycle since listings get priced.
 - **Redirect the 15 how-it-sold drafts into resonant individual-sale STORY pieces** per §1.
 - Retiring dead topics; fixing slugs, metadata, internal links, on-page structure.
 - Querying Brain 1/2/3 and past Facebook performance for what has worked (see below).
@@ -249,6 +250,15 @@ Gold Coast go-live.
 - [x] Autonomous stale/false-title fixes? **Yes.** (2026-09-13)
 - [x] Cadence? **Slow, demand-attached.** (2026-09-13)
 - [x] Whole-of-GC brand-credibility content optimised for likes/comments? **Yes, add it.** (2026-09-13)
+- [ ] **NEW (from 2026-09-15 preview run): the 15 drafts are already story-format, but a
+  conductor directive says HOLD all 15.** How many to propose for approval vs hold? (Agent
+  proposes a measured 3-and-hold-12 trial.) — Will to rule.
+- [ ] **NEW: Facebook post metrics are placeholders** (`clicks:0, fan_reach:1` on all 3
+  posts). Is that Meta's reach deprecation, a token permission, or a collector bug? Until
+  known, "rank on `post_clicks`" is unachievable (`post_clicks` is always 0). — needs a call.
+- [ ] **NEW: no per-article RETURN attribution.** The Engagements tab shows return by
+  channel (`/news` is the #1 return trigger) but not *which article* brought someone back —
+  so the primary metric can't yet be tied to a specific piece. Build it?
 
 ## 8. Changelog
 
@@ -260,3 +270,8 @@ Gold Coast go-live.
   drafts into stories. Reaffirmed FB posting + made autonomous learning from it explicit
   (it had never run). Authorised autonomous correction of stale/false SERP titles. Documented
   the FB measurement gap and retracted the "volume hasn't worked / 0 conversions" claim.
+- 2026-09-15 — **factual corrections from a monitored PREVIEW run** (verified independently):
+  false-title count is **1, not 6** (9 Auriga Ct); the 15 drafts were **already regenerated as
+  story pieces 2026-09-14**; FB posting **has started (3 posts) but returns placeholder
+  metrics**; `article_performance` heartbeat added. Three new §7 questions for Will (draft
+  propose-count vs conductor HOLD; FB metric placeholders; per-article return attribution).
