@@ -54,6 +54,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from shared.db import get_client            # noqa: E402
 from crm_sync import posthog_query          # noqa: E402 (hardened retry/limit helper)
 from job_status import job_run              # noqa: E402
+from fridge_engagement_report import summarise as fridge_summarise  # noqa: E402
 
 AEST = timezone(timedelta(hours=10))
 _SLUG_RE = re.compile(r"/off-market/([a-z0-9][a-z0-9-]{2,120})", re.I)
@@ -276,12 +277,33 @@ def render(batches) -> str:
     return "\n".join(out)
 
 
+def render_fridge(s) -> str:
+    """Fridge magnets ship 2 per envelope, but their QR is a GENERIC stock magnet
+    pointing at /fridge with no slug/token — so a scan is NOT attributable to an
+    address or a batch (confirmed w/ Will 2026-09-15). Measured over time only; the
+    only address link is when a visitor self-types their address on the page."""
+    a, w = s["all_time"], s["window"]
+    lines = [
+        "\n🧲 FRIDGE MAGNETS — aggregate only (generic QR → /fridge; NOT per-address/per-batch)",
+        f"   all-time: {a['devices']} devices · {a['opened']} opened · {a['engaged']} engaged · "
+        f"{a['address_entered']} typed an address → {a['crm_households']} CRM households",
+        f"   last {s['days']}d: {w['new_devices']} new · {w['opened']} opened · "
+        f"{w['engaged']} engaged · {w['address_entered']} typed an address",
+    ]
+    if a["devices"] == 0:
+        lines.append("   (no scans recorded yet)")
+    return "\n".join(lines)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--order")
     ap.add_argument("--lead-days", type=int, default=2,
                     help="delivery lead time added to batch_date when posted_date is unknown")
+    ap.add_argument("--fridge-days", type=int, default=30,
+                    help="rolling window for the aggregate fridge-magnet block")
+    ap.add_argument("--no-fridge", action="store_true", help="skip the fridge aggregate section")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
 
@@ -295,15 +317,27 @@ def main():
         if sent == 0:
             raise RuntimeError("mail_log has zero pieces — cannot measure mailer ROI "
                                "(expected at least the shipped batches)")
+        fridge = None
+        if not a.no_fridge:
+            try:
+                fridge = fridge_summarise(get_client()["system_monitor"], a.fridge_days)
+            except Exception as e:  # aggregate extra — never fail the mailer funnel on it
+                print(f"(fridge summary unavailable: {e})", file=sys.stderr)
+
         beat.metrics = {"sent": sent, "opened": opened,
-                        "open_rate_pct": round(100.0 * opened / sent, 1)}
-        beat.detail = f"{opened}/{sent} opened across {len(batches)} batches"
+                        "open_rate_pct": round(100.0 * opened / sent, 1),
+                        "fridge_devices": (fridge or {}).get("all_time", {}).get("devices")}
+        beat.detail = f"{opened}/{sent} mailer opens across {len(batches)} batches"
 
         if a.json:
-            print(_json.dumps({o: {k: v for k, v in b.items()}
-                               for o, b in batches.items()}, default=str, indent=2))
+            out = {o: {k: v for k, v in b.items()} for o, b in batches.items()}
+            if fridge:
+                out["_fridge_aggregate"] = fridge
+            print(_json.dumps(out, default=str, indent=2))
         else:
             print(render(batches))
+            if fridge:
+                print(render_fridge(fridge))
 
 
 if __name__ == "__main__":
