@@ -28,16 +28,20 @@ properly. So the agent's job this phase is **content strategy, not campaign mech
 1. **Look into seller-specific content** — what seller-problem angles will stop a cold local
    scroll and qualify a watcher (per Krista §4 Axis 2: the *topic* is what makes a watch mean
    "seller", not the watch %).
-2. **Look at what concepts we've already drafted and already have.** A marketing team is
-   developing ad concepts — but those **predate** the Krista scoping doc, so they likely need
-   **adapting** to the video-view-funnel model. ⚠ *Will to point to where those concepts live*
-   (open question §7); until then, search the obvious places (`12_Marketing/Digital_Marketing`,
-   `03_Facebook/`, Drive).
-3. **Look into good new content for this purpose** from what's on the VM — especially the
-   **`12_Marketing/` library**: `Pricing_Strategy`, `Timing_Of_Sale`, `Choosing_An_Agent`,
-   `Selling_Process`, `Renovations`, `House_Improvements_Before_Listing`, `Editorial_Frames`,
-   `Market_Economics`, `Valuation`, `Auction_Or_Private_Treaty`, `Buyer_Psychology`. These are
-   researched seller-decision topics — mine them for 60–90s video concepts.
+2. **SURVEY THE WHOLE VM for seller-content ad material — there are usable concepts
+   everywhere (Will, 2026-09-15).** Do not treat this as one folder. Named starting points from
+   Will: **`05_Sabri_Subri/`** (Sabri Suby direct-response copywriting masterclass + Halo
+   strategy — hook/offer/angle frameworks) and **`12_Marketing/`**. But cast wider — anything on
+   this VM that could seed a cold seller-video concept counts: `08_Seller-Book/`,
+   `10_Market_Report/`, `14_Articles/`, `15_Off-Market/`, the FB `Campaigns/` history, drafted
+   concepts, Drive. A marketing team is also developing ad concepts, but those **predate** the
+   Krista doc and need **adapting** to the video-view-funnel model — fold them in when found.
+3. **Turn that survey into 60–90s seller-problem video concepts.** The `12_Marketing/` library
+   in particular holds researched seller-decision topics — `Pricing_Strategy`, `Timing_Of_Sale`,
+   `Choosing_An_Agent`, `Selling_Process`, `Renovations`, `House_Improvements_Before_Listing`,
+   `Editorial_Frames`, `Market_Economics`, `Valuation`, `Auction_Or_Private_Treaty` — each a
+   candidate hook. Sabri's frameworks shape *how* the hook is built; the marketing research
+   supplies *what* it's about.
 
 **⭐ REACH OUT TO WILL WITH YOUR THOUGHTS AND DIRECTIONS (Will, 2026-09-15).** Will explicitly
 wants to hear from this agent — *"the ads agent should reach out to me via Telegram and tell me
@@ -72,8 +76,9 @@ which drafted concepts to keep/adapt/drop, and the new concepts worth producing 
 
 ## 4. Standing authorisations — SHIP THESE WITHOUT ASKING
 
-- **Mine `12_Marketing/`, the drafted concepts, and the Krista method note** for cold-audience
-  seller-content angles; **adapt** the marketing team's concepts to the video-view funnel.
+- **Survey the WHOLE VM** for cold-audience seller-content angles (start `05_Sabri_Subri/` +
+  `12_Marketing/`, then wider — see §1.2), plus the Krista method note; **adapt** the marketing
+  team's pre-Krista concepts to the video-view funnel.
 - **Draft video concepts, hooks, scripts and landing-page test plans** for Will's approval.
 - **Build/segment video-view + engagement custom audiences (no spend, reversible)** — but
   **first confirm they're permitted under the HOUSING special-ad-category** (§6).
@@ -125,8 +130,8 @@ Coast go-live.
 ## 7. Open questions — Will to answer
 
 - [x] Pause ads? **No** — the reels are the new strategy; keep them live. (Will, 2026-09-15)
-- [ ] **Where do the marketing team's ad concepts live?** (path) — needed so the agent can adapt
-  them to the Krista funnel.
+- [x] **Where's the ad-concept material?** — **the whole VM** (Will, 2026-09-15): survey broadly,
+  starting `05_Sabri_Subri/` + `12_Marketing/`, then wider. No single marketing-team file.
 - [ ] Approve building the **seller-topic** percentile audiences once the seller videos exist?
 - [ ] Budget ceiling for the cold-prospecting test once content exists.
 - [ ] Does the posted-report / hand-raise step (Stage 4) have to work before spend scales?
