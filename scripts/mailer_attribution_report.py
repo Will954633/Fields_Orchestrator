@@ -236,6 +236,9 @@ def build(order_filter=None, lead_days=2):
         b["rows"].append({
             "slug": p["slug"], "address": p.get("address") or p["slug"],
             "opened_at": rec["ts"].astimezone(AEST).strftime("%Y-%m-%d %H:%M") if rec else None,
+            "opened_ts": rec["ts"] if rec else None,           # aware dt, for the backfill
+            "device": rec["dev"] if rec else None,             # the scanner's distinct_id
+            "piece_id": p["_id"], "order": order,
             "pageviews": jr.get("pvs"), "visit_days": jr.get("days"),
             "returned": returned if rec else None,
             "converted": converted if rec else None,
