@@ -51,7 +51,6 @@ TARGET_SUBURBS = ["robina", "varsity_lakes", "burleigh_waters", "merrimac"]
 DATABASE_NAME = "Gold_Coast"
 
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_STATIC_API_KEY", os.getenv("GOOGLE_PLACES_API_KEY", ""))
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # Google Maps Static API settings
 SATELLITE_ZOOM = 19          # Close enough to see roof, yard, neighbours
