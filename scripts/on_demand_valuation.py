@@ -81,19 +81,10 @@ GPT_MAX_PHOTOS = 20
 GPT_IMAGE_TIMEOUT = 15
 GPT_REQUEST_TIMEOUT = 180
 
-# Lazy-loaded — only imported if we actually need GPT enrichment
-_openai_client = None
-
-
-def _get_openai_client():
-    global _openai_client
-    if _openai_client is None:
-        from openai import OpenAI
-        api_key = os.environ.get('OPENAI_API_KEY')
-        if not api_key:
-            raise RuntimeError('OPENAI_API_KEY not set — cannot run GPT enrichment')
-        _openai_client = OpenAI(api_key=api_key)
-    return _openai_client
+# NOTE: vision enrichment routes through shared.claude_vision.vision_text
+# (see _call_gpt below) → Gemini-via-Vertex / Claude. The former direct-OpenAI
+# client was removed 2026-09-15 (dead code — never called) as part of dropping
+# OpenAI entirely.
 
 
 def _image_key(url):
