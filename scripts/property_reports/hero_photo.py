@@ -102,17 +102,15 @@ def _download_in_parallel(urls: List[str]) -> List[Tuple[str, str]]:
 def score_and_pick_hero(photo_urls: List[str], *, max_photos: int = MAX_CANDIDATES) -> Optional[Dict[str, Any]]:
     """Score a list of photo URLs and return the best one for hero usage.
 
-    Returns None on any failure (API key missing, network error, malformed
-    response) so the caller can fall back to the scraper's hero pick.
+    Returns None on any failure (no photos, network error, malformed response,
+    vision helper unavailable) so the caller can fall back to the scraper's hero
+    pick.
 
-    Day 6: photos are pre-downloaded server-side and sent to OpenAI as
-    base64 data URLs. This avoids the Domain CDN timeout issues that hit
-    the URL-fetch path.
+    Photos are pre-downloaded server-side and sent to the vision engine
+    (shared.claude_vision.vision_text → Gemini-via-Vertex / Claude) as base64
+    data URLs. This avoids the Domain CDN timeout issues that hit the URL-fetch
+    path. (Migrated off OpenAI 2026-09-15.)
     """
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        logger.warning("OPENAI_API_KEY not set — skipping AI hero selection")
-        return None
     if not photo_urls:
         return None
 
