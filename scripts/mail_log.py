@@ -20,6 +20,10 @@ depend on the stock ledger or a Drive manifest staying around.
     posted_date    null until John confirms lodged with Australia Post
     posted_source  who/what confirmed it
     lead_source, lead_date          (provenance, where known)
+    link_token                      per-address QR token (mailer_link_tokens); the
+                                    key lead-link-visit.mjs resolves a scan against
+    opened_at, opened_distinct_id   first scan of this piece's QR (stamped by
+                                    lead-link-visit.mjs on the lazy contact bind)
     posthog_distinct_id, crm_contact_id   (join keys, filled opportunistically)
     created_at, updated_at
 
@@ -83,16 +87,23 @@ def record(order_number, flow_code, arm, contents, envelope, batch_date, drive_f
            slug, address, lead_source=None, lead_date=None,
            posthog_distinct_id=None, crm_contact_id=None):
     now = _now()
+    sm = get_client()["system_monitor"]
+    # The per-address QR token minted at generate time (build_owner_mailer.py →
+    # ensure_mailer_token). Carrying it here makes mail_log the durable per-piece
+    # record lead-link-visit.mjs resolves a scan against, so an anonymous scan can
+    # be bound to a CRM contact for this exact address. Absent for pre-token batches.
+    link_token = (sm["mailer_link_tokens"].find_one({"_id": slug}, {"link_token": 1})
+                  or {}).get("link_token")
     doc = {
         "slug": slug, "address": address, "suburb": _suburb(slug, address),
         "order_number": order_number, "flow_code": flow_code, "ab_arm": arm,
         "contents": contents, "contents_str": _contents_str(contents),
         "envelope": envelope, "batch_date": batch_date, "drive_folder": drive_folder,
-        "lead_source": lead_source, "lead_date": lead_date,
+        "lead_source": lead_source, "lead_date": lead_date, "link_token": link_token,
         "posthog_distinct_id": posthog_distinct_id, "crm_contact_id": crm_contact_id,
         "updated_at": now,
     }
-    col().update_one(
+    sm["mail_log"].update_one(
         {"_id": f"{order_number}:{slug}"},
         {"$set": doc,
          "$setOnInsert": {"created_at": now, "posted_date": None, "posted_source": None}},
@@ -138,7 +149,8 @@ def export_csv(out):
     rows = list(col().find({}).sort([("order_number", 1), ("slug", 1)]))
     fields = ["order_number", "slug", "address", "suburb", "flow_code", "ab_arm",
               "contents_str", "envelope", "batch_date", "drive_folder",
-              "posted_date", "posted_source", "lead_source", "lead_date"]
+              "posted_date", "posted_source", "lead_source", "lead_date",
+              "link_token", "opened_at", "opened_distinct_id"]
     os.makedirs(os.path.dirname(os.path.abspath(out)) or ".", exist_ok=True)
     with open(out, "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=fields)
