@@ -32,8 +32,6 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 
-from openai import OpenAI
-
 # Repo-root import (this file lives at scripts/property_reports/, shared/ at repo root)
 import sys as _sys
 from pathlib import Path as _Path
@@ -44,29 +42,14 @@ from shared.domain_urls import to_bucket_api_url, is_bucket_api  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-_CLIENT: Optional[OpenAI] = None
-
-
-def _client() -> Optional[OpenAI]:
-    """Lazy singleton. Returns None if no API key — caller skips work."""
-    global _CLIENT
-    if _CLIENT is not None:
-        return _CLIENT
-    key = os.environ.get("OPENAI_API_KEY")
-    if not key:
-        return None
-    _CLIENT = OpenAI(api_key=key)
-    return _CLIENT
-
 
 # ---------------------------------------------------------------------- #
-# Claude (Anthropic) vision — PRIMARY engine
+# Vision engine — Gemini-via-Vertex / Claude (see _claude_vision_text)
 # ---------------------------------------------------------------------- #
-# Claude is tried first for both classification and analysis (see
-# _classify_one / analyse_floor_plan). The OpenAI client below it is a dormant
-# fallback only, used when Claude is unavailable but an OpenAI key is set —
-# kept because the 2026-06 OpenAI quota exhaustion showed the value of a
-# second vision source.
+# All classification and analysis routes through shared.claude_vision.vision_text
+# (_classify_one / analyse_floor_plan). The former OpenAI (gpt-4o) fallback was
+# removed 2026-09-15 as part of dropping OpenAI entirely — the OpenAI account has
+# been credit-exhausted (429) for months, so the fallback never fired.
 _ANTHROPIC_CLIENT = None
 # Sonnet, not Opus: floor-plan reading is structured OCR, where Sonnet leads on
 # extraction accuracy at ~40% of Opus's cost. Opus-tier was burning credits fast
@@ -125,43 +108,25 @@ CLASSIFY_PROMPT = (
 )
 
 
-def _classify_one(url: str, model: str = "gpt-4o-mini") -> bool:
+def _classify_one(url: str) -> bool:
     """Return True iff the URL is a floor plan. Safe to call on any URL.
 
-    Claude is the primary engine; the OpenAI path is retained only as a dormant
-    fallback for the (unlikely) case Claude is unavailable but an OpenAI key is.
+    Uses the Gemini/Claude vision engine (_claude_vision_text); returns False on
+    any vision failure.
     """
     txt = _claude_vision_text(url, CLASSIFY_PROMPT, max_tokens=8)
     if txt is not None:
         return "YES" in txt.strip().upper()
-    client = _client()
-    if client:
-        try:
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": CLASSIFY_PROMPT},
-                        {"type": "image_url", "image_url": {"url": url, "detail": "low"}},
-                    ],
-                }],
-                max_tokens=4,
-                temperature=0,
-            )
-            return "YES" in (resp.choices[0].message.content or "").strip().upper()
-        except Exception as e:
-            logger.debug(f"  classify_one (openai fallback) threw on {url[:80]}: {e}")
     return False
 
 
 def classify_photos_for_floor_plan(urls: List[str], max_workers: int = 6) -> List[str]:
     """Run classifier across a photo list in parallel. Returns the URLs
-    flagged YES, preserving original order. Uses Claude vision (primary);
-    returns [] only if no vision provider (Claude or OpenAI) is configured."""
+    flagged YES, preserving original order. Uses the Gemini/Claude vision engine;
+    returns [] only if no vision provider is configured."""
     if not urls:
         return []
-    if not _anthropic_client() and not _client():
+    if not _anthropic_client():
         logger.info("  floor_plan classifier: no vision provider configured — skipping")
         return []
 
@@ -271,36 +236,16 @@ def _extract_json(text: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def analyse_floor_plan(url: str, model: str = "gpt-4o") -> Optional[Dict[str, Any]]:
+def analyse_floor_plan(url: str) -> Optional[Dict[str, Any]]:
     """Run vision analysis against a floor-plan image. Returns the
     structured layout dict or None on failure.
 
-    Claude is the primary engine (lower hallucination on diagrams, and it reads
-    the printed area-summary box reliably). The OpenAI path is a dormant
-    fallback only — used if Claude is unavailable but an OpenAI key is set.
+    Uses the Gemini/Claude vision engine (lower hallucination on diagrams, and it
+    reads the printed area-summary box reliably).
     """
     if not url:
         return None
     raw = _claude_vision_text(url, ANALYSE_PROMPT, max_tokens=1200) or ""
-    if not raw:
-        client = _client()
-        if client:
-            try:
-                resp = client.chat.completions.create(
-                    model=model,
-                    messages=[{
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": ANALYSE_PROMPT},
-                            {"type": "image_url", "image_url": {"url": url, "detail": "high"}},
-                        ],
-                    }],
-                    max_tokens=900,
-                    temperature=0,
-                )
-                raw = resp.choices[0].message.content or ""
-            except Exception as e:
-                logger.warning(f"  analyse_floor_plan (openai fallback) threw: {e}")
     if not raw:
         return None
     parsed = _extract_json(raw)
@@ -390,5 +335,5 @@ def resolve_floor_plan(
         "alt_urls": sorted_urls[1:],
         "layout": layout,
         "generated_at": datetime.utcnow().isoformat() + "Z",
-        "model": "gpt-4o",
+        "model": _CLAUDE_VISION_MODEL,
     }
