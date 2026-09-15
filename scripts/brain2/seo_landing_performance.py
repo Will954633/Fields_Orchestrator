@@ -27,6 +27,20 @@ import os, sys, json, argparse, urllib.request, urllib.error, urllib.parse
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 
+try:
+    from zoneinfo import ZoneInfo
+    AEST = ZoneInfo("Australia/Brisbane")
+except Exception:  # pragma: no cover
+    AEST = timezone(timedelta(hours=10))
+
+# --- time-series history (separate collection; the main snapshot is untouched) --------
+# system_monitor.seo_landing_performance stays a single rolling snapshot (delete+insert)
+# so every existing reader keeps working unchanged. This collection ADDS a dated append
+# so before/after windows are answerable from stored data instead of an ad-hoc GSC pull.
+HISTORY_COLL = "seo_landing_performance_history"
+HISTORY_MIN_IMPRESSIONS = 5     # keep gradeable pages; drop the long tail of 1-4 impr noise
+HISTORY_RETAIN_DAYS = 180       # prune snapshots older than this so it stays bounded
+
 load_dotenv("/home/fields/Fields_Orchestrator/.env")
 sys.path.insert(0, "/home/fields/Fields_Orchestrator")
 from shared.db import get_client  # noqa: E402
@@ -200,6 +214,28 @@ def main():
     now = datetime.now(timezone.utc).isoformat()
     for r in all_rows:
         r["computed_at"] = now
+
+    # --- build the dated history rows BEFORE the main insert_many mutates all_rows -----
+    # (insert_many stamps each dict with an _id in place; we copy the fields we keep so
+    # the history docs get their own ids and the two collections never share _id).
+    st = next((r for r in all_rows if r.get("dims") == "__site_totals__"), {})
+    snapshot_date = datetime.now(timezone.utc).astimezone(AEST).date().isoformat()
+    window = {"start_date": st.get("start_date"), "end_date": st.get("end_date"),
+              "days": st.get("window_days")}
+    history_rows = []
+    for r in all_rows:
+        # Keep the compact, gradeable signal: exact site totals + authoritative per-page
+        # rows with real traffic. The query,device sample (~9%) and 1-4 impr tail add bulk
+        # without helping a before/after comparison, so they are not retained.
+        if r.get("dims") == "__site_totals__" or (
+                r.get("dims") == "page" and (r.get("impressions") or 0) >= HISTORY_MIN_IMPRESSIONS):
+            hr = {k: r.get(k) for k in ("source", "dims", "page", "query", "device",
+                                        "clicks", "impressions", "ctr", "position")}
+            hr["snapshot_date"] = snapshot_date
+            hr["window"] = window
+            hr["computed_at"] = now
+            history_rows.append(hr)
+
     # Batched — the page dimension alone is ~12.5k rows at 90 days and a single
     # insert_many that size exhausts Cosmos RU and 16500s the whole write.
     for i in range(0, len(all_rows), 500):
@@ -207,6 +243,32 @@ def main():
     coll.create_index("page")
     coll.create_index("dims")
     print(f"\nwrote {len(all_rows)} seo_landing_performance rows")
+
+    # --- append today's snapshot to the bounded history collection --------------------
+    hcoll = db[HISTORY_COLL]
+    # Idempotent per day: a re-run replaces today's snapshot rather than duplicating it.
+    hcoll.delete_many({"snapshot_date": snapshot_date})
+    if history_rows:
+        for i in range(0, len(history_rows), 500):
+            hcoll.insert_many(history_rows[i:i + 500])
+        hcoll.create_index([("snapshot_date", 1)])
+        hcoll.create_index([("page", 1), ("snapshot_date", 1)])
+        # Prune old snapshots so the collection stays bounded.
+        cutoff = (datetime.now(timezone.utc).astimezone(AEST).date()
+                  - timedelta(days=HISTORY_RETAIN_DAYS)).isoformat()
+        pruned = hcoll.delete_many({"snapshot_date": {"$lt": cutoff}}).deleted_count
+        dates = sorted(hcoll.distinct("snapshot_date"))
+        print(f"history: wrote {len(history_rows)} rows for {snapshot_date} "
+              f"(pages ≥{HISTORY_MIN_IMPRESSIONS} impr + site totals); pruned {pruned} "
+              f"older than {cutoff}; {len(dates)} snapshot date(s) retained "
+              f"[{dates[0]}..{dates[-1]}]")
+    else:
+        # Rule 7b: the main snapshot had rows but none qualified for history — the site
+        # always has traffic, so this means the GSC page/site-totals pull is broken even
+        # though Bing may have returned something. Say so rather than silently skipping.
+        print(f"⚠ history: NO qualifying rows to append for {snapshot_date} "
+              f"(no __site_totals__ and no page rows ≥{HISTORY_MIN_IMPRESSIONS} impr). "
+              f"The GSC pull likely failed; before/after history for today is MISSING.")
     print("   ⚠ consumers MUST filter on `dims`: 'page' = authoritative per-page totals; "
           "'page,query,device' = query attribution only (a ~9% sample — Google withholds "
           "anonymized queries); '__site_totals__' = exact site totals. Summing blind double-counts.")
