@@ -279,6 +279,10 @@ def main():
     ap.add_argument("--list", action="store_true", help="List published articles and exit")
     ap.add_argument("--dry-run", action="store_true", help="Compose and print without posting")
     ap.add_argument("--post", action="store_true", help="Actually publish to Facebook")
+    ap.add_argument("--force", action="store_true",
+                    help="Override the per-day post cap (referenced by the rate-limit check; "
+                         "without it defined, hitting the cap raised AttributeError instead of "
+                         "the intended REFUSED message)")
     args = ap.parse_args()
 
     client, sm = get_db()
