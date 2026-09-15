@@ -29,7 +29,6 @@ os.makedirs(OUT, exist_ok=True)
 os.chdir(HERE)
 sys.path.insert(0, ORCH)
 from shared.db import get_client                      # noqa: E402
-from shared.report_link import report_link_key        # noqa: E402
 
 GRASS = "#22382c"
 COPPER = "#b76749"
@@ -76,8 +75,11 @@ def build(slug, label=None):
     doc = get_client()["system_monitor"]["property_reports"].find_one({"slug": slug}) or {}
     address = doc.get("address") or slug
     disp = label or short_addr(address)
-    key = report_link_key(slug)
-    url = f"{BASE}/your-home/{slug}?{UTM}&utm_content={slug}&k={key}#market"
+    # QR opens the fridge animation, personalised to THIS home via ?slug — the
+    # fridge then offers /news/<suburb>, /off-market/<slug>, and the walkthrough.
+    # No link key needed: /off-market/<slug> is reachable without one, and the
+    # fridge landing itself is public. (Was /your-home/<slug>?k=… before 2026-09-15.)
+    url = f"{BASE}/fridge?slug={slug}&{UTM}&utm_content={slug}"
 
     qr_svg = os.path.join(OUT, f"card_mu_{slug}_qr.svg")
     segno.make(url, error="m").save(qr_svg, dark=GRASS, light="#ffffff", border=3)
