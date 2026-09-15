@@ -1872,3 +1872,117 @@ Doc: cycles/2026-W37/2026-09-13/articles_cycle_20260913_1000.md
   carry the flag. Latent gap documented, not fixed — `organic_journeys` has no such field at all.
 - **Not done, named so it is not lost:** the friction sensor's CLIENT_ERROR channel needs a
   per-surface error-rate threshold. Bounded, does not need Will, first thing under a fresh brief.
+
+## 2026-09-13 — `valuation` weekly cycle (W37) · briefing EXPIRED (31d) → recommend-only
+
+- **The attached surface moved on its own: 37.3% → 51.3% coverage in a week (+19 live
+  listings).** Almost entirely Robina (47.4% → **71.4%**, 45/63), and entirely one decline
+  reason evaporating: `no_class_matched_comparables` 26 → 14. Houses 68.5% (74/108).
+  Envelope suppression 27.1% (61/225). MAE **quoted, not re-derived** — 8.05%, n=581.
+- **Checked whether the coverage was bought with accuracy. It was not.** The 45 publishable
+  Robina units run on **median 12 comparables** (house engine's median is 8), min 4, only
+  1 of 45 at ≤5; tier split **28 `same_complex_same_beds` / 17 `same_subtype_same_beds_suburb`**
+  — none fell back to the weaker `same_complex_any_beds`. Comparable *supply* improved;
+  selection standards did not move. `band_basis` on every record is Rule 5 compliant.
+- **Wrong twice, both recorded:** (1) hypothesised the unit engine was unscheduled and
+  day-stale — `computed_at`/`run_at` are **UTC**, it runs daily 04:30 AEST with a healthy
+  Rule 7 heartbeat; reading UTC as local would have reported a working job as dead.
+  (2) Hypothesised 9 Burleigh Waters records with `publishable:false` and **no**
+  `decline_reason` were a crashed writer — it is the **suburb accuracy gate**
+  (`unit_valuation.py:482`, BW `within10` 46.5% fails `WEAK_WITHIN10`), a correct refusal of
+  all 2,237 BW attached, already documented 2026-08-23. Not re-raised.
+- **Could not attribute the +18 to an upstream job.** `system_monitor.job_runs` holds **one
+  doc per job** (177 docs / 177 names, latest run only) — no history to diff. Named, not
+  proposed: run-history retention is monitoring infrastructure, off-limits to every domain.
+- **Pre-registered prediction to grade 2026-09-20:** `onthehouse_sold_sync_gc_wide_units`
+  landed **6,751 new sold units at 08:57 AEST — four hours AFTER** that day's 04:30
+  precompute, so none of it is in these figures. Attached coverage should move again at the
+  09-14 run with no change in the live book. If it doesn't, that data isn't reaching
+  comparable selection and that's a defect to find.
+- **Proposed nothing.** Cap held by **REC-valuation-005**, re-verified **still live and
+  unfixed after 7 days** — `PropertyPage.tsx:1400` and `:1416` still print the banned
+  "Confidence Range" label over an empirical 80% band. Second consecutive cycle in which
+  this domain's only open item is non-compliant public copy it can measure but not fix.
+- **Open question for Will:** the **floor**, not the ceiling, is now where coverage is lost —
+  ceiling suppressions halved 35 → 19 while floor suppressions rose 40 → 42 (25 of Robina's
+  116). Worth quantifying? The envelope must never be widened to buy coverage, but "the book
+  is drifting below our floor" has never been examined.
+
+## 2026-09-13 16:00 AEST — Samantha weekly brief, cycle 6 (2026-W37)
+
+**Domains: 7/7 ran** — seven `rl_weekly_*` heartbeats `success`, seven cycle docs on disk. Both checked.
+
+**Step 1.** One unactioned Telegram message: `YES A987` (09-10). It is **not** a brief verdict —
+`A987` is an *article* approval token (`article_pending_approval`, slug `renovation-premium-gold-coast`,
+decided and published 09-10 06:56, ten minutes after it was sent). Cross-checked the ledger as well as
+the chat, per the 2026-08-16 lesson: no `will_verdict` landed on any briefed item. **Last week's tokens:
+#70C2 and #78D1 expired unanswered; #FC74 and #92FE still `awaiting`. Genuinely 0 of 5, two weeks running.**
+Message stamped `actioned_at` with the reason; 0 unactioned remain.
+
+**Step 1b.** Will sent no briefing updates, so **nothing was written into any brief** — an empty §4 is a
+true statement that a domain is not authorised, and inventing direction would be authorising work in his
+name. Freshness reported in the brief's Health section instead: geo/seo/ads/articles/ops/valuation
+**expired, 31d** (RECOMMEND-ONLY); onsite **stale, 20d** (NARROWED).
+
+**Step 4 — merges and kills.** 13 open → 5 briefed.
+- **Item 2 merges three:** `REC-articles-008` + `REC-valuation-005` + the framing half of `REC-seo-008`.
+  One surface (`/property`), one class (public copy contradicting the page it sits on), one decision.
+- **Item 5 merges three:** `REC-ops-005` + `REC-onsite-006` + the dead `article_performance` cron line.
+  All one crontab paste.
+- **Orphan found:** `REC-geo-005` asked to be folded into `REC-seo-006`, which seo **withdrew 09-12**.
+  Directive sent to geo.
+- **Killed:** `REC-seo-007` — vanity target, 8 clicks/90d, and articles independently supplied the
+  mechanism (address-attached pages rank and are not searched). Told seo to withdraw it.
+
+**Verified independently before briefing** (not taken from the domain docs): the 6 false "No Guide"
+titles by my own query over all three collections (all `for_sale`, all with published prices) plus a live
+Googlebot fetch of 9 Auriga Court; `Confidence Range` at `PropertyPage.tsx:1400,1416`; `walk.ctaFrom` at
+`MarketFlowProto.engine.ts:2634`; `om_needs_manual_link` = 4; zero scheduler hits for
+`offmarket_report_poller` / `build_call_list` / `build-address-index`; and that `/home/fields/.env` does
+not exist, which is exactly why the `article_performance` cron chain has been dead 15 days.
+
+**Correction recorded:** ops reported its own heartbeat frozen at 08-15 (30d). The board it read was
+generated 20:00 UTC 09-12; its own `success` heartbeat landed at 20:15. `REC-ops-007` is real but
+**intermittent** — the heartbeat vanishes only when the tamper guard fires (08-23, 08-30, 09-06; not this
+week). Stated in the brief.
+
+**Step 5/6.** `mark-briefed` on 7 IDs **before** sending, then five tokens minted in message order and
+attached to my own message — one channel, no overlap:
+`#E1E0` REC-seo-008 (the authorisation sentence) · `#A083` REC-articles-008 (+valuation-005) ·
+`#1FB7` REC-ads-009 · `#775F` REC-ads-006 · `#854B` REC-ops-005 (+onsite-006).
+ONE Telegram sent, 4,047 chars, five tappable rows, questions carried in full.
+
+**The structural finding, third week running.** Six expired domains shipped nothing while between them
+naming a $711 campaign defect (one constant, one line), six titles untrue in Google today, and a banned
+phrase live on 51 listings. The one domain with any envelope (onsite, NARROWED) found and fixed a **10×
+step in React #418 on the off-market deck** — 0 → 15.5 per 100 pageviews since 08-23, a recurrence of our
+own July fix — and declined to scale a replicated 1.80× copy win (z=2.31, n=1,116) because it is stale.
+**Last week I made this item 5 and said it needed words, not a tap. That was the error.** It was the most
+valuable thing on the page and the only one he could not answer with a thumb. This week it is item 1, the
+sentence is written out verbatim, and it has a button.
+
+**Three directives issued** (peer channel, not Will's attention): articles — hold the 15 how-it-sold
+drafts on its own authority and bring a demand-ranked topic list, with the n=5 caveat named; seo — drop
+REC-seo-007, and carry geo's 1,555-URL brand dispatch; geo — REC-geo-005 is orphaned, and the reason
+REC-geo-004 slipped despite my promise (its own 9/9 zero-`/about` probe result).
+
+**Promise broken and recorded:** I told Will last week that REC-geo-004 was "first in the queue next
+week". It is not in this brief. The reason is in the brief in writing, under his eyes, not only here.
+
+## 2026-09-15 18:19 — articles cycle (weekly)
+Briefing `current` (2 days). Market briefs 9 days old (OK). **Proposed nothing; ledger 0/2.**
+- **Fixed 10 live /property pages** stating a priced listing had no price — 58 false strings,
+  oldest live-false 43 days. Brief said 1; the audit behind that number checked only `<title>`
+  tags. Verified as Googlebot before/after; sweep now 0. `[EDITORIAL-PRICE-ABSENCE-DESYNC]`
+- **Closed the detector hole:** step 123 gates on valuation timestamps, and publishing a price
+  guide never advances `computed_at` — the class was invisible to the tool built to catch it.
+  Added `price_contradiction`, placeholder-aware (POA s216). Replayed pre-fix backup: 10/10 fire.
+- **Gave 101 articles somewhere to go** — corpus had 2 internal links total. "Keep reading" →
+  `/news` hub. Routed to hubs not the funnel: 17 of 21 content returners come back to a hub,
+  4 to an article. `[ARTICLES-NO-ONWARD-ROUTING]` — raised twice as a rec, done neither time.
+- Proposed 3 story drafts (drip cap), ranked on the winner's real mechanic: big gap over a
+  SHORT hold. Rule 5 batch gate 15/15 after fixing one draft.
+- Posted 2 articles to FB (sentiment-matched); a third **refused by the editorial gate** — the
+  only article with a live Will walkthrough is titled "Why you should…" → sent to seo.
+- Withdrew REC-009 (part (a) answered in briefing, part (b) executed this cycle).
+- Open question → onsite: FB sends more visitors than Search and ~2% of the reading.
