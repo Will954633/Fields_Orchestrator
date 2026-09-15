@@ -74,7 +74,13 @@ class ScheduleManager:
         # not the Indexing API's 200/day quota, and it passes --sample 0 so it burns no
         # URL-Inspection quota either. Without it the resubmit only happens on the
         # Monday 07:00 cron, i.e. up to 7 days of lag on newly published property pages.
-        self.always_run_processes = {11, 12, 13, 14, 15, 16, 17, 18, 19, 109, 107, 110, 114, 116, 120, 121}  # Backend Enrichment + Pre-computation + Coverage Check + Audit + Image Archival + URL Slugs + Data Quality Validator + AI Editorial + SEO Sitemap Resubmit
+        # 123 added 2026-09-15 (EDITORIAL-VALUATION-DESYNC). Like 121, the ACTUAL
+        # schedule lives here, not in the YAML execution_order — a process absent
+        # from this set never runs even if it's in the YAML. 123 is the editorial↔
+        # valuation desync detector: it must run every night AFTER 18 (valuation
+        # precompute) and 120 (new-listing editorial) so it sees the freshest
+        # valuation_data.computed_at. Detect/flag only — no LLM cost, no publish.
+        self.always_run_processes = {11, 12, 13, 14, 15, 16, 17, 18, 19, 109, 107, 110, 114, 116, 120, 121, 123}  # Backend Enrichment + Pre-computation + Coverage Check + Audit + Image Archival + URL Slugs + Data Quality Validator + AI Editorial + SEO Sitemap Resubmit + Editorial↔Valuation Sync
         
         self.logger.info(f"Schedule Manager initialized")
         self.logger.info(f"Target market suburbs: {len(self.target_market_suburbs)}")

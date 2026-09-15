@@ -36,6 +36,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -3500,12 +3501,140 @@ def _normalize_money_formats(obj):
     return obj
 
 
-def store_analysis(db, suburb: str, property_id, analysis: Dict) -> None:
-    """Write ai_analysis field to the property document."""
+# ---------------------------------------------------------------------------
+# Valuation snapshot + envelope-$ guard (added 2026-09-15, EDITORIAL-VALUATION-DESYNC)
+#
+# Two problems this block addresses:
+#   1) Editorial (ai_analysis) is frozen at generation time while valuation_data
+#      recomputes on its own ~weekly cadence, so a published page silently starts
+#      arguing from a valuation snapshot that no longer exists. We record the
+#      exact valuation the editorial was written against (valuation_snapshot) so a
+#      nightly detector (editorial_valuation_sync.py) can measure REAL drift
+#      rather than merely noticing computed_at advanced.
+#   2) When the comparable-sales model breaches its $1M–$2M design envelope it
+#      SUPPRESSES its own answer (confidence.range == null / directional_only),
+#      yet the LLM has been synthesising ADJUSTED comparables into an implied
+#      subject range anyway (e.g. 2 Eagle Avenue quoting "$2,810,000–$3,060,000").
+#      A deterministic save-time scan holds any such page for review.
+# ---------------------------------------------------------------------------
+
+# A dollar amount: $1,250,000 / $2.81M / $997K / $1.9m.
+_MONEY_RE = re.compile(r"\$\s?\d[\d,]*(?:\.\d+)?\s*[MmKk]?")
+# A dollar RANGE: two dollar amounts joined by a range separator. This is the
+# precise signal of a synthesised subject valuation — a single figure (e.g. the
+# actual asking price) is a fact and is NOT matched here.
+_MONEY_RANGE_RE = re.compile(
+    r"\$\s?\d[\d,]*(?:\.\d+)?\s*[MmKk]?\s*(?:–|—|-|to|and|through|between)\s*\$?\s?\d[\d,]*(?:\.\d+)?\s*[MmKk]?",
+    re.I,
+)
+# A single figure asserted AS the subject's worth (verb + $), which a range scan
+# would miss — "valued at $2,900,000", "worth around $3.1M", "reconciles to $X".
+_VALUE_VERB_MONEY_RE = re.compile(
+    r"\b(?:valu\w*|worth|reconcil\w*|estimat\w*|adjust\w*\s+to|places?\s+it\s+at)\b[^.$\n]{0,40}\$\s?\d[\d,]*(?:\.\d+)?\s*[MmKk]?",
+    re.I,
+)
+
+
+def _valuation_suppressed(prop: Dict) -> bool:
+    """True when the comparable-sales model withheld its answer for this home
+    (outside the $1M–$2M envelope). Checks the exact fields production writes:
+    confidence.range == null, no reconciled_valuation, or directional_only."""
+    vd = (prop or {}).get("valuation_data") or {}
+    conf = vd.get("confidence") or {}
+    rng = conf.get("range")
+    if conf.get("directional_only") or vd.get("directional_only"):
+        return True
+    if not rng or rng.get("low") is None or rng.get("high") is None:
+        # Only treat missing-range as suppression when a valuation was actually
+        # attempted (reconciled null AND comps present, or explicit directional).
+        # A doc with no valuation_data at all is "not valued yet", not suppressed.
+        if conf.get("reconciled_valuation") is None and (vd.get("recent_sales") or vd.get("comparables")):
+            return True
+    return False
+
+
+def _valuation_snapshot(prop: Dict) -> Dict:
+    """The valuation the editorial is being written against — stored on
+    ai_analysis so a later desync check can measure material drift (range moved,
+    comps changed, envelope flipped) instead of guessing from timestamps."""
+    vd = (prop or {}).get("valuation_data") or {}
+    conf = vd.get("confidence") or {}
+    rng = conf.get("range") or {}
+    comp_addresses = sorted(
+        {
+            s.get("address")
+            for s in (vd.get("recent_sales") or [])
+            if s.get("included_in_valuation") and s.get("address")
+        }
+    )
+    return {
+        "valuation_computed_at": vd.get("computed_at"),  # datetime — the ONLY reliable val timestamp
+        "range_low": rng.get("low"),
+        "range_high": rng.get("high"),
+        "reconciled_valuation": conf.get("reconciled_valuation"),
+        "envelope_suppressed": _valuation_suppressed(prop),
+        "n_comps": len(comp_addresses),
+        "comp_addresses": comp_addresses,
+        "input_fingerprint": (vd.get("metadata") or {}).get("input_fingerprint"),
+    }
+
+
+# Reader-facing fields where a synthesised subject valuation is a leak. The
+# per-insight `comparables` array and `key_points` bullets legitimately cite comp
+# sale prices, so they are deliberately NOT scanned — only positioning prose is.
+def _subject_positioning_texts(analysis: Dict):
+    for key in ("headline", "sub_headline", "verdict", "quick_take",
+                "meta_title", "meta_description"):
+        v = analysis.get(key)
+        if isinstance(v, str) and v:
+            yield key, v
+    for i, ins in enumerate(analysis.get("insights") or []):
+        if not isinstance(ins, dict):
+            continue
+        for sub in ("h2", "lifestyle_hook", "what_this_means"):
+            v = ins.get(sub)
+            if isinstance(v, str) and v:
+                yield f"insights[{i}].{sub}", v
+
+
+def _scan_envelope_dollar_leak(analysis: Dict):
+    """Return [{field, snippet}] for every dollar RANGE (or verb+$ worth claim)
+    found in subject-positioning prose. Called only when the valuation is
+    envelope-suppressed; a hit means the editorial quotes a figure the model
+    deliberately withheld."""
+    leaks = []
+    for field, text in _subject_positioning_texts(analysis):
+        for pat in (_MONEY_RANGE_RE, _VALUE_VERB_MONEY_RE):
+            m = pat.search(text)
+            if m:
+                leaks.append({"field": field, "snippet": m.group(0).strip()})
+                break
+    return leaks
+
+
+def store_analysis(db, suburb: str, property_id, analysis: Dict, prop: Dict = None) -> None:
+    """Write ai_analysis field to the property document.
+
+    `prop` (the source document) is used to record the valuation_snapshot the
+    editorial was written against and to enforce the envelope-$ guard. It is
+    optional only for backward compatibility; every in-tree caller passes it."""
     analysis["generated_at"] = datetime.now(timezone.utc).isoformat()
     analysis["model"] = PIPELINE_CONFIG["models"]["editor"]
     # Draft 1 content is always usable — even if Draft 2 rewrite failed, show in ops review
     analysis["status"] = analysis.get("status", "draft")
+
+    # Record the valuation this editorial was written against (drift baseline) and
+    # enforce the envelope-$ guard (EDITORIAL-VALUATION-DESYNC, 2026-09-15).
+    envelope_leaks = []
+    if prop is not None:
+        analysis["valuation_snapshot"] = _valuation_snapshot(prop)
+        if analysis["valuation_snapshot"].get("envelope_suppressed"):
+            envelope_leaks = _scan_envelope_dollar_leak(analysis)
+            if envelope_leaks:
+                analysis["envelope_dollar_leak"] = envelope_leaks
+                print("  [ENVELOPE-GUARD] valuation is envelope-suppressed but the "
+                      f"editorial leaks {len(envelope_leaks)} $ figure(s) in positioning "
+                      f"text: {[l['snippet'] for l in envelope_leaks]}")
 
     # Auto-publish (opt-in, env AUTO_PUBLISH=1): only when the FINAL draft was
     # genuinely fact-checked and came back clean or with minor flags within the
@@ -3522,6 +3651,13 @@ def store_analysis(db, suburb: str, property_id, analysis: Dict) -> None:
         analysis["status"] = "draft"
         analysis["conjunction_preview"] = True
         print("  [CONJUNCTION-PREVIEW] status forced to draft — will NOT publish (agent approval required)")
+    elif envelope_leaks:
+        # Envelope-suppressed home whose editorial quotes a $ range the model
+        # withheld — never auto-publish; force a human look regardless of
+        # verify_outcome. (A --force manual run leaves it in draft anyway.)
+        analysis["status"] = "needs_review"
+        print("  [ENVELOPE-GUARD] status forced to needs_review — will NOT publish "
+              "(subject-valuation $ leaked on an envelope-suppressed property)")
     elif _AUTO_PUBLISH and analysis["status"] != "failed_factcheck" \
             and analysis.get("_verify_outcome") in ("clean", "minor_flags"):
         analysis["status"] = "published"
@@ -3686,7 +3822,7 @@ def process_cadastral_property(
     # Tag mode so the V3 frontend can render the cadastral disclaimer
     analysis["mode"] = "cadastral"
 
-    store_analysis(db, suburb, prop_id, analysis)
+    store_analysis(db, suburb, prop_id, analysis, prop=prop)
     return analysis
 
 
@@ -4165,6 +4301,25 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
             )
 
     summary = _json.dumps(_prop_clean, indent=2, default=str)
+    # Envelope-suppression directive (EDITORIAL-VALUATION-DESYNC, 2026-09-15).
+    # When the comparable-sales model has withheld its answer (>$2M / directional),
+    # prepend an unmissable directive so no agent synthesises adjusted comps into a
+    # subject valuation range. Belt-and-braces over the prompt rule + the save-time
+    # leak scan in store_analysis.
+    if _valuation_suppressed(prop):
+        summary = (
+            "⛔⛔ VALUATION SUPPRESSED — THIS HOME IS OUTSIDE THE MODEL'S RELIABLE "
+            "$1,000,000–$2,000,000 ENVELOPE. The comparable-sales engine has "
+            "DELIBERATELY WITHHELD any point estimate and any range for this "
+            "property (confidence.range is null / directional_only). You MUST NOT "
+            "state a dollar valuation or a dollar RANGE for this home — not from "
+            "the model, and NOT by adjusting comparables yourself. Do not write "
+            "'adjusts to $X–$Y', 'worth ~$X', or any synthesised band. You MAY cite "
+            "what a comparable actually SOLD for (a raw sale price is a fact) and "
+            "the asking price, and discuss the evidence qualitatively — but no "
+            "dollar range and no stated worth for the subject.\n\n"
+        ) + summary
+        print("  [ENVELOPE-GUARD] valuation suppressed → prepended no-$ directive to agent prompt")
     print(f"  Property document: {len(summary):,} chars (~{len(summary)//4:,} tokens)")
     print(f"  Comparables compaction: {_bytes_before:,} -> {_bytes_after:,} chars "
           f"(-{(_bytes_before-_bytes_after)//4:,} tokens, -{100*(_bytes_before-_bytes_after)//max(_bytes_before,1)}%)")
@@ -4219,7 +4374,7 @@ def process_property(db, suburb: str, prop: Dict, api_key: str, force: bool = Fa
     analysis = _fix_year_hallucinations(analysis, prop)
 
     # Store
-    store_analysis(db, suburb, prop_id, analysis)
+    store_analysis(db, suburb, prop_id, analysis, prop=prop)
 
     # Post-store: attach alerts if any data gaps found, but keep status as draft
     # so it appears in the default ops dashboard view
@@ -4263,6 +4418,7 @@ def main():
     group.add_argument("--address", help="Address substring to match")
     group.add_argument("--new-listings", action="store_true", help="Process new listings (<=7 days) missing ai_analysis")
     group.add_argument("--backfill", action="store_true", help="Process ALL properties missing ai_analysis")
+    group.add_argument("--stale-valuation", action="store_true", help="Regenerate published editorials that editorial_valuation_sync.py flagged for regen (ai_analysis.valuation_sync.needs_regen). Implies --force.")
     group.add_argument("--cadastral", action="store_true", help="Cadastral mode — analyse a NOT-currently-listed property by suburb + property_id (used by V3 analyse-your-home flow)")
     parser.add_argument("--property-id", help="MongoDB ObjectId — required with --cadastral")
     parser.add_argument("--days", type=int, default=7, help="Days threshold for --new-listings (default 7)")
@@ -4412,6 +4568,33 @@ def main():
                 except Exception as e:
                     print(f"[ERROR] Failed on {prop.get('address', '?')}: {e}")
         print(f"\nDone. Processed {total} properties.")
+
+    elif args.stale_valuation:
+        # Regenerate the editorials that editorial_valuation_sync.py flagged (their
+        # valuation recomputed materially since the editorial was written). Always
+        # forces regeneration; --force ALSO means store_analysis leaves them as
+        # drafts (auto-publish suppressed), so Will publishes each only after
+        # confirming the new copy matches the CURRENT valuation. Scoped to the
+        # target-market suburbs the editorial pipeline writes to.
+        suburbs = [args.suburb] if args.suburb else TARGET_SUBURBS
+        total = 0
+        for suburb in suburbs:
+            query = {
+                "listing_status": "for_sale",
+                "ai_analysis.valuation_sync.needs_regen": True,
+            }
+            props = cosmos_retry(lambda s=suburb: list(db[s].find(query)), f"stale_val_{suburb}")
+            if props:
+                print(f"\n{suburb}: {len(props)} listings flagged for valuation-desync regen")
+            for prop in props:
+                try:
+                    process_property(db, suburb, prop, api_key, force=True, use_gemini_gather=use_gemini, gemini_api_key=gemini_api_key, use_openai_gather=use_openai, openai_api_key=openai_api_key, use_hybrid_gather=use_hybrid)
+                    total += 1
+                    sleep_with_jitter(0.5)
+                except Exception as e:
+                    print(f"[ERROR] Failed on {prop.get('address', '?')}: {e}")
+        print(f"\nDone. Regenerated {total} flagged listings (all left as drafts — "
+              f"verify against current valuation, then publish).")
 
     print_meter("run total —")
     client.close()

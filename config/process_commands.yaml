@@ -383,6 +383,18 @@ processes:
     cooldown_seconds: 20
     depends_on: [120]  # Run after new-listing editorial auto-publish
 
+  - id: 123
+    name: "Editorial ↔ Valuation Sync (Desync Detector)"
+    description: "The durable link between valuation recompute and property editorial. Runs AFTER step 18 (valuation precompute) so it sees the freshest valuation_data.computed_at. For every published ai_analysis in the target suburbs it compares generated_at against valuation_data.computed_at and classifies the desync (envelope_leak / envelope_flip / material range-move >10% or comp-set change / stale_no_baseline / minor). Flags each listing on ai_analysis.valuation_sync and enqueues the regen-worthy ones onto system_monitor.editorial_regen_queue — it does NOT regenerate (~$10/property on Opus-Max, Will-triggered via generate_property_ai_analysis.py --stale-valuation) and does NOT publish. Detect-only, so safe to run unattended nightly. Self-monitors via job_run (Rule 7/7b): raises if a desync was detected but zero rows were enqueued, or if no published+valued editorial could be read at all. Does NOT touch the render-time editorial_fresh gate. See fix-history 2026-09-15 [EDITORIAL-VALUATION-DESYNC]."
+    phase: "data_quality"
+    command: "bash -c 'source /home/fields/venv/bin/activate && python3 scripts/editorial_valuation_sync.py'"
+    working_dir: "/home/fields/Fields_Orchestrator"
+    mongodb_activity: "moderate_write"
+    requires_browser: false
+    estimated_duration_minutes: 3
+    cooldown_seconds: 20
+    depends_on: [18, 120]  # Needs freshest valuation precompute + any new-listing editorial
+
   - id: 122
     name: "Live Leads Sheet — Selling Plan Refresh"
     description: "On-demand sync of the Live Leads Tracker Google Sheet, triggered in near-real-time (via trigger_requests, polled every 30s) whenever a seller saves a Process Decisions / selling-plan answer on their mini-site. Adds any brand-new lead rows and, for leads already in the sheet, updates their dedicated Selling Plan column in place with the latest answers (2026-07-21 fix — see fix-history LIVE-LEADS-SHEET-AUTOUPDATE) without touching Name/Status/Details, which Will may have edited by hand."
@@ -528,12 +540,14 @@ processes:
 
 # Execution order (processes will run in this order based on schedule)
 # Note: Schedule manager determines which processes run based on day of week
-# - Monday-Saturday: 101, 103, 111, 113, 114, 115, 116, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 120, 121, 109, 107
-# - Sunday: 102, 104, 101, 103, 111, 113, 114, 115, 116, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 120, 121, 109, 107
+# - Monday-Saturday: 101, 103, 111, 113, 114, 115, 116, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 120, 121, 123, 109, 107
+# - Sunday: 102, 104, 101, 103, 111, 113, 114, 115, 116, 112, 105, 106, 108, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 120, 121, 123, 109, 107
 # 120 (new-listing editorial) + 121 (sitemap resubmit) run after 18 (valuation precompute) and 117 (satellite),
 # which are their depends_on. 120 was defined 2026-03-27 but never added to the order (original omission);
 # re-added 2026-07-30 so nightly listing editorial actually runs. 121 follows 120 (resubmits sitemap for new pages).
-execution_order: [101, 102, 103, 104, 111, 113, 114, 115, 110, 116, 112, 105, 106, 108, 117, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 120, 121, 109, 107]
+# 123 (editorial↔valuation desync detector) runs after 18 + 120 so it sees the freshest valuation_data.computed_at
+# and any editorial just written this run; it flags/enqueues stale editorials but never regenerates or publishes.
+execution_order: [101, 102, 103, 104, 111, 113, 114, 115, 110, 116, 112, 105, 106, 108, 117, 6, 11, 12, 13, 14, 16, 15, 17, 19, 18, 120, 121, 123, 109, 107]
 
 # Phase descriptions for UI display
 phases:
@@ -585,7 +599,7 @@ phases:
   data_quality:
     name: "Data Quality Audit"
     description: "Validate database integrity, detect misplaced properties, and check scraping coverage against Domain"
-    steps: [116, 109, 107]
+    steps: [116, 109, 107, 123]
 
   backup:
     name: "Daily Backup"

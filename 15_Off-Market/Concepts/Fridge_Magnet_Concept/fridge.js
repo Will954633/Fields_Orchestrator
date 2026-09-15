@@ -70,6 +70,15 @@
      and from /fridge in production alike. */
   var EVENT_API = 'https://fieldsestate.com.au/api/v1/fridge-event';
 
+  /* Arm/campaign for attribution. Default = the generic business-card magnet
+     (v1). The per-address magnet (?slug=<subject>) flips these to v2 in the
+     subject-property block below, BEFORE fridge_land / the posthog.register()
+     call fire — so a slug-less scan (every generic magnet already posted) is
+     tagged and behaves exactly as before. */
+  var CAMPAIGN = 'fridge_magnet_bizcard';
+  var SUBJECT_ARM = 'v1';
+  var SUBJECT_SLUG = null;
+
   /* Mirror the fridge PostHog event to the durable MongoDB ledger. sendBeacon so
      it survives the tab closing / the navigation away on an option tap — the same
      reason the deck uses it for deck_exit. Fire-and-forget: a logging failure must
@@ -84,7 +93,8 @@
       event: name,
       props: props || {},
       referrer: document.referrer || null,
-      utm_source: 'fridge_magnet', utm_medium: 'print', utm_campaign: 'fridge_magnet_bizcard'
+      utm_source: 'fridge_magnet', utm_medium: 'print', utm_campaign: CAMPAIGN,
+      subject_slug: SUBJECT_SLUG
     };
     try {
       var blob = new Blob([JSON.stringify(body)], { type: 'application/json' });
@@ -515,6 +525,85 @@
     });
   });
 
+  /* ── Subject-property mode (the per-address magnet) ────────────────────
+     The generic magnet QR is plain /fridge (no slug) and is untouched by any
+     of this. The per-address magnet QR is /fridge?slug=<subject>, and here we
+     bake that one home in: the market shelf becomes "What's happening in
+     <suburb>", one shelf becomes "The latest on <address>" → their
+     /off-market/<slug> page (no picker, no address sheet), the redundant
+     sold/for-sale/worth shelves are hidden, and a walkthrough launcher links
+     straight into the playing suburb walkthrough (/news/<suburb>?play=1).
+     If JS is off, none of this runs and the four generic shelves show. */
+  var WALK_POSTER = {
+    'robina':          'https://fieldsestate.com.au/walkthrough/posters/robina_2026-08_v3b_dom_f0.jpg',
+    'varsity-lakes':   'https://fieldsestate.com.au/walkthrough/posters/varsity-lakes_2026-08_v2_dom_f0.jpg',
+    'burleigh-waters': 'https://fieldsestate.com.au/walkthrough/posters/burleigh-waters_2026-08_v2_dom_f0.jpg'
+  };
+  /* street-type abbreviations — mirrors the magnet generator so the shelf label
+     reads the same as the printed address ("25 Huntingdale Cres") */
+  var ST = { crescent:'Cres', street:'St', avenue:'Ave', court:'Ct', drive:'Dr',
+             road:'Rd', close:'Cl', circuit:'Cct', place:'Pl', parade:'Pde',
+             boulevard:'Bvd', lane:'Ln', terrace:'Tce', circle:'Cir', grove:'Gr' };
+  function prettyAddr(slug, subKey) {
+    var s = slug;
+    if (subKey && s.slice(-(subKey.length + 1)) === '-' + subKey) s = s.slice(0, -(subKey.length + 1));
+    var parts = s.split('-').filter(Boolean);
+    if (!parts.length) return 'your home';
+    var last = parts.length - 1;
+    parts[last] = ST[parts[last]] || (parts[last].charAt(0).toUpperCase() + parts[last].slice(1));
+    for (var i = 0; i < last; i++) parts[i] = parts[i].charAt(0).toUpperCase() + parts[i].slice(1);
+    return parts.join(' ');
+  }
+
+  (function subjectProperty() {
+    var raw = q.get('slug');
+    if (!raw) return;
+    var slug = raw.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    if (!slug) return;
+
+    /* suburb off the slug tail (the same technique my-home recognition uses) */
+    var subKey = null;
+    for (var i = 0; i < SUBURBS.length; i++) {
+      var k = SUBURBS[i].key;
+      if (k !== 'gold-coast' && slug.length > k.length && slug.slice(-(k.length + 1)) === '-' + k) { subKey = k; break; }
+    }
+
+    SUBJECT_SLUG = slug;
+    SUBJECT_ARM = 'v2';
+    CAMPAIGN = 'fridge_magnet_property';
+
+    if (subKey) setSuburb(subKey, 'url_slug');   // market shelf → /news/<suburb>, resolved
+
+    /* "The latest on <address>" → their off-market report */
+    var optSubject = document.getElementById('optSubject');
+    var shelfSubject = document.getElementById('shelfSubject');
+    if (optSubject) {
+      optSubject.href = OFFMARKET + slug;
+      var lb = document.getElementById('optSubjectLabel');
+      if (lb) lb.childNodes[0].nodeValue = 'The latest on ' + prettyAddr(slug, subKey) + ' ';
+    }
+    if (shelfSubject) shelfSubject.hidden = false;
+
+    /* walkthrough launcher → the playing suburb walkthrough */
+    var optWalk = document.getElementById('optWalk');
+    var shelfWalk = document.getElementById('shelfWalk');
+    if (subKey && optWalk) {
+      optWalk.href = 'https://fieldsestate.com.au/news/' + subKey + '?play=1';
+      var thumb = document.getElementById('optWalkThumb');
+      var poster = WALK_POSTER[subKey];
+      if (thumb && poster) thumb.style.backgroundImage = 'url("' + poster + '")';
+      if (shelfWalk) shelfWalk.hidden = false;
+    }
+
+    /* hide the redundant generic address shelves — the subject shelf replaces them */
+    Array.prototype.forEach.call(document.querySelectorAll('.shelf a[data-flow="address"]'), function (a) {
+      var li = a.closest ? a.closest('.shelf') : null;
+      if (li) li.hidden = true;
+    });
+
+    document.body.classList.add('is-subject');
+  })();
+
   /* ── The door WAITS for a tap. It does not auto-open. ─────────────────
      It used to open itself at 0.8s, and that made the single most important
      moment on the page — the first opening — permanently silent, because no
@@ -564,8 +653,9 @@
     window.posthog.register({
       utm_source: 'fridge_magnet',
       utm_medium: 'print',
-      utm_campaign: 'fridge_magnet_bizcard',
-      fridge_arm: 'v1'
+      utm_campaign: CAMPAIGN,
+      fridge_arm: SUBJECT_ARM,
+      subject_slug: SUBJECT_SLUG
     });
   }
   emit('fridge_land', {
