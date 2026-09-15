@@ -31,10 +31,10 @@ properly. So the agent's job this phase is **content strategy, not campaign mech
 2. **SURVEY THE WHOLE VM for seller-content ad material — there are usable concepts
    everywhere (Will, 2026-09-15).** Do not treat this as one folder. Named starting points from
    Will: **`05_Sabri_Subri/`** (Sabri Suby direct-response copywriting masterclass + Halo
-   strategy — hook/offer/angle frameworks) and **`12_Marketing/`**. But cast wider — anything on
-   this VM that could seed a cold seller-video concept counts: `08_Seller-Book/`,
-   `10_Market_Report/`, `14_Articles/`, `15_Off-Market/`, the FB `Campaigns/` history, drafted
-   concepts, Drive. A marketing team is also developing ad concepts, but those **predate** the
+   strategy — hook/offer/angle frameworks), **`08_Seller-Book/`** (the seller book — "plenty of
+   seller-related content", Will 2026-09-15), and **`12_Marketing/`**. But cast wider — anything
+   on this VM that could seed a cold seller-video concept counts: `10_Market_Report/`,
+   `14_Articles/`, `15_Off-Market/`, the FB `Campaigns/` history, drafted concepts, Drive. A marketing team is also developing ad concepts, but those **predate** the
    Krista doc and need **adapting** to the video-view-funnel model — fold them in when found.
 3. **Turn that survey into 60–90s seller-problem video concepts.** The `12_Marketing/` library
    in particular holds researched seller-decision topics — `Pricing_Strategy`, `Timing_Of_Sale`,
