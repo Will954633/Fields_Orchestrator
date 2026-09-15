@@ -137,15 +137,22 @@ def cmd_propose(a):
     # one-line excerpt, so three of the fifteen drafts put to Will as "Rule 5 clean" were
     # not. Refuse rather than warn: the whole point of this command is that what follows it
     # is Will tapping YES, and he is entitled to assume the copy has been checked.
+    # WALKTHROUGH EXEMPTION (Will, 2026-09-15): a Will walkthrough is his personal on-camera
+    # sign-off, so a flagged article carrying one is approved and not subject to the automated
+    # gate (see the articles brief §5). Keyed on content_articles.will_walkthrough.
+    walkthrough_exempt = bool(art.get("will_walkthrough"))
     breaches = [b for b in check_article(art)
                 if not _is_acknowledged(art.get("slug") or str(art["_id"]), b)]
-    if breaches and not a.allow_breach:
+    if breaches and not a.allow_breach and not walkthrough_exempt:
         print(f"REFUSING to propose {art.get('title')!r} — {len(breaches)} Rule 5 breach(es):",
               file=sys.stderr)
         for b in breaches:
             print(f"  - {b}", file=sys.stderr)
         sys.exit("Fix the copy, or re-run with --allow-breach if every one is a false "
                  "positive (then add it to ACKNOWLEDGED in editorial_gate.py).")
+    if breaches and walkthrough_exempt:
+        print(f"Editorial gate EXEMPT (has Will walkthrough) — {len(breaches)} would-have-flagged, "
+              f"waived: " + "; ".join(breaches), file=sys.stderr)
 
     tok = _token()
     title = art.get("title") or "(untitled)"
