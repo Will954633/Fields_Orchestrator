@@ -49,6 +49,8 @@ import urllib.error
 
 import base64
 import io
+import uuid
+from datetime import datetime, timezone
 
 import segno
 
@@ -68,10 +70,40 @@ OFFMARKET_URL = SITE + "/off-market/{slug}"
 OFFMARKET_QR_QUERY = "?from=mailer"
 
 
-def _qr_target(url: str) -> str:
+def _qr_target(url: str, lead_token: str | None = None) -> str:
     """The URL to ENCODE IN A QR / put behind an <a> — the clean page URL plus the
-    mailer deep-link marker. Kept separate from the human-typed fallback text."""
-    return url + OFFMARKET_QR_QUERY
+    mailer deep-link marker, and (when we have one) a per-address `lead` token.
+
+    The token is what makes a scan attributable: root.tsx's global useLeadIdentify
+    fires on any `?lead=<token>` and posts it to lead-link-visit.mjs, which resolves
+    the token to this address via system_monitor.mail_log / mailer_link_tokens and
+    lazily binds the scanner's device to a CRM contact. Without it a scan is only
+    ever an anonymous `?from=mailer` pageview. The human-typed fallback URL printed
+    on the piece stays clean (no token) — see qr_panel_html/teaser_html."""
+    q = OFFMARKET_QR_QUERY + (f"&lead={lead_token}" if lead_token else "")
+    return url + q
+
+
+def ensure_mailer_token(client, slug: str, address: str | None) -> str:
+    """Mint (or reuse) a stable per-address `link_token` so a scanned mailer QR can
+    bind to a CRM contact. Stored in system_monitor.mailer_link_tokens keyed by slug;
+    mail_log.py copies it onto the per-piece mail_log doc at backfill, and
+    lead-link-visit.mjs resolves it on scan (lazy contact create — no empty stubs
+    are created up front). Idempotent: a rerun for the same slug reuses the token, so
+    reprinting a piece never changes its QR."""
+    col = client["system_monitor"]["mailer_link_tokens"]
+    doc = col.find_one({"_id": slug})
+    if doc and doc.get("link_token"):
+        return doc["link_token"]
+    tok = uuid.uuid4().hex
+    col.update_one(
+        {"_id": slug},
+        {"$setOnInsert": {"_id": slug, "link_token": tok, "address": address,
+                          "first_minted_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    # Re-read so a concurrent insert (two pieces built in parallel) wins consistently.
+    return (col.find_one({"_id": slug}) or {}).get("link_token", tok)
 
 # Will's WSJ-style hedcut, the same portrait the website byline uses.
 PORTRAIT_PATH = ("/home/fields/Feilds_Website/01_Website/src/assets/fields/"
@@ -167,13 +199,13 @@ def brandbar_html() -> str:
             f'<span class="tag">{TAGLINE}<b>.</b></span></div>')
 
 
-def byline_frontqr_html(url: str) -> str:
+def byline_frontqr_html(url: str, lead_token: str | None = None) -> str:
     """Sits UNDER the hero aerial (Will's request): Will's byline on the left, the
     'front-page' QR to this home's off-market page on the right."""
     portrait = _portrait_datauri()
     avatar = (f'<img class="byline-avatar" src="{portrait}" alt="{BYLINE_NAME}">'
               if portrait else "")
-    target = _qr_target(url)
+    target = _qr_target(url, lead_token)
     return f"""
 <div class="underhero">
   <div class="byline">{avatar}
@@ -187,11 +219,11 @@ def byline_frontqr_html(url: str) -> str:
 """
 
 
-def qr_panel_html(url: str, address_short: str) -> str:
+def qr_panel_html(url: str, address_short: str, lead_token: str | None = None) -> str:
     """The closing call-out, styled as the mailer_v2 CTA band: full-bleed green,
     the QR in a warm-paper tile, cream copy. Data-framed, no CTA verb."""
     img = (f'<img class="qr-img" alt="Scan for {address_short}" '
-           f'src="{qr_png_datauri(_qr_target(url))}">')
+           f'src="{qr_png_datauri(_qr_target(url, lead_token))}">')
     return f"""
 <section class="qr-panel" aria-label="Off-market page for this address">
   <div class="qr-code">{img}</div>
@@ -342,7 +374,8 @@ th{border-bottom-color:var(--green)!important}
 """
 
 
-def build_mail_html(html: str, url: str, address_short: str) -> tuple[str, int]:
+def build_mail_html(html: str, url: str, address_short: str,
+                    lead_token: str | None = None) -> tuple[str, int]:
     """Transform the article HTML into the print/mail edition (mailer_v2 visual
     language): brandbar, byline + front QR UNDER the hero, per-link QR chips, and the
     closing green CTA panel. Returns (html, n_link_qrs)."""
@@ -356,7 +389,7 @@ def build_mail_html(html: str, url: str, address_short: str) -> tuple[str, int]:
                         '<div class="flag">Prepared for this address</div>', 1)
 
     # 3. Byline + front QR, immediately AFTER the hero aerial (Will's request).
-    top = byline_frontqr_html(url)
+    top = byline_frontqr_html(url, lead_token)
     hero = re.search(r'<figure class="hero">.*?</figure>', html, re.DOTALL)
     if hero:
         html = html[:hero.end()] + top + html[hero.end():]
@@ -370,7 +403,7 @@ def build_mail_html(html: str, url: str, address_short: str) -> tuple[str, int]:
     marker = "</div></body></html>"
     if marker not in html:
         raise RuntimeError("could not find wrap-close marker to inject QR panel")
-    html = html.replace(marker, qr_panel_html(url, address_short) + marker, 1)
+    html = html.replace(marker, qr_panel_html(url, address_short, lead_token) + marker, 1)
     return html, n_links
 
 
@@ -653,7 +686,7 @@ html,body{font-family:'Liberation Sans',-apple-system,Segoe UI,Roboto,sans-serif
 """
 
 
-def teaser_html(f: dict, url: str) -> str:
+def teaser_html(f: dict, url: str, lead_token: str | None = None) -> str:
     logo = _logo_datauri()
     mark = (f'<img src="{logo}" alt="Fields">' if logo
             else '<span class="serif" style="color:#fdf3ec;font-size:20pt">FIELDS</span>')
@@ -669,7 +702,7 @@ def teaser_html(f: dict, url: str) -> str:
     # The SCANNED QR carries ?from=mailer so the off-market page smooth-scrolls to
     # the "Your market update" section this teaser previews; the printed link text
     # a reader types by hand stays clean (they land at the top, which is fine).
-    qr = qr_png_datauri(_qr_target(url), scale=16, error="q")
+    qr = qr_png_datauri(_qr_target(url, lead_token), scale=16, error="q")
     urltext = url.replace("https://", "")
 
     front = f"""
@@ -801,7 +834,11 @@ def build_teaser(address, suburb=None, out_dir=None, skip_market_check=False,
                     "errors": [f"off-market page did not resolve ({why}): {url}"]}
 
     slug = boa.slugify(f["address"])
-    html = teaser_html(f, url)
+    # Per-address token so a scan of this QR binds to a CRM contact (lazy, via
+    # mail_log / mailer_link_tokens → lead-link-visit.mjs). url_slug is the slug the
+    # off-market page resolves by, so the token must key on it, not the article slug.
+    lead_token = ensure_mailer_token(client, f["url_slug"], f["address"])
+    html = teaser_html(f, url, lead_token)
     html_path = os.path.join(out_dir, f"{slug}.teaser.html")
     with open(html_path, "w", encoding="utf-8") as fh:
         fh.write(html)
@@ -816,7 +853,9 @@ def build_teaser(address, suburb=None, out_dir=None, skip_market_check=False,
                 "errors": layout, "rejected_pdf": bad}
 
     return {"ok": True, "address": f["address"], "offmarket_url": url,
-            "url_slug": f["url_slug"], "teaser_html": html_path, "pdf": pdf_path,
+            "url_slug": f["url_slug"], "link_token": lead_token,
+            "qr_target": _qr_target(url, lead_token),
+            "teaser_html": html_path, "pdf": pdf_path,
             "figures": {"home_6m": f"{_fmt_pct(f['home_6m'])} ({f['home_move_word']} "
                         f"since {f['month_from']})",
                         "suburb_6m": _fmt_pct(f["suburb_6m"]),
@@ -860,7 +899,10 @@ def build_mailer(address, suburb=None, out_dir=None, variant="report",
     with open(r["html"], encoding="utf-8") as fh:
         html = fh.read()
 
-    mail_html, n_link_qrs = build_mail_html(html, offmarket, address_short)
+    # Per-address token (keyed on the off-market url_slug) so a scan binds to a CRM
+    # contact — see ensure_mailer_token / lead-link-visit.mjs.
+    lead_token = ensure_mailer_token(client, slug, full_addr)
+    mail_html, n_link_qrs = build_mail_html(html, offmarket, address_short, lead_token)
     mail_html_path = os.path.join(out_dir, f"{article_slug}.mailer.html")
     with open(mail_html_path, "w", encoding="utf-8") as fh:
         fh.write(mail_html)
@@ -869,7 +911,8 @@ def build_mailer(address, suburb=None, out_dir=None, variant="report",
     html_to_pdf(mail_html_path, pdf_path)
 
     r.update({"mailer_html": mail_html_path, "pdf": pdf_path,
-              "offmarket_url": offmarket, "url_slug": slug, "n_link_qrs": n_link_qrs})
+              "offmarket_url": offmarket, "url_slug": slug, "n_link_qrs": n_link_qrs,
+              "link_token": lead_token, "qr_target": _qr_target(offmarket, lead_token)})
     return r
 
 
