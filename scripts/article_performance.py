@@ -86,6 +86,19 @@ def _norm_title(t):
     return re.sub(r"[^a-z0-9 ]+", "", str(t or "").lower()).strip()
 
 
+def _is_facebook_referral(*signals):
+    """True if any referrer/utm signal on a session points to Facebook. Covers every FB entry
+    host seen in organic_journeys — facebook.com, www./m./l./lm.facebook.com — plus fb.* and
+    utm_source=facebook|fb. Case-insensitive; ignores None/empty."""
+    for s in signals:
+        v = str(s or "").lower()
+        if not v:
+            continue
+        if "facebook" in v or v in ("fb", "fb.com", "fb.me", "fb.watch"):
+            return True
+    return False
+
+
 def build(dry_run=False, only_slug=None, verbose=False):
     sm = get_client()["system_monitor"]
     arts = list(sm[ARTICLES].find({}, {"html": 0, "content": 0}))
@@ -111,7 +124,14 @@ def build(dry_run=False, only_slug=None, verbose=False):
         "read_depth_paid": {"sessions": 0, "scrolled": 0, "scroll_sum": 0.0, "dwell_sum": 0.0},
         "read_depth_organic": {"sessions": 0, "scrolled": 0, "scroll_sum": 0.0},
         "paid_headline": {"ads": 0, "impressions": 0, "clicks": 0, "spend_aud": 0.0},
-        "fb_organic": {"posts": 0, "clicks": 0, "fan_reach": 0, "reactions": 0},
+        # `fb_referral_sessions` (added 2026-09-15) is the fix for a dead ranking signal:
+        # `clicks`/`fan_reach` are FB POST insights, and this page has 1-3 fans so post_clicks
+        # is structurally ~0 (1 link click across every posted article). Real Facebook volume
+        # arrives as on-site SESSIONS — FB posts, shares AND ads all land here — so we count
+        # those from `organic_journeys` and rank on them instead. post_clicks/fan_reach kept
+        # for completeness. See rank change in main().
+        "fb_organic": {"posts": 0, "clicks": 0, "fan_reach": 0, "reactions": 0,
+                       "fb_referral_sessions": 0},
     })
 
     # ── organic landing affinity ────────────────────────────────────────────────
@@ -265,6 +285,31 @@ def build(dry_run=False, only_slug=None, verbose=False):
         p["reactions"] += (sum(reacts.values()) if isinstance(reacts, dict) else 0) \
             or ((eng.get("likes", 0) or 0) + (eng.get("comments", 0) or 0))
 
+    # ── Facebook-referred on-site sessions (the real ranking signal) ────────────
+    # post_clicks above is dead (1-3 fans). Actual FB reach shows up as SESSIONS in
+    # organic_journeys, whose per-session referrer fields (referring_domain / first_referrer /
+    # utm_source, channel="Organic Social") tell us FB sent them. A session is attributed to
+    # every article it TOUCHED (entry_path + pages[]), so an FB ad landing on /for-sale-v3 and
+    # then reading an article still counts for that article — which post/share-only entry-path
+    # counting would miss. Unique sessions per article (a session that opened two articles
+    # counts once for each, never twice for one).
+    seen_fb = defaultdict(set)  # aid -> {session_id}
+    for j in sm["organic_journeys"].find(
+            {"$or": [{"entry_path": {"$regex": r"^/articles?/"}},
+                     {"pages": {"$regex": r"^/articles?/"}}]},
+            {"session_id": 1, "entry_path": 1, "pages": 1,
+             "referring_domain": 1, "first_referrer": 1, "utm_source": 1}):
+        if not _is_facebook_referral(j.get("referring_domain"),
+                                     j.get("first_referrer"), j.get("utm_source")):
+            continue
+        sid = j.get("session_id") or str(j.get("_id"))
+        for path in [j.get("entry_path"), *(j.get("pages") or [])]:
+            aid = by_key.get(_slug_from_path(path) or "")
+            if aid:
+                seen_fb[aid].add(sid)
+    for aid, sids in seen_fb.items():
+        perf[aid]["fb_organic"]["fb_referral_sessions"] = len(sids)
+
     # ── derive, grade, write ────────────────────────────────────────────────────
     rows, written = [], 0
     for a in arts:
@@ -388,12 +433,18 @@ def main():
     print("evidence grade: " + ", ".join(f"{k}={v}" for k, v in sorted(grades.items())))
     print()
 
-    rank = sorted(rows, key=lambda r: (r[3], r[2]), reverse=True)[:a.top]
-    print(f"{'article':52s} {'impr':>7s} {'sess':>5s} {'≥25%':>7s} {'grade':>16s}")
+    # Rank on REAL Facebook demand — fb_referral_sessions (posts+shares+ads) plus paid
+    # headline clicks — NOT the dead organic post_clicks (this page has 1-3 fans, so
+    # post_clicks is structurally ~0). Tiebreak on total on-site sessions then impressions.
+    def _fb_demand(r):
+        return r[1]["fb_organic"]["fb_referral_sessions"] + r[1]["paid_headline"]["clicks"]
+    rank = sorted(rows, key=lambda r: (_fb_demand(r), r[2], r[3]), reverse=True)[:a.top]
+    print(f"{'article':52s} {'fbref':>5s} {'pdclk':>5s} {'sess':>5s} {'≥25%':>7s} {'grade':>16s}")
     for art, b, sess, impr in rank:
         rd = b["read_depth"]
         reach = rd["paid_reach_25_pct"] if rd["paid_reach_25_pct"] is not None else rd["organic_reach_25_pct"]
-        print(f"{str(art.get('title'))[:52]:52s} {impr:>7d} {sess:>5d} "
+        print(f"{str(art.get('title'))[:52]:52s} {b['fb_organic']['fb_referral_sessions']:>5d} "
+              f"{b['paid_headline']['clicks']:>5d} {sess:>5d} "
               f"{(f'{reach*100:.0f}%') if reach is not None else '—':>7s} {b['evidence_grade']:>16s}")
     print()
     for art, b, _, _ in rank[:5]:
