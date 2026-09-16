@@ -32,18 +32,18 @@ WINDOW=56  # 8 weeks
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("--scope",default="core3",choices=["core3","gcwide"])
     args=ap.parse_args()
-    sm=get_client()["system_monitor"]
-    lst=sm["onthehouse_listings"]; sold=sm["onthehouse_sold"]
-
-    lq={} ; sq={}
-    if args.scope=="core3":
-        lq={"suburb_key":{"$in":list(CORE3)}}; sq={"suburb_key":{"$in":list(CORE3)},"dwelling":"house"}
-        label="Core 3 suburbs (Robina, Burleigh Waters, Varsity Lakes)"
-    else:
-        sq={"dwelling":"house"}; label="Gold Coast (82 suburbs)"
-
-    # pull appearance dates (listings) and sale dates (houses)
-    listed=[str(d["listed_date"])[:10] for d in lst.find(lq,{"listed_date":1}) if d.get("listed_date")]
+    cl=get_client(); sm=cl["system_monitor"]; gc=cl["Gold_Coast"]
+    sold=sm["onthehouse_sold"]
+    # NEW LISTINGS: Domain first_listed (nightly for-sale scrape) — far more complete than
+    # onthehouse's for-sale index (~30-40% only). Core-3 only. ⚠ ~26% retention on sold
+    # docs, so older windows undercount listings (levels approximate; direction robust).
+    # SALES: on-market only (exclude VG off-market transfers) to match the listings basis.
+    label="Core 3 (Robina, Burleigh Waters, Varsity Lakes) — houses, on-market basis"
+    listed=[]
+    for s in ["robina","burleigh_waters","varsity_lakes"]:
+        for d in gc[s].find({"first_listed_timestamp":{"$ne":None}},{"first_listed_timestamp":1}):
+            listed.append(str(d["first_listed_timestamp"])[:10])
+    sq={"suburb_key":{"$in":list(CORE3)},"property_type":"House"}
     sales=[str(d["sold_date"])[:10] for d in sold.find(sq,{"sold_date":1}) if d.get("sold_date")]
     listed.sort(); sales.sort()
     print(f"{args.scope}: {len(listed)} listing appearances ({listed[0] if listed else '-'}→{listed[-1] if listed else '-'}), "
