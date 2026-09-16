@@ -116,7 +116,7 @@ def crawl_suburb(sub: dict, since: str) -> tuple[list[dict] | None, dict]:
     rows, pages, stopped_early = [], 0, False
     for pg in range(1, MAX_PAGES + 1):
         params = {
-            "locations": [{"suburb": sub["suburb"].title(), "state": "QLD",
+            "locations": [{"suburb": sub["suburb"].title(), "state": sub.get("state", "QLD"),
                            "postcode": sub["slug"].rsplit("-", 1)[1],
                            "includeSurroundingSuburbs": False}],
             "listingType": "Sold", "page": pg, "pageSize": PAGE_SIZE,
