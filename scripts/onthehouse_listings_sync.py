@@ -50,7 +50,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from shared.db import get_client
 from job_status import job_run
 from onthehouse import client as oth
-from onthehouse.suburbs import CORE
+from onthehouse.suburbs import CORE, ALL_GC
 
 COLL = "onthehouse_listings"
 MAX_PAGES = 12
@@ -100,7 +100,7 @@ def shape(rec: dict) -> dict:
     }
 
 
-def sync(db, dry_run: bool = False) -> dict:
+def sync(db, dry_run: bool = False, scope=None) -> dict:
     now = datetime.now(timezone.utc)
     coll = db[COLL]
     stats = {"suburbs_ok": 0, "suburbs_failed": 0, "active": 0,
@@ -109,7 +109,7 @@ def sync(db, dry_run: bool = False) -> dict:
     rows: dict[str, dict] = {}
     covered: set[str] = set()
 
-    for s in CORE:
+    for s in (scope or CORE):
         recs, meta = oth.crawl_suburb("sale", s["slug"], MAX_PAGES, PAGE_BUDGET_S, want=is_house)
         if recs is None:
             stats["suburbs_failed"] += 1
@@ -194,19 +194,31 @@ def is_listed(db, address: str, suburb: str | None = None) -> dict | None:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--all-gc", action="store_true",
+                    help="all 82 GC suburbs (for the coast-wide new-listings/entries "
+                         "ledger feeding the sales-to-new-listings ratio); default core 3")
     args = ap.parse_args()
     db = get_client()["system_monitor"]
+    scope = ALL_GC if args.all_gc else CORE
 
     if args.dry_run:
-        st = sync(db, dry_run=True)
+        st = sync(db, dry_run=True, scope=scope)
         print(f"\ndry-run: {st['active']} active houses across {st['suburbs_ok']} suburb(s), "
               f"{st['pages']} pages, {st['suburbs_failed']} failure(s)")
         return
 
-    with job_run("onthehouse_listings_sync", cadence_hours=24,
-                 title="onthehouse For-Sale Houses (Domain gap-fill)") as beat:
+    # GC-wide gets its own heartbeat (weekly cadence) — its death must be visible apart
+    # from the nightly core-3 gap-fill job.
+    job = "onthehouse_listings_sync_gc_wide" if args.all_gc else "onthehouse_listings_sync"
+    cadence = 24 * 8 if args.all_gc else 24
+    title = ("onthehouse For-Sale Houses — GC-WIDE ledger (new-listings/entries)"
+             if args.all_gc else "onthehouse For-Sale Houses (Domain gap-fill)")
+    with job_run(job, cadence_hours=cadence, title=title) as beat:
         try:
-            st = sync(db)
+            st = sync(db, scope=scope)
+            if args.all_gc and st["suburbs_ok"] < 40:
+                raise RuntimeError(f"only {st['suburbs_ok']} suburbs reached — onthehouse "
+                                   "blocked/broken, not an empty market")
         except oth.Blocked as e:
             # Loud, not silent: being blocked is the one failure mode that would quietly
             # turn this whole source off.
