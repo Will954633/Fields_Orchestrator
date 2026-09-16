@@ -65,6 +65,13 @@ run_step "4/6 market charts — volume + turnover" \
 run_step "4b market charts — GC days-on-market by type (houses/units)" \
   $PY scripts/build_gc_dom_by_type.py
 
+# GC-vs-capitals days-on-market JSON. Reads system_monitor.domain_sold (GC, refreshed by
+# the month-end domain_sold_sync_gc_wide cron) + domain_sold_capitals (refreshed by the
+# month-end scrape_capitals cron) — both run on the last day of the month, so this bake
+# on the 1st sees fresh data. Push public/data/gc_vs_capitals_dom.json to deploy.
+run_step "4c market charts — GC vs capitals days-on-market" \
+  $PY scripts/capitals_dom/build_capitals_dom_json.py
+
 run_step "5/6 PropRadar VOLUME re-anchor" \
   $PY scripts/propradar/recalibrate_charts.py --all --apply
 
