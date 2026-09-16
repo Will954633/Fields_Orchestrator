@@ -68,6 +68,16 @@ def is_house(rec: dict) -> bool:
     return rec.get("type") == "House"
 
 
+# Residential dwelling types (for the sales-to-new-listings entries ledger, which needs
+# ALL residential listings, not just standalone houses). Excludes Commercial/Land/Other.
+_RESIDENTIAL = {"House", "Townhouse", "Unit", "Apartment", "DuplexSemi-detached",
+                "Semi-Detached", "Villa", "Studio", "Penthouse", "Terrace"}
+
+
+def is_residential(rec: dict) -> bool:
+    return rec.get("type") in _RESIDENTIAL
+
+
 def shape(rec: dict) -> dict:
     a = rec.get("address") or {}
     lst = rec.get("listing") or {}
@@ -100,7 +110,7 @@ def shape(rec: dict) -> dict:
     }
 
 
-def sync(db, dry_run: bool = False, scope=None) -> dict:
+def sync(db, dry_run: bool = False, scope=None, want=is_house) -> dict:
     now = datetime.now(timezone.utc)
     coll = db[COLL]
     stats = {"suburbs_ok": 0, "suburbs_failed": 0, "active": 0,
@@ -110,7 +120,7 @@ def sync(db, dry_run: bool = False, scope=None) -> dict:
     covered: set[str] = set()
 
     for s in (scope or CORE):
-        recs, meta = oth.crawl_suburb("sale", s["slug"], MAX_PAGES, PAGE_BUDGET_S, want=is_house)
+        recs, meta = oth.crawl_suburb("sale", s["slug"], MAX_PAGES, PAGE_BUDGET_S, want=want)
         if recs is None:
             stats["suburbs_failed"] += 1
             print(f"{s['slug']}: FETCH FAILED — nothing in this suburb will be expired")
@@ -197,12 +207,16 @@ def main():
     ap.add_argument("--all-gc", action="store_true",
                     help="all 82 GC suburbs (for the coast-wide new-listings/entries "
                          "ledger feeding the sales-to-new-listings ratio); default core 3")
+    ap.add_argument("--all-types", action="store_true",
+                    help="capture ALL residential dwelling types (house/unit/townhouse/…), "
+                         "not standalone houses only — needed for the sales-to-new-listings ratio")
     args = ap.parse_args()
     db = get_client()["system_monitor"]
     scope = ALL_GC if args.all_gc else CORE
+    want = is_residential if args.all_types else is_house
 
     if args.dry_run:
-        st = sync(db, dry_run=True, scope=scope)
+        st = sync(db, dry_run=True, scope=scope, want=want)
         print(f"\ndry-run: {st['active']} active houses across {st['suburbs_ok']} suburb(s), "
               f"{st['pages']} pages, {st['suburbs_failed']} failure(s)")
         return
@@ -215,7 +229,7 @@ def main():
              if args.all_gc else "onthehouse For-Sale Houses (Domain gap-fill)")
     with job_run(job, cadence_hours=cadence, title=title) as beat:
         try:
-            st = sync(db, scope=scope)
+            st = sync(db, scope=scope, want=want)
             if args.all_gc and st["suburbs_ok"] < 40:
                 raise RuntimeError(f"only {st['suburbs_ok']} suburbs reached — onthehouse "
                                    "blocked/broken, not an empty market")
