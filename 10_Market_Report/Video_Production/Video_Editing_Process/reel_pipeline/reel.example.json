@@ -1,0 +1,35 @@
+{
+  "slug": "gc_crash_risk_2026-09",
+  "source": "../assets/Market_Updates/Sep_2026/DJI_20260917140152_0052_D.MP4",
+  "fps": 25,
+  "scenes": [
+    {
+      "type": "text",
+      "ss": 0.0,
+      "dur": 6.0,
+      "cropx": 820,
+      "kicker": "Gold Coast · Market Watch",
+      "words": [["Is",0.24],["the",0.70],["Gold",0.82],["Coast",0.98],["property",1.20],
+                ["market",1.58],["going",1.82],["to",2.40],["crash?",2.54]],
+      "breaks_after": [1,3,5,7],
+      "accent_index": 8
+    },
+    {
+      "type": "chart",
+      "ss": 24.3,
+      "dur": 13.2,
+      "kicker": "Angle 1 · Days on market",
+      "headline": "How long are homes taking to sell?",
+      "chips": [["Houses","g"],["Rolling 3-mo",""],["3-year range",""]],
+      "chart": "dom",
+      "annotations": [
+        {"key": "2026-04", "label": "27d · Apr"},
+        {"key": "2026-08", "label": "40d · Aug"}
+      ],
+      "pill": ["<b>27d</b> Apr", "→", "<b>40d</b> Aug"],
+      "anim": {"drawon": 2.0, "pops": [6.6, 8.7], "pill": 9.2},
+      "source": "Source <b>Fields Estate</b> · fieldsestate.com.au",
+      "pip": {"x": 572, "y": 1372, "w": 440, "h": 516, "cropw": 850, "croph": 996, "cropx": 815, "cropy": 44}
+    }
+  ]
+}
