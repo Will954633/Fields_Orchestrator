@@ -1,0 +1,148 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="chart_data.js"></script>
+<style>
+  :root{
+    --ink:#F3F4F5; --muted:#9198A0; --copper:#DB7A4A; --green:#2F9D5B;
+    --blue:#3B9BEA; --gold:#C79A3A; --bg:#14171A;
+    --font:-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1080px;height:1920px;overflow:hidden;background:var(--bg);font-family:var(--font);
+    -webkit-font-smoothing:antialiased;text-rendering:geometricPrecision}
+  #chart{position:absolute;inset:0;z-index:0}
+  #chart svg{display:block;width:1080px;height:1920px}
+  #text{position:absolute;left:64px;top:120px;width:952px;z-index:2;display:flex;flex-direction:column;gap:26px}
+  .kicker{font-size:28px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--copper)}
+  .kicker .dot{color:var(--muted);font-weight:700;margin:0 10px}
+  .headline{font-size:76px;line-height:1.05;font-weight:800;color:var(--ink);letter-spacing:-.015em}
+  .chips{display:flex;flex-wrap:wrap;gap:12px}
+  .chip{font-size:24px;font-weight:700;color:var(--ink);background:rgba(255,255,255,.10);padding:9px 20px;border-radius:999px}
+  .chip.g{color:#fff;background:var(--green)}.chip.b{color:#fff;background:var(--blue)}
+  .pill{display:inline-flex;align-items:center;gap:16px;background:var(--copper);color:#fff;
+    font-size:34px;font-weight:800;padding:14px 26px;border-radius:16px;align-self:flex-start;
+    box-shadow:0 16px 40px -14px rgba(219,122,74,.65);opacity:0;transform:translateY(14px)}
+  .pill .big{font-size:40px}
+  #legend{position:absolute;left:70px;top:1560px;z-index:2;display:flex;flex-direction:column;gap:18px;
+    font-size:26px;font-weight:700;color:var(--ink)}
+  #legend .k{display:flex;align-items:center;gap:14px}
+  .swatch{width:38px;border-top:6px solid}.swatch.dot{border-top-style:dotted;border-top-width:7px}
+  .source{position:absolute;left:70px;top:1840px;z-index:2;font-size:22px;font-weight:600;color:var(--muted)}
+  .source b{color:var(--copper);font-weight:800}
+</style>
+</head>
+<body>
+<div id="chart"></div>
+<div id="text">
+  <div class="kicker" id="kicker"></div>
+  <div class="headline" id="headline"></div>
+  <div class="chips" id="chips"></div>
+  <div class="pill" id="pill"></div>
+</div>
+<div id="legend"></div>
+<div class="source" id="source"></div>
+<script>
+const SVGNS='http://www.w3.org/2000/svg';
+function el(tag,attrs){const e=document.createElementNS(SVGNS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);return e;}
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const easeOut=x=>1-Math.pow(1-x,3);
+function pop(t,start,dur){return clamp((t-start)/dur,0,1);}
+const MON=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// per-chart config. Add a new kind here to support a new series.
+const CFG={
+  dom:{ key:'m', lo:20, hi:45, grid:[20,26,33,39,45], color:'#3B9BEA', seasonal:true,
+        xevery:6, ylabel:g=>String(g),
+        xlabel:p=>{const[y,m]=p.key.split('-');return MON[+m]+' '+y.slice(2);},
+        legend:[['#3B9BEA','This year',false],['#C79A3A','Historical trend',true]] },
+  median:{ key:'q', lo:1040000, hi:1390000, grid:[1050000,1130000,1220000,1300000,1380000],
+        color:'#2F9D5B', seasonal:false, xevery:2, ylabel:g=>'$'+(g/1e6).toFixed(2)+'M',
+        xlabel:p=>p.key.replace('20','').replace('-',' '), lastDot:'Gold Coast',
+        legend:[['#2F9D5B','Median house price',false]] },
+};
+
+const DEFAULT={
+  kicker:"Angle 1 · Days on market",
+  headline:"How long are homes taking to sell?",
+  chips:[["Houses","g"],["Rolling 3-mo",""],["3-year range",""]],
+  chart:"dom",
+  annotations:[{key:"2026-04",label:"27d · Apr"},{key:"2026-08",label:"40d · Aug"}],
+  pill:["<b>27d</b> Apr","→","<b>40d</b> Aug"],
+  anim:{drawon:2.0, pops:[6.6,8.7], pill:9.2},
+  source:"Source <b>Fields Estate</b> · fieldsestate.com.au",
+};
+
+let LINE=null, LEN=0, RINGS=[], ANIM=null, PILLEL=null;
+
+function buildChart(host, kind, annotations){
+  host.innerHTML='';
+  const c=CFG[kind]; const data=(window.CHART_DATA[kind]||[]).map(p=>({key:p[c.key],v:p.v}));
+  const W=1080,H=1920,mL=92,mR=64,mT=680,mB=620;
+  const X=i=>mL+(W-mL-mR)*i/(data.length-1);
+  const Y=v=>mT+(H-mT-mB)*(1-(v-c.lo)/(c.hi-c.lo));
+  const svg=el('svg',{viewBox:`0 0 ${W} ${H}`});
+  c.grid.forEach(g=>{
+    svg.appendChild(el('line',{x1:mL,x2:W-mR,y1:Y(g),y2:Y(g),stroke:'rgba(255,255,255,.09)','stroke-width':1.5,'stroke-dasharray':'2 7'}));
+    const t=el('text',{x:mL-14,y:Y(g)+8,'text-anchor':'end',fill:'#727982','font-size':24,'font-weight':600});t.textContent=c.ylabel(g);svg.appendChild(t);
+  });
+  data.forEach((p,i)=>{ if(i%c.xevery===0||i===data.length-1){ const t=el('text',{x:X(i),y:H-mB+52,'text-anchor':'middle',fill:'#727982','font-size':22,'font-weight':600});
+    t.textContent=c.xlabel(p);svg.appendChild(t);} });
+  if(c.seasonal && window.CHART_DATA.seasonal){
+    const seas=window.CHART_DATA.seasonal;let sd='';
+    data.forEach((p,i)=>{const mn=+p.key.split('-')[1];sd+=(i?'L':'M')+X(i)+','+Y(seas[mn]);});
+    svg.appendChild(el('path',{d:sd,fill:'none',stroke:'var(--gold)','stroke-width':3.5,'stroke-dasharray':'2 8','stroke-linecap':'round'}));
+  }
+  let bd='';data.forEach((p,i)=>{bd+=(i?'L':'M')+X(i)+','+Y(p.v);});
+  const line=el('path',{d:bd,fill:'none',stroke:c.color,'stroke-width':6,'stroke-linecap':'round','stroke-linejoin':'round'});
+  svg.appendChild(line);
+  const len=line.getTotalLength();line.style.strokeDasharray=len;
+  if(c.lastDot){const li=data.length-1;
+    svg.appendChild(el('circle',{cx:X(li),cy:Y(data[li].v),r:9,fill:'#fff',stroke:c.color,'stroke-width':4}));}
+  const rings=(annotations||[]).map(a=>{
+    const idx=data.findIndex(p=>p.key===a.key); if(idx<0) return null;
+    const g=el('g',{});const cx=X(idx),cy=Y(data[idx].v),color='#E0864F';
+    g.appendChild(el('circle',{cx,cy,r:26,fill:'none',stroke:color,'stroke-width':5}));
+    g.appendChild(el('circle',{cx,cy,r:7,fill:color}));
+    const pillW=158,pillH=48,py=cy-88;
+    const pcx=Math.max(pillW/2+mL,Math.min(W-mR-pillW/2,cx));
+    g.appendChild(el('rect',{x:pcx-pillW/2,y:py,width:pillW,height:pillH,rx:12,fill:color}));
+    const t=el('text',{x:pcx,y:py+33,'text-anchor':'middle',fill:'#fff','font-size':28,'font-weight':800});t.textContent=a.label;g.appendChild(t);
+    g.style.transformOrigin=`${cx}px ${cy}px`;g.style.opacity=0;svg.appendChild(g);return g;
+  }).filter(Boolean);
+  host.appendChild(svg);
+  return {line,len,rings,legend:c.legend};
+}
+
+window.__build=function(scene){
+  scene=scene||DEFAULT;
+  document.getElementById('kicker').innerHTML=(scene.kicker||'').replace(/ · /g,' <span class="dot">·</span> ');
+  document.getElementById('headline').innerHTML=scene.headline||'';
+  const chips=document.getElementById('chips');chips.innerHTML='';
+  (scene.chips||[]).forEach(([txt,cls])=>{const s=document.createElement('span');s.className='chip'+(cls?' '+cls:'');s.textContent=txt;chips.appendChild(s);});
+  PILLEL=document.getElementById('pill');
+  if(scene.pill&&scene.pill.length){PILLEL.style.display='inline-flex';
+    PILLEL.innerHTML=scene.pill.map(x=>`<span>${x.replace(/<b>/g,'<span class="big">').replace(/<\/b>/g,'</span>')}</span>`).join('');
+  } else {PILLEL.style.display='none';}
+  document.getElementById('source').innerHTML=scene.source||'';
+  const r=buildChart(document.getElementById('chart'), scene.chart, scene.annotations);
+  LINE=r.line;LEN=r.len;RINGS=r.rings;
+  const lg=document.getElementById('legend');lg.innerHTML='';
+  (r.legend||[]).forEach(([col,txt,dot])=>{const k=document.createElement('span');k.className='k';
+    k.innerHTML=`<span class="swatch${dot?' dot':''}" style="border-color:${col}"></span>${txt}`;lg.appendChild(k);});
+  ANIM=scene.anim||{drawon:2.0,pops:[],pill:9999};
+  window.__setT(0);
+};
+window.__setT=function(t){
+  if(LINE){const p=easeOut(clamp(t/(ANIM.drawon||2.0),0,1));LINE.style.strokeDashoffset=LEN*(1-p);}
+  RINGS.forEach((g,i)=>{const st=(ANIM.pops&&ANIM.pops[i]!=null)?ANIM.pops[i]:9999;
+    const pa=easeOut(pop(t,st,0.45));g.style.opacity=pa;g.style.transform=`scale(${1.5-0.5*pa})`;});
+  if(PILLEL&&PILLEL.style.display!=='none'){const pp=easeOut(pop(t,ANIM.pill==null?9999:ANIM.pill,0.5));
+    PILLEL.style.opacity=pp;PILLEL.style.transform=`translateY(${(1-pp)*14}px)`;}
+};
+window.__build(null);
+window.__panelReady=true;
+</script>
+</body>
+</html>
