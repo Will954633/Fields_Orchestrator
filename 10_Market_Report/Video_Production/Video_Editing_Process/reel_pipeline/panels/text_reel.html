@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root{
+    --copper:#C8541F; --ink:#15181B; --muted:#4C555E;
+    --font:-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;font-family:var(--font);
+    -webkit-font-smoothing:antialiased;text-rendering:geometricPrecision}
+  /* soft scrim over the left wall column so dark text lifts */
+  #scrim{position:absolute;left:0;top:0;width:640px;height:1920px;z-index:1;
+    background:linear-gradient(90deg,rgba(244,246,248,.90) 0%,rgba(244,246,248,.72) 46%,rgba(244,246,248,.22) 80%,rgba(244,246,248,0) 100%)}
+  #text{position:absolute;left:60px;top:250px;width:560px;z-index:2;display:flex;flex-direction:column;gap:26px}
+  .kicker{font-size:25px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--copper);white-space:nowrap}
+  .kicker .dot{color:var(--muted);font-weight:700;margin:0 10px}
+  .headline{font-size:82px;line-height:1.04;font-weight:800;color:var(--ink);letter-spacing:-.02em;
+    text-shadow:0 1px 22px rgba(244,246,248,.8)}
+  .headline .q{color:var(--copper)}
+  .headline .w{display:inline-block;opacity:0;transform:translateY(22px);will-change:opacity,transform}
+</style>
+</head>
+<body>
+<div id="scrim"></div>
+<div id="text">
+  <div class="kicker" id="kicker"></div>
+  <div class="headline" id="hookline"></div>
+</div>
+<script>
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const easeOut=x=>1-Math.pow(1-x,3);
+
+// The scene is authored per-word: [word, appear_seconds]. Cut the reel so those
+// seconds line up with when the presenter says each word (faster-whisper word ts).
+const DEFAULT={
+  kicker:"Gold Coast · Market Watch",
+  words:[["Is",0.24],["the",0.70],["Gold",0.82],["Coast",0.98],["property",1.20],
+         ["market",1.58],["going",1.82],["to",2.40],["crash?",2.54]],
+  breaks_after:[1,3,5,7], accent_index:8, reveal:0.30, rise:22
+};
+
+let WORDS=[], REVEAL=0.30, RISE=22;
+window.__build=function(scene){
+  scene=scene||DEFAULT;
+  const k=document.getElementById('kicker');
+  k.innerHTML=(scene.kicker||'').replace(/ · /g,' <span class="dot">·</span> ');
+  const line=document.getElementById('hookline'); line.innerHTML='';
+  const brk={}; (scene.breaks_after||[]).forEach(i=>brk[i]=true);
+  const accent=(scene.accent_index==null?-1:scene.accent_index);
+  (scene.words||[]).forEach((w,i)=>{
+    const s=document.createElement('span');s.className='w'+(i===accent?' q':'');s.textContent=w[0];
+    line.appendChild(s);line.appendChild(document.createTextNode(' '));
+    if(brk[i])line.appendChild(document.createElement('br'));
+  });
+  WORDS=[...line.querySelectorAll('.w')].map((el,i)=>({el,st:scene.words[i][1]}));
+  REVEAL=scene.reveal||0.30; RISE=scene.rise||22;
+  window.__setT(0);
+};
+window.__setT=function(t){
+  WORDS.forEach(({el,st})=>{const p=easeOut(clamp((t-st)/REVEAL,0,1));
+    el.style.opacity=p;el.style.transform=`translateY(${(1-p)*RISE}px)`;});
+};
+window.__build(null);      // default preview when opened directly
+window.__panelReady=true;
+</script>
+</body>
+</html>
