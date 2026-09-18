@@ -17,8 +17,14 @@ two scene types.
 
 ## 1. The two approved formats
 
-Both are **1080×1920 (9:16)**, dark-theme, copper accent (`#DB7A4A`), Fields wordmark voice.
-A reel is a sequence of these two beat types.
+All beats are **1080×1920 (9:16)**, dark-theme graphics, copper accent (`#DB7A4A`), Fields voice.
+A reel is a sequence of **three** beat types: **text**, **chart**, and **stat** (§3).
+
+**Worked examples (copy these specs):**
+- `reel_pipeline/reel.example.json` — Sep-2026 "crash risk" (text + chart). Indoor, plain wall.
+- `reel_pipeline/reel.auctions.json` — Sep-2026 "auctions not working" (text ×4 + `clearance`
+  chart + `stat`). **Outdoor/lakeside shoot → text beats use `theme: "dark"`.** Output:
+  `Auctions_Not_Working_REEL_9x16_Sep2026.mp4`.
 
 ### Text beat — full-frame presenter, headline to his left
 Approved reference: **`GC_Crash_Risk_DEMO_text-only_REEL_9x16_Sep2026.mp4`**
@@ -119,6 +125,8 @@ the safe-area zone.
   "type": "text",
   "ss": 0.0,            // start second IN THE SOURCE CLIP for this beat's audio
   "dur": 6.0,           // beat length (seconds)
+  "theme": "dark",      // OPTIONAL: "dark" = dark scrim + light text (bright/outdoor shoots);
+                        //           omit for the default light scrim + dark text (plain wall)
   "cropx": 820,         // x of the 608px-wide portrait window (tune presenter framing, see §5)
   "kicker": "Gold Coast · Market Watch",
   "words": [["Is",0.24],["the",0.70], ... ],   // [word, appear_second] — see §4
@@ -126,6 +134,12 @@ the safe-area zone.
   "accent_index": 8                             // this word renders in copper (omit for none)
 }
 ```
+> **On-screen text is DISTILLED, not verbatim.** For a long spoken sentence, author a short
+> 3–7 word headline that captures the beat (e.g. VO "what's the best sale method given these
+> softer conditions" → on-screen "Auction or private treaty?"). The VO carries the detail; the
+> headline is a title. Reveal times for a distilled headline just need to feel good — space them
+> across the beat; they need not match VO word times (only verbatim headlines do).
+> **`theme: "dark"`** is essential for outdoor/bright shoots — dark text won't read over sky/water.
 
 ### A chart beat
 ```jsonc
@@ -147,6 +161,29 @@ the safe-area zone.
 }
 ```
 `pip` is optional — omit it to use the default bottom-right box.
+
+### A stat beat  (big animated number — for a single/comparison figure)
+Same full-bleed dark canvas + presenter PIP as the chart beat, but shows a headline stat
+instead of a chart. Use it when the data point is one striking figure, not a series
+(e.g. "over 1% less", "clearance halved").
+```jsonc
+{
+  "type": "stat",
+  "ss": 23.5, "dur": 13.8,
+  "kicker": "New Research · University of NSW",
+  "headline": "What happens after a failed auction?",
+  "stat": {
+    "pre":  "Homes that fail to sell at auction go on to sell for",  // small eyebrow line
+    "big":  "over <b>1%</b> less",                                    // the hero — <b> = huge copper
+    "post": "than if they had listed as private treaty first"        // sub-line
+  },
+  "anim": {"pre": 2.0, "big": 9.2, "post": 10.6},   // seconds (beat-local) each element appears
+  "source": "Source <b>UNSW</b> research",
+  "pip": { /* same shape as the chart beat; optional */ }
+}
+```
+> Keep `source` short — it sits bottom-left and the PIP occupies the bottom-right, so anything
+> past ~500px is hidden behind the box. Same applies to the chart beat's `source`.
 
 ---
 
@@ -199,6 +236,7 @@ The presenter comes from **one continuous landscape talking-head clip** (DJI, 19
 |------|----------|--------|-------|
 | `dom` | `CHART_DATA.dom` (monthly `{m,v}`) + `CHART_DATA.seasonal` | blue line + gold dotted historical | days-on-market |
 | `median` | `CHART_DATA.median` (quarterly `{q,v}`) | green line + end dot | median house price |
+| `clearance` | `CHART_DATA.clearance` (monthly `{m,v}`, value = %) | copper line | auction clearance %. Built from `public/data/auction_clearance.json` (SQM, capitals — GC has no auction series; use Brisbane as nearest capital and say so). |
 
 **Add a new kind** by adding one config block to the `CFG` map in `chart_reel.html`
 (lo/hi, gridlines, colour, x-label formatter, legend). No other file changes.
