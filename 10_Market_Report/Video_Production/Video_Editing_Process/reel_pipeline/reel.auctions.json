@@ -4,13 +4,13 @@
   "fps": 25,
   "scenes": [
     {
-      "type": "text", "ss": 0.0, "dur": 4.4, "theme": "dark", "cropx": 820,
+      "type": "text", "ss": 0.0, "dur": 4.4, "theme": "dark", "cropx": 760, "text_left": 56, "text_top": 210, "text_width": 470, "text_size": 76,
       "kicker": "Gold Coast · Market Watch",
       "words": [["Auctions",1.48],["are",2.0],["not",2.08],["working",2.32],["in",2.68],["this",2.96],["market",3.1]],
       "breaks_after": [1,3], "accent_index": 3
     },
     {
-      "type": "text", "ss": 4.4, "dur": 8.0, "theme": "dark", "cropx": 820,
+      "type": "text", "ss": 4.4, "dur": 8.0, "theme": "dark", "cropx": 760, "text_left": 56, "text_top": 210, "text_width": 470, "text_size": 76,
       "kicker": "Selling in the next 3–6 months?",
       "words": [["Auction",0.5],["or",1.1],["private",1.6],["treaty?",2.1]],
       "breaks_after": [1], "accent_index": 3
@@ -44,13 +44,13 @@
       "pip": {"x": 572, "y": 1372, "w": 440, "h": 516, "cropw": 850, "croph": 1000, "cropx": 775, "cropy": 30}
     },
     {
-      "type": "text", "ss": 37.3, "dur": 7.4, "theme": "dark", "cropx": 820,
+      "type": "text", "ss": 37.3, "dur": 7.4, "theme": "dark", "cropx": 760, "text_left": 56, "text_top": 210, "text_width": 470, "text_size": 76,
       "kicker": "When you sell",
       "words": [["Choose",0.4],["an",0.9],["agency",1.2],["on",1.8],["your",2.0],["side",2.3]],
       "breaks_after": [2], "accent_index": 5
     },
     {
-      "type": "text", "ss": 44.7, "dur": 10.4, "theme": "dark", "cropx": 820,
+      "type": "text", "ss": 44.7, "dur": 10.4, "theme": "dark", "cropx": 760, "text_left": 56, "text_top": 210, "text_width": 470, "text_size": 76,
       "kicker": "Two facts you might not know",
       "words": [["Watch",0.5],["the",1.0],["full",1.3],["walkthrough",1.7],["→",2.3]],
       "breaks_after": [1], "accent_index": 4
