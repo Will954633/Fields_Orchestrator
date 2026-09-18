@@ -4,12 +4,12 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 project:
-  slug: "auction-market_2026-09"   # → out/<slug>.mp4 and site public/walkthrough/<slug>.mp4
-  title: "The auction market has halved in a year"
-  suburb: "Gold Coast"
+  slug: "robina_2026-08_dom"      # → out/<slug>.mp4 and site public/walkthrough/<slug>.mp4
+  title: "Robina — August 2026 Market Overview"
+  suburb: "Robina"
 
 paths:
-  raw_dir:  "./assets/auction_market_raw"   # folder of raw DJI clips (relative to this file)
+  raw_dir:  "../Example_Raw_Video"          # folder of raw DJI clips (relative to this file)
   work_dir: "./work"                        # intermediates (safe to delete/rebuild)
   out_dir:  "./out"                         # final deliverables
 
