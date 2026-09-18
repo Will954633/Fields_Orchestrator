@@ -40,20 +40,22 @@ def D(cfg, *path, default=None):
     return cur
 
 
-def crop_geom(face_cx, zoom):
-    """Centred square crop of the 4K frame around the face."""
+def crop_geom(face_cx, zoom, raw_w=RAW_W, raw_h=RAW_H):
+    """Centred square crop around the face. Dimensions are the SOURCE frame's (probed
+    per clip) — the pipeline handles 4K (3840×2160) and 1080p (1920×1080) alike; a
+    hardcoded 2160 crop overflows a 1080-tall frame (fix 2026-09-18, [WALK-BUILD-1080P-CROP])."""
     face_cx = 0.5 if face_cx is None else float(face_cx)
     zoom = max(1.0, float(zoom or 1.0))
-    side = min(RAW_H, round(RAW_H / zoom))
-    x = round(face_cx * RAW_W - side / 2)
-    x = max(0, min(RAW_W - side, x))
-    y = max(0, min(RAW_H - side, round((RAW_H - side) / 2)))
+    side = min(raw_h, round(raw_h / zoom))
+    x = round(face_cx * raw_w - side / 2)
+    x = max(0, min(raw_w - side, x))
+    y = max(0, min(raw_h - side, round((raw_h - side) / 2)))
     return side, x, y
 
 
-def grade_vf(cfg, seg, master):
+def grade_vf(cfg, seg, master, raw_w=RAW_W, raw_h=RAW_H):
     look = {**D(cfg, "look", default={}), **(seg.get("look") or {})}
-    side, x, y = crop_geom(seg.get("face_cx"), seg.get("zoom", D(cfg, "framing", "zoom", default=1.0)))
+    side, x, y = crop_geom(seg.get("face_cx"), seg.get("zoom", D(cfg, "framing", "zoom", default=1.0)), raw_w, raw_h)
     parts = [
         f"crop={side}:{side}:{x}:{y}",
         f"scale={master}:{master}:flags=lanczos",
@@ -127,7 +129,9 @@ def render_segments(cfg, edl, work):
         seg = {**seg, "in": in_t, "out": out_t}
         dur = round(float(seg["out"]) - float(seg["in"]), 3)
         outp = work / f"seg_{i:03d}.mp4"
-        vf, af = grade_vf(cfg, seg, master), grade_af(cfg)
+        _ps = vlib.probe_summary(str(src))
+        raw_w, raw_h = int(_ps.get("width") or RAW_W), int(_ps.get("height") or RAW_H)
+        vf, af = grade_vf(cfg, seg, master, raw_w, raw_h), grade_af(cfg)
         print(f"  seg {i:03d}  {seg['src']}  {seg['in']:.2f}→{seg['out']:.2f} ({dur:.1f}s) "
               f"cx={seg.get('face_cx')}  {seg.get('chapter','')}")
         threads = os.environ.get("WALK_FFMPEG_THREADS", "")
