@@ -140,6 +140,17 @@ the safe-area zone.
 > headline is a title. Reveal times for a distilled headline just need to feel good — space them
 > across the beat; they need not match VO word times (only verbatim headlines do).
 > **`theme: "dark"`** is essential for outdoor/bright shoots — dark text won't read over sky/water.
+>
+> **Keeping text off the presenter's face** (optional per-scene overrides): if the crop puts the
+> presenter centre-frame, the text can run into his face. Two levers, use together:
+> - `"cropx"` — **lower** it to slide the presenter **right**, opening the left for text (don't go
+>   so low his face touches the right edge; hair bleeding off-edge is fine).
+> - `"text_width"` (narrower → wraps earlier, runs down the page), `"text_size"`, `"text_left"`,
+>   `"text_top"` — shape the text column into the clear left strip.
+>
+> Worked example (the auctions reel's outdoor framing): `"cropx": 760, "text_left": 56,
+> "text_top": 210, "text_width": 470, "text_size": 76` — presenter right-of-centre, headline
+> stacked 1–2 words per line down the left, clear of his face.
 
 ### A chart beat
 ```jsonc
