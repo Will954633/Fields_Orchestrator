@@ -1,0 +1,59 @@
+{
+  "slug": "auctions_not_working_2026-09",
+  "source": "../assets/Auction_VS_PrivateTreaty/Auctions_Not_Working_Sep_2026.MP4",
+  "fps": 25,
+  "scenes": [
+    {
+      "type": "text", "ss": 0.0, "dur": 4.4, "theme": "dark", "cropx": 820,
+      "kicker": "Gold Coast · Market Watch",
+      "words": [["Auctions",1.48],["are",2.0],["not",2.08],["working",2.32],["in",2.68],["this",2.96],["market",3.1]],
+      "breaks_after": [1,3], "accent_index": 3
+    },
+    {
+      "type": "text", "ss": 4.4, "dur": 8.0, "theme": "dark", "cropx": 820,
+      "kicker": "Selling in the next 3–6 months?",
+      "words": [["Auction",0.5],["or",1.1],["private",1.6],["treaty?",2.1]],
+      "breaks_after": [1], "accent_index": 3
+    },
+    {
+      "type": "chart", "ss": 12.4, "dur": 11.1,
+      "kicker": "Auction Clearance · QLD",
+      "headline": "Clearance has halved",
+      "chips": [["Brisbane · nearest capital",""],["Trailing 4-wk",""]],
+      "chart": "clearance",
+      "annotations": [
+        {"key": "2025-09", "label": "33% · Sep 25"},
+        {"key": "2026-09", "label": "17% · Sep 26"}
+      ],
+      "pill": ["<b>33%</b>", "→", "<b>17%</b>"],
+      "anim": {"drawon": 2.0, "pops": [4.2, 8.0], "pill": 8.7},
+      "source": "Source <b>SQM Research</b> auctions",
+      "pip": {"x": 572, "y": 1372, "w": 440, "h": 516, "cropw": 850, "croph": 1000, "cropx": 775, "cropy": 30}
+    },
+    {
+      "type": "stat", "ss": 23.5, "dur": 13.8,
+      "kicker": "New Research · University of NSW",
+      "headline": "What happens after a failed auction?",
+      "stat": {
+        "pre": "Homes that fail to sell at auction go on to sell for",
+        "big": "over <b>1%</b> less",
+        "post": "than if they had listed as private treaty first"
+      },
+      "anim": {"pre": 2.0, "big": 9.2, "post": 10.6},
+      "source": "Source <b>UNSW</b> research",
+      "pip": {"x": 572, "y": 1372, "w": 440, "h": 516, "cropw": 850, "croph": 1000, "cropx": 775, "cropy": 30}
+    },
+    {
+      "type": "text", "ss": 37.3, "dur": 7.4, "theme": "dark", "cropx": 820,
+      "kicker": "When you sell",
+      "words": [["Choose",0.4],["an",0.9],["agency",1.2],["on",1.8],["your",2.0],["side",2.3]],
+      "breaks_after": [2], "accent_index": 5
+    },
+    {
+      "type": "text", "ss": 44.7, "dur": 10.4, "theme": "dark", "cropx": 820,
+      "kicker": "Two facts you might not know",
+      "words": [["Watch",0.5],["the",1.0],["full",1.3],["walkthrough",1.7],["→",2.3]],
+      "breaks_after": [1], "accent_index": 4
+    }
+  ]
+}
