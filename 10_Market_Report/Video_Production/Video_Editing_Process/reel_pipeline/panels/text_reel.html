@@ -20,6 +20,11 @@
     text-shadow:0 1px 22px rgba(244,246,248,.8)}
   .headline .q{color:var(--copper)}
   .headline .w{display:inline-block;opacity:0;transform:translateY(22px);will-change:opacity,transform}
+  /* dark theme — for bright/outdoor backgrounds (dark scrim + light text) */
+  body.dark #scrim{background:linear-gradient(90deg,rgba(15,19,23,.90) 0%,rgba(15,19,23,.72) 46%,rgba(15,19,23,.24) 80%,rgba(15,19,23,0) 100%)}
+  body.dark .kicker{color:#E8975C}
+  body.dark .headline{color:#F5F6F7;text-shadow:0 2px 28px rgba(0,0,0,.6)}
+  body.dark .headline .q{color:#E8905A}
 </style>
 </head>
 <body>
@@ -44,6 +49,7 @@ const DEFAULT={
 let WORDS=[], REVEAL=0.30, RISE=22;
 window.__build=function(scene){
   scene=scene||DEFAULT;
+  document.body.className=(scene.theme==='dark')?'dark':'';
   const k=document.getElementById('kicker');
   k.innerHTML=(scene.kicker||'').replace(/ · /g,' <span class="dot">·</span> ');
   const line=document.getElementById('hookline'); line.innerHTML='';
