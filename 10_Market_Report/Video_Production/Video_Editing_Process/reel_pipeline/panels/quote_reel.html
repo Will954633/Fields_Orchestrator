@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root{
+    --ink:#F3F4F5; --muted:#9198A0; --copper:#DB7A4A; --bg:#14171A;
+    --hl:rgba(219,122,74,.40); --font:-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1080px;height:1920px;overflow:hidden;background:var(--bg);font-family:var(--font);
+    -webkit-font-smoothing:antialiased;text-rendering:geometricPrecision}
+  #head{position:absolute;left:64px;top:150px;width:952px;z-index:2;display:flex;flex-direction:column;gap:24px}
+  .kicker{font-size:28px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--copper)}
+  .kicker .dot{color:var(--muted);font-weight:700;margin:0 10px}
+  .headline{font-size:62px;line-height:1.05;font-weight:800;color:var(--ink);letter-spacing:-.015em}
+  /* the quote "document" card, centred */
+  #card{position:absolute;left:40px;top:560px;width:1000px;z-index:2;background:#fff;border-radius:26px;
+    padding:50px 44px;box-shadow:0 40px 90px -30px rgba(0,0,0,.6);opacity:0;transform:translateY(24px)}
+  #imgwrap{position:relative;display:block;width:100%}
+  #imgwrap img{display:block;width:100%;height:auto}
+  .hl{position:absolute;background:var(--hl);border-radius:6px;transform:scaleX(0);transform-origin:left center;
+    mix-blend-mode:normal}
+  .source{position:absolute;left:64px;top:1836px;z-index:2;font-size:22px;font-weight:600;color:var(--muted)}
+  .source b{color:var(--copper);font-weight:800}
+</style>
+</head>
+<body>
+<div id="head">
+  <div class="kicker" id="kicker"></div>
+  <div class="headline" id="headline"></div>
+</div>
+<div id="card"><div id="imgwrap"><img id="qimg"></div></div>
+<div class="source" id="source"></div>
+<script>
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const easeOut=x=>1-Math.pow(1-x,3);
+function pop(t,start,dur){return clamp((t-start)/dur,0,1);}
+
+const DEFAULT={
+  kicker:"The Research · University of NSW",
+  headline:"What the modelling found",
+  image:"../assets/auctions_research_quote.png", image_w:1504, image_h:176,
+  // x,y,w,h in image pixels — the sentence "On average … first place."
+  highlights:[[492,10,1010,52],[22,66,1470,52],[22,120,830,52]],
+  anim:{card:0.2, hl:2.0, stagger:0.45, grow:0.6},
+  source:"Source <b>University of New South Wales</b>",
+};
+
+let CARD, HLS=[], ANIM;
+window.__build=function(scene){
+  scene=scene||DEFAULT;
+  document.getElementById('kicker').innerHTML=(scene.kicker||'').replace(/ · /g,' <span class="dot">·</span> ');
+  document.getElementById('headline').innerHTML=scene.headline||'';
+  document.getElementById('source').innerHTML=scene.source||'';
+  const img=document.getElementById('qimg');
+  img.src=/^(file:|https?:|\.)/.test(scene.image)?scene.image:('file://'+scene.image);
+  const wrap=document.getElementById('imgwrap');
+  [...wrap.querySelectorAll('.hl')].forEach(e=>e.remove());
+  HLS=(scene.highlights||[]).map(([x,y,w,h])=>{
+    const d=document.createElement('div');d.className='hl';
+    d.style.left=(x/scene.image_w*100)+'%';d.style.top=(y/scene.image_h*100)+'%';
+    d.style.width=(w/scene.image_w*100)+'%';d.style.height=(h/scene.image_h*100)+'%';
+    wrap.appendChild(d);return d;
+  });
+  CARD=document.getElementById('card');
+  ANIM=scene.anim||DEFAULT.anim;
+  window.__setT(0);
+};
+window.__setT=function(t){
+  const c=easeOut(pop(t,ANIM.card==null?0:ANIM.card,0.5));
+  CARD.style.opacity=c;CARD.style.transform=`translateY(${(1-c)*24}px)`;
+  HLS.forEach((d,i)=>{const st=(ANIM.hl==null?2:ANIM.hl)+i*(ANIM.stagger==null?0.45:ANIM.stagger);
+    const p=easeOut(pop(t,st,ANIM.grow==null?0.6:ANIM.grow));d.style.transform=`scaleX(${p})`;});
+};
+window.__build(null);
+window.__panelReady=true;
+</script>
+</body>
+</html>
