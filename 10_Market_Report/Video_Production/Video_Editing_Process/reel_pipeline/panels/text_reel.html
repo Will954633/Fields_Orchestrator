@@ -50,6 +50,12 @@ let WORDS=[], REVEAL=0.30, RISE=22;
 window.__build=function(scene){
   scene=scene||DEFAULT;
   document.body.className=(scene.theme==='dark')?'dark':'';
+  // optional per-scene layout overrides (tune the text column away from the presenter's face)
+  const T=document.getElementById('text');
+  if(scene.text_left  !=null) T.style.left =scene.text_left+'px';
+  if(scene.text_top   !=null) T.style.top  =scene.text_top+'px';
+  if(scene.text_width !=null) T.style.width=scene.text_width+'px';
+  if(scene.text_size  !=null) document.querySelector('.headline').style.fontSize=scene.text_size+'px';
   const k=document.getElementById('kicker');
   k.innerHTML=(scene.kicker||'').replace(/ · /g,' <span class="dot">·</span> ');
   const line=document.getElementById('hookline'); line.innerHTML='';
