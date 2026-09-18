@@ -61,6 +61,10 @@ const CFG={
         color:'#2F9D5B', seasonal:false, xevery:2, ylabel:g=>'$'+(g/1e6).toFixed(2)+'M',
         xlabel:p=>p.key.replace('20','').replace('-',' '), lastDot:'Gold Coast',
         legend:[['#2F9D5B','Median house price',false]] },
+  clearance:{ key:'m', lo:10, hi:45, grid:[10,20,30,40], color:'#DB7A4A', seasonal:false,
+        xevery:6, ylabel:g=>g+'%',
+        xlabel:p=>{const[y,m]=p.key.split('-');return MON[+m]+' '+y.slice(2);},
+        legend:[['#DB7A4A','Auction clearance',false]] },
 };
 
 const DEFAULT={
