@@ -18,7 +18,7 @@ two scene types.
 ## 1. The two approved formats
 
 All beats are **1080×1920 (9:16)**, dark-theme graphics, copper accent (`#DB7A4A`), Fields voice.
-A reel is a sequence of **three** beat types: **text**, **chart**, and **stat** (§3).
+A reel is a sequence of **four** beat types: **text**, **chart**, **stat**, and **quote** (§3).
 
 **Worked examples (copy these specs):**
 - `reel_pipeline/reel.example.json` — Sep-2026 "crash risk" (text + chart). Indoor, plain wall.
@@ -195,6 +195,28 @@ instead of a chart. Use it when the data point is one striking figure, not a ser
 ```
 > Keep `source` short — it sits bottom-left and the PIP occupies the bottom-right, so anything
 > past ~500px is hidden behind the box. Same applies to the chart beat's `source`.
+
+### A quote beat  (evidence — a real screenshot with a highlighter)
+Shows an image (e.g. a screenshot of research/an article) on a white "document" card on the
+dark canvas, with a copper highlighter that sweeps over a target sentence. **No presenter** —
+it's an evidence cutaway; the voice continues underneath. Great right before a stat that the
+quote proves.
+```jsonc
+{
+  "type": "quote", "ss": 23.5, "dur": 7.0,
+  "kicker": "The Research · University of NSW",
+  "headline": "What the modelling found",
+  "image": "../assets/auctions_research_quote.png",   // path relative to panels/, or an absolute path
+  "image_w": 1504, "image_h": 176,                     // the image's natural pixel size
+  "highlights": [ [492,10,1010,52], [22,66,1470,52], [22,120,830,52] ],  // [x,y,w,h] per line, IMAGE px
+  "anim": {"card": 0.2, "hl": 2.0, "stagger": 0.45, "grow": 0.6},        // card fade; sweep start/stagger/grow (s)
+  "source": "Source <b>University of New South Wales</b>"
+}
+```
+> **Highlights are in the image's own pixel coordinates** (one `[x,y,w,h]` rectangle per line of the
+> sentence). Read them off the screenshot: partial first line + full middle lines + partial last line.
+> The panel scales them with the displayed card, so you author against the original resolution.
+> Put the source image under `reel_pipeline/assets/` and reference it `../assets/<file>.png`.
 
 ---
 
