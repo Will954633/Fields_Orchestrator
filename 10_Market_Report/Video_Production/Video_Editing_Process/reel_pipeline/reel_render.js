@@ -17,7 +17,7 @@ const htmlPath = 'file://' + path.resolve(panel);
 (async () => {
   const browser = await puppeteer.launch({
     executablePath: '/usr/bin/google-chrome', headless: 'new',
-    args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--force-color-profile=srgb','--hide-scrollbars'],
+    args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--force-color-profile=srgb','--hide-scrollbars','--allow-file-access-from-files'],
     defaultViewport: { width: W, height: H, deviceScaleFactor: 1 },
   });
   const page = await browser.newPage();
