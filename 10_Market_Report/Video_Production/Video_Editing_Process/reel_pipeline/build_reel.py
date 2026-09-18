@@ -71,14 +71,18 @@ def build_text_scene(src, scene, frames_dir, out_mp4, fps):
          '-c:a','aac','-b:a','192k','-r',str(fps),'-t',f'{dur}','-movflags','+faststart', out_mp4])
 
 
-def build_chart_scene(src, scene, frames_dir, out_mp4, fps):
+# chart + stat beats share this compositor (full-bleed bg panel + presenter PIP);
+# only the panel HTML differs.
+PIP_PANEL = {'chart': 'chart_reel.html', 'stat': 'stat_reel.html'}
+
+def build_pip_scene(src, scene, frames_dir, out_mp4, fps):
     dur = float(scene['dur']); ss = float(scene['ss'])
     p = dict(PIP_DEFAULT); p.update(scene.get('pip', {}))
     mask = frames_dir + '_mask.png'
     m = Image.new('L', (p['w'], p['h']), 0)
     ImageDraw.Draw(m).rounded_rectangle([0,0,p['w']-1,p['h']-1], radius=p['r'], fill=255)
     m.save(mask)
-    render_frames(os.path.join(PANELS,'chart_reel.html'), scene, frames_dir, dur, fps, False)
+    render_frames(os.path.join(PANELS, PIP_PANEL[scene['type']]), scene, frames_dir, dur, fps, False)
     vf = (f"[1:v]crop={p['cropw']}:{p['croph']}:{p['cropx']}:{p['cropy']},scale={p['w']}:{p['h']},setsar=1[will];"
           f"[2:v]format=gray,scale={p['w']}:{p['h']}[mask];"
           f"[will][mask]alphamerge[willa];"
@@ -115,8 +119,8 @@ def main():
         frames_dir = os.path.join(work, f'scene_{i:02d}_frames')
         out_mp4    = os.path.join(work, f'scene_{i:02d}.mp4')
         print(f'\n=== scene {i} [{scene["type"]}]  ss={scene["ss"]} dur={scene["dur"]} ===')
-        if scene['type'] == 'text':   build_text_scene(src, scene, frames_dir, out_mp4, fps)
-        elif scene['type'] == 'chart': build_chart_scene(src, scene, frames_dir, out_mp4, fps)
+        if scene['type'] == 'text':               build_text_scene(src, scene, frames_dir, out_mp4, fps)
+        elif scene['type'] in ('chart','stat'):   build_pip_scene(src, scene, frames_dir, out_mp4, fps)
         else: raise ValueError(f'unknown scene type: {scene["type"]}')
         d = probe_dur(out_mp4)
         if d <= 0: raise RuntimeError(f'scene {i} produced an empty clip')
