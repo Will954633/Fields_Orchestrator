@@ -31,26 +31,14 @@
       "pip": {"x": 572, "y": 1372, "w": 440, "h": 516, "cropw": 850, "croph": 1000, "cropx": 775, "cropy": 30}
     },
     {
-      "type": "quote", "ss": 23.5, "dur": 7.0,
+      "type": "quote", "ss": 23.5, "dur": 13.8,
       "kicker": "The Research · University of NSW",
       "headline": "What the modelling found",
       "image": "../assets/auctions_research_quote.png", "image_w": 1504, "image_h": 176,
+      "display_w": 1900,
       "highlights": [[492,10,1010,52],[22,66,1470,52],[22,120,830,52]],
-      "anim": {"card": 0.2, "hl": 2.0, "stagger": 0.45, "grow": 0.6},
+      "anim": {"card": 0.2, "hl": 1.4, "stagger": 0.4, "grow": 0.6, "pan_start": 3.0, "pan_dur": 9.6},
       "source": "Source <b>University of New South Wales</b>"
-    },
-    {
-      "type": "stat", "ss": 30.5, "dur": 6.8,
-      "kicker": "New Research · University of NSW",
-      "headline": "What happens after a failed auction?",
-      "stat": {
-        "pre": "Homes that fail to sell at auction go on to sell for",
-        "big": "<b>1.3%</b> less",
-        "post": "than if they had listed as private treaty first"
-      },
-      "anim": {"pre": 0.3, "big": 2.2, "post": 3.6},
-      "source": "Source <b>UNSW</b> research",
-      "pip": {"x": 572, "y": 1372, "w": 440, "h": 516, "cropw": 850, "croph": 1000, "cropx": 775, "cropy": 30}
     },
     {
       "type": "text", "ss": 37.3, "dur": 7.4, "theme": "dark", "cropx": 760, "text_left": 56, "text_top": 210, "text_width": 470, "text_size": 76,
