@@ -96,6 +96,18 @@ def build_pip_scene(src, scene, frames_dir, out_mp4, fps):
          '-c:a','aac','-b:a','192k','-r',str(fps),'-t',f'{dur}','-movflags','+faststart', out_mp4])
 
 
+def build_graphic_scene(src, scene, frames_dir, out_mp4, fps):
+    """Full-bleed graphic beat with NO presenter (e.g. a quote/evidence card).
+    Renders the panel frames and lays the source audio span under them."""
+    dur = float(scene['dur']); ss = float(scene['ss'])
+    render_frames(os.path.join(PANELS, 'quote_reel.html'), scene, frames_dir, dur, fps, False)
+    run(['ffmpeg','-y','-framerate',str(fps),'-i',os.path.join(frames_dir,'f%04d.png'),
+         '-ss',f'{ss}','-t',f'{dur}','-i',src,
+         '-map','0:v','-map','1:a','-dn','-map_metadata','-1',
+         '-c:v','libx264','-preset','medium','-crf','18','-pix_fmt','yuv420p',
+         '-c:a','aac','-b:a','192k','-r',str(fps),'-t',f'{dur}','-movflags','+faststart', out_mp4])
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__); sys.exit(1)
@@ -121,6 +133,7 @@ def main():
         print(f'\n=== scene {i} [{scene["type"]}]  ss={scene["ss"]} dur={scene["dur"]} ===')
         if scene['type'] == 'text':               build_text_scene(src, scene, frames_dir, out_mp4, fps)
         elif scene['type'] in ('chart','stat'):   build_pip_scene(src, scene, frames_dir, out_mp4, fps)
+        elif scene['type'] == 'quote':            build_graphic_scene(src, scene, frames_dir, out_mp4, fps)
         else: raise ValueError(f'unknown scene type: {scene["type"]}')
         d = probe_dur(out_mp4)
         if d <= 0: raise RuntimeError(f'scene {i} produced an empty clip')
