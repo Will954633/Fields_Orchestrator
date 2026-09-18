@@ -196,27 +196,33 @@ instead of a chart. Use it when the data point is one striking figure, not a ser
 > Keep `source` short — it sits bottom-left and the PIP occupies the bottom-right, so anything
 > past ~500px is hidden behind the box. Same applies to the chart beat's `source`.
 
-### A quote beat  (evidence — a real screenshot with a highlighter)
-Shows an image (e.g. a screenshot of research/an article) on a white "document" card on the
-dark canvas, with a copper highlighter that sweeps over a target sentence. **No presenter** —
-it's an evidence cutaway; the voice continues underneath. Great right before a stat that the
-quote proves.
+### A quote beat  (evidence — a real screenshot, enlarged, with a highlighter that pans)
+Shows an image (screenshot of research/an article) on a white "document" card, enlarged so the
+text is **readable on a phone**, with a copper highlighter over a target sentence, then a slow
+**left→right pan** so viewers read along as the presenter speaks to it. **No presenter** — it's an
+evidence cutaway; the voice continues. Because the enlarged quote is wider than the frame, the pan
+is what reveals the whole sentence — so give it enough `dur` to be read at a comfortable pace.
 ```jsonc
 {
-  "type": "quote", "ss": 23.5, "dur": 7.0,
+  "type": "quote", "ss": 23.5, "dur": 13.8,
   "kicker": "The Research · University of NSW",
   "headline": "What the modelling found",
   "image": "../assets/auctions_research_quote.png",   // path relative to panels/, or an absolute path
   "image_w": 1504, "image_h": 176,                     // the image's natural pixel size
+  "display_w": 1900,                                   // rendered width — BIGGER = more readable + more pan
   "highlights": [ [492,10,1010,52], [22,66,1470,52], [22,120,830,52] ],  // [x,y,w,h] per line, IMAGE px
-  "anim": {"card": 0.2, "hl": 2.0, "stagger": 0.45, "grow": 0.6},        // card fade; sweep start/stagger/grow (s)
+  "anim": {"card": 0.2, "hl": 1.4, "stagger": 0.4, "grow": 0.6, "pan_start": 3.0, "pan_dur": 9.6},
   "source": "Source <b>University of New South Wales</b>"
 }
 ```
-> **Highlights are in the image's own pixel coordinates** (one `[x,y,w,h]` rectangle per line of the
-> sentence). Read them off the screenshot: partial first line + full middle lines + partial last line.
-> The panel scales them with the displayed card, so you author against the original resolution.
-> Put the source image under `reel_pipeline/assets/` and reference it `../assets/<file>.png`.
+> - **`display_w`** sets how big the text is. Wider than 1080 (the frame) → the pan reveals the
+>   off-screen part left→right. Set it so the text is comfortably readable, then size `dur`/`pan_dur`
+>   to the voiceover so it can be read in time. Edge-fades soften the text entering/leaving frame.
+> - **Highlights are in the image's own pixel coordinates** (one `[x,y,w,h]` rectangle per line of the
+>   sentence — partial first line + full middle lines + partial last line). The panel scales them with
+>   the card, so author against the original resolution. Put the image under `reel_pipeline/assets/`.
+> - If the figure the reel needs is inside the quote (e.g. "1.3% discount"), you usually don't also
+>   need a separate `stat` beat — let viewers read it in the highlight.
 
 ---
 
